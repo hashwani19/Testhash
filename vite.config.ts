@@ -17,8 +17,8 @@ export default defineConfig({
       ],
       manifest: {
         id: '/',
-        name: 'Eye Care Records',
-        short_name: 'Eye Records',
+        name: 'Ortho and Vision Care',
+        short_name: 'OVC',
         description:
           'Offline-first patient and eye prescription records, installable on iOS and Android.',
         start_url: '/',

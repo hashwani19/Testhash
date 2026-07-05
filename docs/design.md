@@ -1,4 +1,4 @@
-# Eye Care Records — System Design
+# Ortho and Vision Care — System Design
 
 Status: **draft, for future implementation**. This document specifies the
 target architecture and schema for evolving the current client-only MVP into

@@ -53,7 +53,7 @@ function AppShell() {
 
       <header className="px-5 pt-7 pb-2">
         <div className="flex items-baseline justify-between gap-3">
-          <h1 className="text-[28px] font-bold tracking-[-0.4px] text-text-h">Eye Care Records</h1>
+          <h1 className="text-[28px] font-bold tracking-[-0.4px] text-text-h">Ortho and Vision Care</h1>
           <div className="flex items-center gap-2.5 text-[13px] text-text">
             <span>
               {user.fullName}{' '}

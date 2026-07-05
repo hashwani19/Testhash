@@ -1,4 +1,4 @@
-# Eye Care Records — a Progressive Web App
+# Ortho and Vision Care — a Progressive Web App
 
 An installable, offline-first patient records app for eye care, built with
 React, TypeScript, and Vite. It runs in the browser and can be installed to
@@ -111,8 +111,8 @@ src/
   types.ts      Shared User / Patient / PatientGroup / EyeVisit types
   styles.ts     Shared Tailwind class-string constants (buttons, fields,
                 cards) — the single source of truth for repeated UI patterns
-public/icons/   App icons (regular + maskable, generated from scripts/icon*.svg)
-scripts/        Icon source SVGs + generation script
+public/icons/   App icons (regular + maskable, generated from scripts/logo-source.png)
+scripts/        Logo source PNG + generation script
 docs/design.md  Target backend-synced architecture and schema
 ```
 
@@ -134,7 +134,9 @@ utility strings.
 
 ## Regenerating icons
 
-Icons are generated from `scripts/icon.svg` / `scripts/icon-maskable.svg`:
+The logo (`scripts/logo-source.png`) is the "OVC" mark extracted from the
+clinic's prescription card, with the background removed. Icons for every
+size/purpose are composited from it onto a white background:
 
 ```bash
 npm install -D sharp
