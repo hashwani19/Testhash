@@ -82,11 +82,17 @@ changes (see column-type notes in §5.3).
 
 ## 4. User roles & permissions
 
-| Role | Can view demographics | Can view/edit clinical records (visits, refraction, diagnosis) | Can manage attachments | Can manage staff accounts | Can view audit log |
-|---|---|---|---|---|---|
-| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `doctor` | ✅ | ✅ | ✅ | ❌ | ❌ |
-| `front_desk` | ✅ | ❌ (read-only demographics; no SPH/CYL/diagnosis) | ❌ | ❌ | ❌ |
+| Role | Can view demographics | Can create/edit demographics | Can view/edit clinical records (visits, refraction, diagnosis) | Can manage attachments | Can manage staff accounts | Can view audit log |
+|---|---|---|---|---|---|---|
+| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `doctor` | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `front_desk` | ✅ | ✅ | ❌ (no SPH/CYL/diagnosis) | ❌ | ❌ | ❌ |
+
+Front desk can register a new patient and edit name/DOB/address/gender —
+e.g. at check-in, before a clinician ever opens the chart — but the API
+rejects any `front_desk`-authenticated request touching `eye_visits`,
+`eye_refractions`, or `attachments` (§6), regardless of what the client
+sends.
 
 Permissions are enforced **server-side** on every API call — the role in the
 session determines what the API returns/accepts, never trust the client.
@@ -366,9 +372,9 @@ Every mutating endpoint writes an `audit_log` row server-side.
 | `POST /users` | admin | Create staff account |
 | `PATCH /users/:id` | admin | Update role/active status |
 | `GET /patients?search=` | any | List/search patients (front desk sees demographics only — response shaped by role) |
-| `POST /patients` | admin, doctor | Create patient |
+| `POST /patients` | admin, doctor, front_desk | Create patient (demographics only — request body may not include clinical fields) |
 | `GET /patients/:id` | any | Patient detail (role-shaped response) |
-| `PATCH /patients/:id` | admin, doctor | Update demographics |
+| `PATCH /patients/:id` | admin, doctor, front_desk | Update demographics |
 | `DELETE /patients/:id` | admin | Soft-delete patient (+ cascade note in audit log) |
 | `GET /patients/:id/visits` | admin, doctor | Visit history for a patient |
 | `POST /patients/:id/visits` | admin, doctor | Create a visit — one payload containing up to 4 refraction rows (distance/reading × left/right), diagnosis, treatment plan, and lenses |
@@ -470,9 +476,10 @@ build them if multi-device offline editing turns out to be a real need.
   of a two-row (Distance/Reading) prescription per eye, per a real
   prescription pad reviewed during design (§5.2), not a single ambiguous
   measurement.
-- Should `front_desk` be able to *create* a patient (demographics only) even
-  though they can't see clinical data? Current role table (§4) assumes yes
-  for create/edit demographics — confirm before implementing.
+- ~~Should `front_desk` be able to *create* a patient (demographics only)~~ —
+  **resolved: yes.** Front desk can create/edit demographics (name, DOB,
+  address, gender) but the API blocks any `front_desk` request touching
+  `eye_visits`/`eye_refractions`/`attachments` (§4, §6).
 - Multi-clinic / multi-location support is not modeled (no `clinic_id`
   anywhere) — add a `clinics` table and scope everything to it if/when a
   second location is added.
