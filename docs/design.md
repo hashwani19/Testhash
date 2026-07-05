@@ -131,6 +131,7 @@ erDiagram
     }
     PATIENTS {
         text id PK
+        text patient_number
         text name
         text dob
         int manual_age
@@ -203,6 +204,25 @@ erDiagram
 
 ### 5.2 Field notes / definitions
 
+- **`patients.patient_number`** — the human-facing patient ID (distinct from
+  `patients.id`, which stays an opaque UUID used only internally for foreign
+  keys). Format: **`P-YYYYMMDD-NNNN`** — registration date + a 4-digit
+  sequence that resets daily (e.g. `P-20260705-0007` = the 7th patient
+  registered on 2026-07-05). This is what's shown in the UI, printed on a
+  physical file/label, and read aloud over the phone — not the UUID.
+  - **Monotonically increasing**: because the date prefix always increases
+    and the sequence is zero-padded to a fixed width, sorting
+    `patient_number` as plain text always matches registration order —
+    no need to parse it or join to `created_at` to get chronological order.
+  - **Generation**: assigned once at creation, immutable after. Computed
+    atomically via a small counters table (`patient_number_counters`, §5.3)
+    keyed by date, incremented with a single `UPDATE ... RETURNING` inside
+    the same transaction as the `INSERT INTO patients`, so two concurrent
+    registrations on the same day never collide — no read-then-write race.
+  - **Capacity**: 4 digits supports 9,999 new registrations/day, far beyond
+    a small clinic's volume (§10); widen to 5+ digits if that changes.
+  - `UNIQUE NOT NULL` — enforced at the DB level as a backstop even though
+    generation is already collision-free by construction.
 - **Age**: never stored as a derived value. If `patients.dob` is set, age is
   computed at read time (same logic as today's `computeAgeFromDob`). If
   `dob` is null, `manual_age` is authoritative. Exactly one of the two
@@ -292,17 +312,24 @@ CREATE TABLE sessions (
 );
 CREATE INDEX idx_sessions_user ON sessions(user_id);
 
+-- Backs atomic generation of patients.patient_number (one row per calendar day).
+CREATE TABLE patient_number_counters (
+    date_key TEXT PRIMARY KEY,                  -- 'YYYYMMDD'
+    next_seq INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE patients (
-    id          TEXT PRIMARY KEY,
-    name        TEXT NOT NULL,
-    dob         TEXT,                           -- ISO date (YYYY-MM-DD); null if unknown
-    manual_age  INTEGER,                        -- only used when dob is null
-    address     TEXT,
-    gender      TEXT NOT NULL CHECK (gender IN ('female', 'male', 'other', 'unspecified')),
-    created_by  TEXT REFERENCES users(id),
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    deleted_at  TEXT                            -- soft delete; null = active
+    id             TEXT PRIMARY KEY,             -- opaque UUID; internal FK target only
+    patient_number TEXT NOT NULL UNIQUE,         -- e.g. "P-20260705-0007"; human-facing ID (§5.2)
+    name           TEXT NOT NULL,
+    dob            TEXT,                         -- ISO date (YYYY-MM-DD); null if unknown
+    manual_age     INTEGER,                      -- only used when dob is null
+    address        TEXT,
+    gender         TEXT NOT NULL CHECK (gender IN ('female', 'male', 'other', 'unspecified')),
+    created_by     TEXT REFERENCES users(id),
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    deleted_at     TEXT                          -- soft delete; null = active
 );
 CREATE INDEX idx_patients_name ON patients(name);
 CREATE INDEX idx_patients_deleted_at ON patients(deleted_at);
@@ -381,6 +408,25 @@ CREATE INDEX idx_audit_actor ON audit_log(actor_user_id, created_at);
 `TEXT` id columns → native `UUID` with `gen_random_uuid()`; `REAL` → `NUMERIC(5,2)`;
 `INTEGER` booleans → native `BOOLEAN`; `CHECK (... IN (...))` → native `ENUM` types.
 
+**Generating `patient_number` (example)** — run inside the same transaction
+as the `INSERT INTO patients`:
+
+```sql
+INSERT INTO patient_number_counters (date_key, next_seq)
+VALUES (:date_key, 2)
+ON CONFLICT (date_key) DO UPDATE SET next_seq = next_seq + 1
+RETURNING next_seq - 1 AS seq;
+-- :date_key = strftime('%Y%m%d', 'now'); patient_number = 'P-' || :date_key || '-' || printf('%04d', seq)
+```
+
+This is a single atomic upsert-and-return — two concurrent registrations on
+the same day each get a distinct `seq` with no read-then-write gap to race on.
+
+**On Postgres**, the equivalent is a `SEQUENCE` per day (or a single
+`BIGSERIAL` with the date formatted separately) — either works; the emphasis
+here is "atomic increment, not read-max-then-add-one", which both engines
+support.
+
 ## 6. API surface (v1)
 
 All endpoints under `/api`, JSON in/out, session cookie required except `/auth/login`.
@@ -397,9 +443,10 @@ but the unsorted default is never "whatever order the DB happened to return."
 | `GET /users` | admin | List staff accounts | `full_name` asc |
 | `POST /users` | admin | Create staff account | — |
 | `PATCH /users/:id` | admin | Update role/active status | — |
-| `GET /patients?search=` | any | List/search patients (summary row only — name/age/gender; full clinical detail lives on the visit endpoints below) | `created_at` **desc** (newest-registered first) |
-| `POST /patients` | admin, doctor, front_desk | Create patient (demographics only — request body may not include clinical fields) | — |
+| `GET /patients?search=` | any | List/search patients (summary row only — `patient_number`/name/age/gender; `search` matches either name or `patient_number`; full clinical detail lives on the visit endpoints below) | `created_at` **desc** (newest-registered first) |
+| `POST /patients` | admin, doctor, front_desk | Create patient (demographics only — request body may not include clinical fields). Response includes the generated `patient_number` | — |
 | `GET /patients/:id` | any | Patient detail (demographics; visit history fetched separately via `/patients/:id/visits`) | — |
+| `GET /patients/by-number/:patient_number` | any | Look up a patient by their human-facing ID (e.g. staff reading it off a physical file) — resolves to the same detail response as `GET /patients/:id` | — |
 | `PATCH /patients/:id` | admin, doctor, front_desk | Update demographics | — |
 | `DELETE /patients/:id` | admin | Soft-delete patient (+ cascade note in audit log) | — |
 | `GET /patients/:id/visits` | admin, doctor, front_desk | Visit history for a patient | `visit_at` **desc** (most recent visit first) |
@@ -435,6 +482,10 @@ but the unsorted default is never "whatever order the DB happened to return."
   (§6) — the client does not re-sort client-side. This keeps "sorted by date
   by default" a server-guaranteed property rather than something that can
   drift if a client is added/changed later.
+- `patient_number` is shown wherever a patient is identified — patient list
+  row, patient detail header, and the search box accepts it directly
+  (via `GET /patients/by-number/:patient_number`) so staff can type/read out
+  the ID from a physical file instead of searching by name.
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 
@@ -501,7 +552,10 @@ build them if multi-device offline editing turns out to be a real need.
 3. Swap `usePatients`/`useEyeRecords` to call the API instead of
    `localStorage`, with a one-time client-side import tool that reads any
    existing `localStorage` data and POSTs it to the new API (so early
-   testers/demo data isn't lost).
+   testers/demo data isn't lost). The import runs patients through
+   `POST /patients` **in ascending `createdAt` order** so `patient_number`
+   values are assigned in the same order patients were originally created,
+   not import-batch order.
 4. Add the new clinical fields (axis, add, visual acuity, diagnosis/plan,
    attachments) to the forms and history view.
 5. Remove the localStorage code path once the API path is confirmed stable.
