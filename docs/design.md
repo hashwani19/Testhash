@@ -82,11 +82,11 @@ changes (see column-type notes in §5.3).
 
 ## 4. User roles & permissions
 
-| Role | Can view demographics | Can create/edit demographics | Can view/create/edit clinical records (visits, refraction, diagnosis) | Can delete clinical records | Can manage attachments (upload/view) | Can manage staff accounts | Can view audit log |
-|---|---|---|---|---|---|---|---|
-| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `doctor` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| `front_desk` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Role | Can view demographics | Can create/edit demographics | Can view/create/edit clinical records (visits, refraction, diagnosis) | Can delete clinical records | Can manage attachments (upload/view) | Can manage patient groups (create/rename/delete) | Can manage staff accounts | Can view audit log |
+|---|---|---|---|---|---|---|---|---|
+| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `doctor` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| `front_desk` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 Front desk can register a new patient and edit name/DOB/address/gender —
 e.g. at check-in, before a clinician ever opens the chart. Front desk can
@@ -98,6 +98,17 @@ The API rejects any `front_desk`-authenticated request touching
 `attachments` at all (upload or delete), and rejects any `DELETE` on
 `eye_visits`/`eye_refractions` from anyone but `admin` (§6), regardless of
 what the client sends.
+
+**Patient groups** (e.g. "Friends", "Family" — a free-form category a
+clinic assigns patients to) are **admin-managed, everyone-usable**: only
+`admin` can create, rename, or delete a group (via the dedicated screen,
+§8.7), but `doctor` and `front_desk` can both *see* the list of groups and
+*assign* a patient to one when creating/editing demographics — assigning a
+patient to an existing group is part of ordinary demographics editing, not
+a separate permission. The API enforces this the same way as everything
+else: `POST/PATCH/DELETE /patient-groups` are `admin`-only; `GET
+/patient-groups` and the `group_id` field on `POST/PATCH /patients` are
+open to any authenticated role (§6).
 
 Permissions are enforced **server-side** on every API call — the role in the
 session determines what the API returns/accepts, never trust the client.
@@ -115,6 +126,8 @@ erDiagram
     USERS ||--o{ AUDIT_LOG : "acts in"
     USERS ||--o{ PATIENTS : "created by"
     USERS ||--o{ EYE_VISITS : "examined by"
+    USERS ||--o{ PATIENT_GROUPS : "created by"
+    PATIENT_GROUPS ||--o{ PATIENTS : groups
     PATIENTS ||--o{ EYE_VISITS : has
     PATIENTS ||--o{ CONSENTS : has
     EYE_VISITS ||--o{ EYE_REFRACTIONS : has
@@ -129,6 +142,14 @@ erDiagram
         int active
         text created_at
     }
+    PATIENT_GROUPS {
+        text id PK
+        text name
+        text created_by FK
+        text created_at
+        text updated_at
+        text deleted_at
+    }
     PATIENTS {
         text id PK
         text patient_number
@@ -137,6 +158,7 @@ erDiagram
         int manual_age
         text address
         text gender
+        text group_id FK
         text created_by FK
         text created_at
         text updated_at
@@ -204,6 +226,22 @@ erDiagram
 
 ### 5.2 Field notes / definitions
 
+- **`patient_groups` / `patients.group_id`** — a free-form category a clinic
+  puts patients into (e.g. "Friends", "Family", "VIP"), not a clinical
+  concept. Modeled as **one group per patient** (`patients.group_id` is a
+  single nullable FK, not a join table) — matches the examples given
+  (mutually-exclusive categories, not overlapping tags). If overlapping
+  multi-group membership turns out to be needed later, that's an additive
+  `patient_group_members` join table without touching anything else here
+  (flagged as an open question, §13).
+  - `patient_groups.name` is `UNIQUE NOT NULL`.
+  - Soft-deleted the same way as `patients` (`deleted_at`) rather than hard
+    deleted — so a patient's historical group assignment still resolves to
+    a name even after a group is retired, but retired groups drop out of
+    the assignable/filterable list (§6, §8.7).
+  - Mutation (`POST`/`PATCH`/`DELETE /patient-groups`) is **admin-only**;
+    reading the list and setting `patients.group_id` is open to any role
+    that can edit demographics — i.e. all three roles (§4).
 - **`patients.patient_number`** — the human-facing patient ID (distinct from
   `patients.id`, which stays an opaque UUID used only internally for foreign
   keys). Format: **`P-YYYYMMDD-NNNN`** — registration date + a 4-digit
@@ -337,6 +375,17 @@ CREATE TABLE patient_number_counters (
     next_seq INTEGER NOT NULL DEFAULT 1
 );
 
+-- Admin-managed categories (e.g. "Friends", "Family"); one per patient (§5.2).
+CREATE TABLE patient_groups (
+    id         TEXT PRIMARY KEY,
+    name       TEXT NOT NULL UNIQUE,
+    created_by TEXT REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    deleted_at TEXT                              -- soft delete; null = active
+);
+CREATE INDEX idx_patient_groups_name ON patient_groups(name);
+
 CREATE TABLE patients (
     id             TEXT PRIMARY KEY,             -- opaque UUID; internal FK target only
     patient_number TEXT NOT NULL UNIQUE,         -- e.g. "P-20260705-0007"; human-facing ID (§5.2)
@@ -345,6 +394,7 @@ CREATE TABLE patients (
     manual_age     INTEGER,                      -- only used when dob is null
     address        TEXT,
     gender         TEXT NOT NULL CHECK (gender IN ('female', 'male', 'other', 'unspecified')),
+    group_id       TEXT REFERENCES patient_groups(id),  -- nullable; ungrouped by default
     created_by     TEXT REFERENCES users(id),
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
@@ -353,6 +403,7 @@ CREATE TABLE patients (
 CREATE INDEX idx_patients_name ON patients(name);
 CREATE INDEX idx_patients_deleted_at ON patients(deleted_at);
 CREATE INDEX idx_patients_created_at ON patients(created_at DESC);  -- supports default sort (§6)
+CREATE INDEX idx_patients_group ON patients(group_id);              -- supports filter by group (§6)
 
 CREATE TABLE eye_visits (
     id             TEXT PRIMARY KEY,
@@ -462,12 +513,16 @@ but the unsorted default is never "whatever order the DB happened to return."
 | `GET /users` | admin | List staff accounts | `full_name` asc |
 | `POST /users` | admin | Create staff account | — |
 | `PATCH /users/:id` | admin | Update role/active status | — |
-| `GET /patients?search=` | any | List/search patients — one query box, matches **name** (substring, case-insensitive) **or** `patient_number` (substring match, so typing a partial number or a date prefix like `P-20260705` also works) in a single OR'd query (§5.2). `search` must be ≥3 characters or omitted; shorter values → `400`. Summary rows only (`patient_number`/name/age/gender); full clinical detail lives on the visit endpoints below | `created_at` **desc** (newest-registered first) |
-| `POST /patients` | admin, doctor, front_desk | Create patient (demographics only — request body may not include clinical fields). Response includes the generated `patient_number` | — |
-| `GET /patients/:id` | any | Patient detail (demographics; visit history fetched separately via `/patients/:id/visits`) | — |
+| `GET /patients?search=&group_id=&sort=` | any | List/search patients. `search` matches **name** (substring, case-insensitive) **or** `patient_number` (substring, so a partial number or date prefix like `P-20260705` also works) — ≥3 characters or omitted, shorter values → `400` (§5.2). Optional `group_id` filters to one group. Optional `sort=group` overrides the default (group name asc, then `created_at` desc within a group) — omit for the plain default below. Summary rows only (`patient_number`/name/age/gender/group); full clinical detail lives on the visit endpoints below | `created_at` **desc** (newest-registered first) |
+| `POST /patients` | admin, doctor, front_desk | Create patient (demographics only, optionally including `group_id` — request body may not include clinical fields). Response includes the generated `patient_number` | — |
+| `GET /patients/:id` | any | Patient detail (demographics, including group; visit history fetched separately via `/patients/:id/visits`) | — |
 | `GET /patients/by-number/:patient_number` | any | **Exact-match** convenience alias for the common case of already having the full ID (e.g. a barcode/QR scan) — skips the substring search. Resolves to the same detail response as `GET /patients/:id` | — |
-| `PATCH /patients/:id` | admin, doctor, front_desk | Update demographics | — |
+| `PATCH /patients/:id` | admin, doctor, front_desk | Update demographics, including reassigning `group_id` (any role that can edit demographics — not restricted to admin, §4) | — |
 | `DELETE /patients/:id` | admin | Soft-delete patient (+ cascade note in audit log) | — |
+| `GET /patient-groups` | any | List active (non-deleted) patient groups, for the group selector in patient forms and the filter dropdown | `name` asc |
+| `POST /patient-groups` | admin | Create a group | — |
+| `PATCH /patient-groups/:id` | admin | Rename a group | — |
+| `DELETE /patient-groups/:id` | admin | Soft-delete a group (existing patients keep their `group_id`/name for history; the group drops out of future assignment/filter lists) | — |
 | `GET /patients/:id/visits` | admin, doctor, front_desk | Visit history for a patient | `visit_at` **desc** (most recent visit first) |
 | `POST /patients/:id/visits` | admin, doctor, front_desk | Create a visit — one payload containing a `visit_at` datetime, up to 4 refraction rows (distance/reading × left/right), diagnosis, treatment plan, and lenses | — |
 | `GET /visits/:id` | admin, doctor, front_desk | Single visit detail | — |
@@ -509,6 +564,9 @@ but the unsorted default is never "whatever order the DB happened to return."
 - The search box debounces input and only calls the API once the query is
   **3+ characters**; below that it shows the unfiltered (or previous) list
   rather than firing a request, matching the API's enforced minimum (§5.2).
+- A new admin-only Manage Groups screen (§8.7), plus a group filter/sort
+  control and a group selector added to the existing patient list and
+  patient form.
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 
@@ -529,8 +587,15 @@ data.
 - One search box at the top — debounced, ignores input under 3 characters,
   calls `GET /patients?search=`. Matches name *or* `patient_number` in the
   same box; no separate "search by ID" mode (§5.2, §6).
-- Below it, summary rows: `patient_number`, name, age, gender. Default order
-  is newest-registered-first (`created_at` desc) — a server-guaranteed order,
+- A **group filter** dropdown (all groups + "All groups") next to the search
+  box — sets `group_id` on the same request. And a **sort** toggle: default
+  (newest-registered-first) or **by group** (group name asc, then
+  newest-first within the group), mapping straight to `?sort=group` (§6).
+  Both are plain query-string params — no client-side re-sort/re-filter of
+  an already-fetched page.
+- Below it, summary rows: `patient_number`, name, age, gender, and the
+  patient's group (if any) as a small label/chip. Default order is
+  newest-registered-first (`created_at` desc) — a server-guaranteed order,
   not incidental array order (§6).
 - "Add patient" button — visible to `admin`, `doctor`, and `front_desk`.
 - Tapping a row opens Patient Detail.
@@ -538,9 +603,15 @@ data.
 ### 8.3 Patient Detail
 
 - Header: name, `patient_number`, age (computed from DOB, or the manual
-  value when DOB is absent), DOB, gender, address.
+  value when DOB is absent), DOB, gender, address, group.
 - Edit / Delete patient buttons — delete is **admin-only**, hidden entirely
-  (not disabled) for the other two roles (§4).
+  (not disabled) for the other two roles (§4). Edit opens the same patient
+  form as creation (§8.2), including the group selector.
+- The patient create/edit form's **Group** field is a plain dropdown
+  populated from `GET /patient-groups` (name asc), plus "No group." It's a
+  *picker*, not a group editor — every role that can edit demographics can
+  assign an existing group to a patient, but only `admin` can add a new
+  option to that dropdown, from the separate Manage Groups screen (§8.7).
 - "Eye treatment history" below: visit cards, most-recent-visit-first
   (`visit_at` desc, §6).
 - Each visit card shows: visit date + time, the Distance/Reading ×
@@ -570,6 +641,8 @@ data.
 | View/create/edit patients & visits | ✅ | ✅ | ✅ |
 | Delete anything (patient, visit, attachment) | ✅ | ❌ | ❌ |
 | Attachments (upload/view) | ✅ | ✅ | ❌ (hidden) |
+| Assign a patient to an existing group | ✅ | ✅ | ✅ |
+| Manage patient groups (create/rename/delete) | ✅ | ❌ | ❌ |
 | Manage staff accounts, audit log | ✅ | ❌ | ❌ |
 
 ### 8.6 Carried over unchanged
@@ -577,6 +650,21 @@ data.
 The offline/install banners (`OfflineBanner`, `InstallBanner`) and the PWA
 install experience are exactly what's already live in the current MVP —
 this is additive on top of that shell, not a rewrite of it.
+
+### 8.7 Manage Groups (admin-only screen)
+
+- A route only `admin` can reach — hidden from the nav entirely for
+  `doctor`/`front_desk` (a direct URL hit gets the same server-side `403`
+  as any other admin-only endpoint, §4).
+- List of groups: name, and how many active patients currently reference it
+  (a simple `COUNT`, not stored).
+- Create (name input), rename, and delete (soft-delete, §5.2) — delete asks
+  for confirmation since it removes the group from every patient's
+  assignable/filterable list going forward, even though existing patients
+  keep their historical group name on record.
+- No bulk reassignment tool in this phase — if a group is deleted, patients
+  who had it keep showing that (now-retired) name read-only; reassigning
+  them individually is a normal patient-edit action.
 
 ## 9. Offline sync strategy (phased)
 
@@ -659,6 +747,12 @@ build them if multi-device offline editing turns out to be a real need.
   **resolved: yes.** Front desk can create/edit demographics (name, DOB,
   address, gender) but the API blocks any `front_desk` request touching
   `eye_visits`/`eye_refractions`/`attachments` (§4, §6).
+- **Patient groups: one per patient, assumed.** Modeled as a single nullable
+  `patients.group_id`, not many-to-many — matches "Friends"/"Family" reading
+  as mutually-exclusive categories, but wasn't asked explicitly. If a patient
+  should ever belong to more than one group at once, swap in a
+  `patient_group_members(patient_id, group_id)` join table; nothing else in
+  §5/§6/§8 needs to change.
 - Multi-clinic / multi-location support is not modeled (no `clinic_id`
   anywhere) — add a `clinics` table and scope everything to it if/when a
   second location is added.
