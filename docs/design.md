@@ -223,6 +223,19 @@ erDiagram
     a small clinic's volume (§10); widen to 5+ digits if that changes.
   - `UNIQUE NOT NULL` — enforced at the DB level as a backstop even though
     generation is already collision-free by construction.
+  - **Search**: `GET /patients?search=` (§6) matches name or `patient_number`
+    in one query:
+    ```sql
+    SELECT id, patient_number, name, dob, manual_age, gender
+    FROM patients
+    WHERE deleted_at IS NULL
+      AND (name LIKE '%' || :q || '%' COLLATE NOCASE
+           OR patient_number LIKE '%' || :q || '%')
+    ORDER BY created_at DESC;
+    ```
+    A leading-wildcard `LIKE` can't use the `patient_number`/`name` indexes,
+    but at clinic scale (§10: hundreds–low thousands of rows) a full scan is
+    still sub-millisecond — no need for FTS5 or trigram indexing yet.
 - **Age**: never stored as a derived value. If `patients.dob` is set, age is
   computed at read time (same logic as today's `computeAgeFromDob`). If
   `dob` is null, `manual_age` is authoritative. Exactly one of the two
@@ -443,10 +456,10 @@ but the unsorted default is never "whatever order the DB happened to return."
 | `GET /users` | admin | List staff accounts | `full_name` asc |
 | `POST /users` | admin | Create staff account | — |
 | `PATCH /users/:id` | admin | Update role/active status | — |
-| `GET /patients?search=` | any | List/search patients (summary row only — `patient_number`/name/age/gender; `search` matches either name or `patient_number`; full clinical detail lives on the visit endpoints below) | `created_at` **desc** (newest-registered first) |
+| `GET /patients?search=` | any | List/search patients — one query box, matches **name** (substring, case-insensitive) **or** `patient_number` (substring match, so typing a partial number or a date prefix like `P-20260705` also works) in a single OR'd query (§5.2). Summary rows only (`patient_number`/name/age/gender); full clinical detail lives on the visit endpoints below | `created_at` **desc** (newest-registered first) |
 | `POST /patients` | admin, doctor, front_desk | Create patient (demographics only — request body may not include clinical fields). Response includes the generated `patient_number` | — |
 | `GET /patients/:id` | any | Patient detail (demographics; visit history fetched separately via `/patients/:id/visits`) | — |
-| `GET /patients/by-number/:patient_number` | any | Look up a patient by their human-facing ID (e.g. staff reading it off a physical file) — resolves to the same detail response as `GET /patients/:id` | — |
+| `GET /patients/by-number/:patient_number` | any | **Exact-match** convenience alias for the common case of already having the full ID (e.g. a barcode/QR scan) — skips the substring search. Resolves to the same detail response as `GET /patients/:id` | — |
 | `PATCH /patients/:id` | admin, doctor, front_desk | Update demographics | — |
 | `DELETE /patients/:id` | admin | Soft-delete patient (+ cascade note in audit log) | — |
 | `GET /patients/:id/visits` | admin, doctor, front_desk | Visit history for a patient | `visit_at` **desc** (most recent visit first) |
@@ -483,9 +496,10 @@ but the unsorted default is never "whatever order the DB happened to return."
   by default" a server-guaranteed property rather than something that can
   drift if a client is added/changed later.
 - `patient_number` is shown wherever a patient is identified — patient list
-  row, patient detail header, and the search box accepts it directly
-  (via `GET /patients/by-number/:patient_number`) so staff can type/read out
-  the ID from a physical file instead of searching by name.
+  row, patient detail header. There is **one search box** in the patient
+  list, backed by `GET /patients?search=`, which matches name or
+  `patient_number` — staff don't need to pick "search by name" vs "search by
+  ID" as separate modes, they just type either one.
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 
