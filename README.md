@@ -1,16 +1,25 @@
-# Tasks — a Progressive Web App
+# Eye Care Records — a Progressive Web App
 
-An installable, offline-first task manager built with React, TypeScript, and
-Vite. It runs in the browser and can be installed to the home screen on both
-iOS and Android, where it behaves like a native app (own icon, splash/status
-bar theming, full-screen standalone window, works with no network).
+An installable, offline-first patient records app for eye care, built with
+React, TypeScript, and Vite. It runs in the browser and can be installed to
+the home screen on both iOS and Android, where it behaves like a native app
+(own icon, splash/status bar theming, full-screen standalone window, works
+with no network).
 
 ## Features
 
+- **Patient records**: name, date of birth, address, and gender. Age is
+  computed automatically from the date of birth; if no DOB is provided, age
+  can be entered manually instead.
+- **Eye treatment history**: each patient can have any number of dated visit
+  records. Every record captures **sphere**, **cylinder**, and **distance**
+  values for the **left** and **right** eye independently, each a signed
+  (positive or negative) decimal number.
 - **Installable** on iOS (Safari "Add to Home Screen") and Android/Chrome
   (native install prompt), plus desktop Chrome/Edge.
 - **Offline-first** — a service worker precaches the app shell, so it loads
-  with no network connection. Tasks are persisted to `localStorage` on-device.
+  with no network connection. All patient and record data is persisted to
+  `localStorage` on-device.
 - **Responsive, mobile-first UI** with safe-area handling for notches/home
   indicators.
 - **Auto-updating** service worker — new deployments are picked up on next
@@ -58,11 +67,13 @@ working offline.
 
 ```
 src/
-  components/   UI building blocks (task list, form, install/offline banners)
-  hooks/        useTasks (state + persistence), useOnlineStatus, useInstallPrompt
-  types.ts      Shared Task/Filter types
+  components/   Patient list/form/detail, eye-record form/history, install/offline banners
+  hooks/        usePatients, useEyeRecords (state + localStorage persistence),
+                useOnlineStatus, useInstallPrompt
+  utils/age.ts  Age computation from date of birth
+  types.ts      Shared Patient / EyeRecord / EyeValues types
 public/icons/   App icons (regular + maskable, generated from scripts/icon*.svg)
-scripts/        Icon source SVGs + generation script (npm run icons, needs `sharp`)
+scripts/        Icon source SVGs + generation script
 ```
 
 PWA configuration (manifest, service worker/caching strategy) lives in

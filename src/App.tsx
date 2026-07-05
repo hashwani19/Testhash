@@ -1,23 +1,30 @@
-import { useMemo, useState } from 'react'
-import { useTasks } from './hooks/useTasks'
-import { TaskForm } from './components/TaskForm'
-import { TaskList } from './components/TaskList'
+import { useState } from 'react'
+import { usePatients } from './hooks/usePatients'
+import { useEyeRecords } from './hooks/useEyeRecords'
+import { PatientList } from './components/PatientList'
+import { PatientForm } from './components/PatientForm'
+import { PatientDetail } from './components/PatientDetail'
+import { EyeRecordForm } from './components/EyeRecordForm'
 import { OfflineBanner } from './components/OfflineBanner'
 import { InstallBanner } from './components/InstallBanner'
-import type { Filter } from './types'
 import './App.css'
 
+type View = 'list' | 'newPatient' | 'editPatient' | 'patientDetail' | 'newRecord'
+
 function App() {
-  const { tasks, addTask, toggleTask, deleteTask, clearCompleted } = useTasks()
-  const [filter, setFilter] = useState<Filter>('all')
+  const { patients, addPatient, updatePatient, deletePatient } = usePatients()
+  const { addRecord, deleteRecord, deleteRecordsForPatient, getRecordsForPatient } =
+    useEyeRecords()
 
-  const visibleTasks = useMemo(() => {
-    if (filter === 'active') return tasks.filter((t) => !t.done)
-    if (filter === 'done') return tasks.filter((t) => t.done)
-    return tasks
-  }, [tasks, filter])
+  const [view, setView] = useState<View>('list')
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
 
-  const remaining = tasks.filter((t) => !t.done).length
+  const selectedPatient = patients.find((p) => p.id === selectedPatientId) ?? null
+
+  const goToList = () => {
+    setSelectedPatientId(null)
+    setView('list')
+  }
 
   return (
     <div className="app">
@@ -25,34 +32,80 @@ function App() {
       <InstallBanner />
 
       <header className="app-header">
-        <h1>Tasks</h1>
+        <h1>Eye Care Records</h1>
         <p className="subtitle">
-          {remaining === 0 ? 'All caught up' : `${remaining} task${remaining === 1 ? '' : 's'} left`}
+          {patients.length === 0
+            ? 'No patients yet'
+            : `${patients.length} patient${patients.length === 1 ? '' : 's'}`}
         </p>
       </header>
 
       <main className="app-main">
-        <TaskForm onAdd={addTask} />
-
-        <nav className="filter-tabs" aria-label="Filter tasks">
-          {(['all', 'active', 'done'] as Filter[]).map((f) => (
-            <button
-              key={f}
-              className={`filter-tab ${filter === f ? 'active' : ''}`}
-              onClick={() => setFilter(f)}
-              aria-pressed={filter === f}
-            >
-              {f}
+        {view === 'list' && (
+          <>
+            <button className="btn-primary btn-block" onClick={() => setView('newPatient')}>
+              Add patient
             </button>
-          ))}
-        </nav>
+            <PatientList
+              patients={patients}
+              onSelect={(id) => {
+                setSelectedPatientId(id)
+                setView('patientDetail')
+              }}
+            />
+          </>
+        )}
 
-        <TaskList tasks={visibleTasks} onToggle={toggleTask} onDelete={deleteTask} />
+        {view === 'newPatient' && (
+          <PatientForm
+            onSubmit={(input) => {
+              const id = addPatient(input)
+              setSelectedPatientId(id)
+              setView('patientDetail')
+            }}
+            onCancel={goToList}
+          />
+        )}
 
-        {tasks.some((t) => t.done) && (
-          <button className="btn-link" onClick={clearCompleted}>
-            Clear completed
-          </button>
+        {view === 'editPatient' && selectedPatient && (
+          <PatientForm
+            initial={selectedPatient}
+            onSubmit={(input) => {
+              updatePatient(selectedPatient.id, input)
+              setView('patientDetail')
+            }}
+            onCancel={() => setView('patientDetail')}
+          />
+        )}
+
+        {view === 'patientDetail' && selectedPatient && (
+          <PatientDetail
+            patient={selectedPatient}
+            records={getRecordsForPatient(selectedPatient.id)}
+            onEdit={() => setView('editPatient')}
+            onDelete={() => {
+              if (!confirm(`Delete ${selectedPatient.name} and all their records?`)) return
+              deleteRecordsForPatient(selectedPatient.id)
+              deletePatient(selectedPatient.id)
+              goToList()
+            }}
+            onAddRecord={() => setView('newRecord')}
+            onDeleteRecord={(id) => {
+              if (!confirm('Delete this record?')) return
+              deleteRecord(id)
+            }}
+            onBack={goToList}
+          />
+        )}
+
+        {view === 'newRecord' && selectedPatient && (
+          <EyeRecordForm
+            onSubmit={(input) => {
+              addRecord(selectedPatient.id, input)
+              setView('patientDetail')
+            }}
+            onCancel={() => setView('patientDetail')}
+          />
         )}
       </main>
     </div>

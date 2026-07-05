@@ -15,10 +15,10 @@ export default defineConfig({
       ],
       manifest: {
         id: '/',
-        name: 'Testhash Tasks',
-        short_name: 'Tasks',
+        name: 'Eye Care Records',
+        short_name: 'Eye Records',
         description:
-          'An offline-first task manager, installable on iOS and Android.',
+          'Offline-first patient and eye prescription records, installable on iOS and Android.',
         start_url: '/',
         scope: '/',
         display: 'standalone',
@@ -26,7 +26,7 @@ export default defineConfig({
         orientation: 'portrait-primary',
         background_color: '#0f172a',
         theme_color: '#0f172a',
-        categories: ['productivity', 'utilities'],
+        categories: ['medical', 'productivity'],
         icons: [
           {
             src: 'icons/icon-192.png',
