@@ -1,6 +1,7 @@
 import type { EyeVisit, Patient, PatientGroup } from '../types'
 import { getPatientAge } from '../utils/age'
 import { EyeRecordHistory } from './EyeRecordHistory'
+import { btnDanger, btnLink, btnPrimary, btnSecondary, card } from '../styles'
 
 interface Props {
   patient: Patient
@@ -31,51 +32,55 @@ export function PatientDetail({
   const groupName = groups.find((g) => g.id === patient.groupId)?.name
 
   return (
-    <div className="patient-detail">
-      <button className="btn-link" onClick={onBack}>
+    <div className="flex flex-col gap-4">
+      <button className={btnLink} onClick={onBack}>
         ‹ All patients
       </button>
 
-      <div className="patient-summary">
-        <h2>{patient.name}</h2>
-        <p className="subtitle">{patient.patientNumber}</p>
-        <dl className="patient-facts">
+      <div className={`${card} flex flex-col gap-3.5`}>
+        <h2 className="text-[22px] font-bold text-text-h">{patient.name}</h2>
+        <p className="text-sm text-text">{patient.patientNumber}</p>
+        <dl className="grid grid-cols-2 gap-3">
           <div>
-            <dt>Age</dt>
-            <dd>{age != null ? `${age} years` : 'Unknown'}</dd>
+            <dt className="text-xs uppercase tracking-wide text-text">Age</dt>
+            <dd className="mt-0.5 capitalize text-text-h">
+              {age != null ? `${age} years` : 'Unknown'}
+            </dd>
           </div>
           <div>
-            <dt>Date of birth</dt>
-            <dd>{patient.dob || 'Not provided'}</dd>
+            <dt className="text-xs uppercase tracking-wide text-text">Date of birth</dt>
+            <dd className="mt-0.5 capitalize text-text-h">{patient.dob || 'Not provided'}</dd>
           </div>
           <div>
-            <dt>Gender</dt>
-            <dd>{patient.gender === 'unspecified' ? 'Unspecified' : patient.gender}</dd>
+            <dt className="text-xs uppercase tracking-wide text-text">Gender</dt>
+            <dd className="mt-0.5 capitalize text-text-h">
+              {patient.gender === 'unspecified' ? 'Unspecified' : patient.gender}
+            </dd>
           </div>
           <div>
-            <dt>Group</dt>
-            <dd>{groupName || 'No group'}</dd>
+            <dt className="text-xs uppercase tracking-wide text-text">Group</dt>
+            <dd className="mt-0.5 capitalize text-text-h">{groupName || 'No group'}</dd>
           </div>
           <div>
-            <dt>Address</dt>
-            <dd>{patient.address || 'Not provided'}</dd>
+            <dt className="text-xs uppercase tracking-wide text-text">Address</dt>
+            <dd className="mt-0.5 capitalize text-text-h">{patient.address || 'Not provided'}</dd>
           </div>
         </dl>
-        <div className="form-actions">
-          <button className="btn-secondary" onClick={onEdit}>
+        <div className="flex justify-end gap-2.5">
+          <button className={btnSecondary} onClick={onEdit}>
             Edit patient
           </button>
           {canDeletePatient && (
-            <button className="btn-danger" onClick={onDelete}>
+            <button className={btnDanger} onClick={onDelete}>
               Delete patient
             </button>
           )}
         </div>
       </div>
 
-      <div className="section-header">
-        <h3>Eye treatment history</h3>
-        <button className="btn-primary" onClick={onAddRecord}>
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-bold text-text-h">Eye treatment history</h3>
+        <button className={btnPrimary} onClick={onAddRecord}>
           Add record
         </button>
       </div>

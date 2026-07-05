@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import type { EyeVisitInput } from '../hooks/useEyeVisits'
 import type { Eye, EyeRefraction, RefractionGrid, VisionType } from '../types'
 import { isEmptyVisit } from '../utils/eyeVisit'
+import { btnPrimary, btnSecondary, card, fieldInput, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   onSubmit: (input: EyeVisitInput) => void
@@ -54,13 +55,17 @@ function RefractionCell({
 }) {
   const label = visionType === 'distance' ? 'Distance' : 'Reading'
   return (
-    <div className="refraction-cell">
-      <span className="refraction-cell-label">{label}</span>
-      <div className="field-row">
-        <label className="field">
-          <span>Sphere</span>
+    <div className="flex flex-col gap-2 border-t border-border py-2 first:border-t-0 first:pt-0">
+      {/* Deliberately subdued relative to the Left/Right eye legend above. */}
+      <span className="text-[11px] font-medium uppercase tracking-wide text-text opacity-85">
+        {label}
+      </span>
+      <div className="flex flex-wrap gap-2.5">
+        <label className={`${fieldLabel} min-w-[90px]`}>
+          <span className={fieldLabelText}>Sphere</span>
           <input
             type="number"
+            className={fieldInput}
             step="any"
             inputMode="decimal"
             value={cell.sphere}
@@ -68,10 +73,11 @@ function RefractionCell({
             placeholder="0.00"
           />
         </label>
-        <label className="field">
-          <span>Cylinder</span>
+        <label className={`${fieldLabel} min-w-[90px]`}>
+          <span className={fieldLabelText}>Cylinder</span>
           <input
             type="number"
+            className={fieldInput}
             step="any"
             inputMode="decimal"
             value={cell.cylinder}
@@ -79,10 +85,11 @@ function RefractionCell({
             placeholder="0.00"
           />
         </label>
-        <label className="field">
-          <span>Axis</span>
+        <label className={`${fieldLabel} min-w-[90px]`}>
+          <span className={fieldLabelText}>Axis</span>
           <input
             type="number"
+            className={fieldInput}
             min={0}
             max={180}
             step={1}
@@ -93,12 +100,13 @@ function RefractionCell({
           />
         </label>
       </div>
-      <div className="field-row">
+      <div className="flex flex-wrap gap-2.5">
         {visionType === 'reading' && (
-          <label className="field">
-            <span>Add</span>
+          <label className={`${fieldLabel} min-w-[90px]`}>
+            <span className={fieldLabelText}>Add</span>
             <input
               type="number"
+              className={fieldInput}
               step="any"
               inputMode="decimal"
               value={cell.addPower}
@@ -107,10 +115,11 @@ function RefractionCell({
             />
           </label>
         )}
-        <label className="field">
-          <span>Visual acuity</span>
+        <label className={`${fieldLabel} min-w-[90px]`}>
+          <span className={fieldLabelText}>Visual acuity</span>
           <input
             type="text"
+            className={fieldInput}
             value={cell.visualAcuity}
             onChange={(e) => onChange({ ...cell, visualAcuity: e.target.value })}
             placeholder={visionType === 'distance' ? '6/6' : 'N/6'}
@@ -163,11 +172,12 @@ export function EyeRecordForm({ onSubmit, onCancel }: Props) {
   }
 
   return (
-    <form className="panel-form" onSubmit={submit}>
-      <label className="field">
-        <span>Visit date &amp; time</span>
+    <form className={`${card} flex flex-col gap-3.5`} onSubmit={submit}>
+      <label className={fieldLabel}>
+        <span className={fieldLabelText}>Visit date &amp; time</span>
         <input
           type="datetime-local"
+          className={fieldInput}
           value={visitAt}
           max={nowLocal()}
           onChange={(e) => setVisitAt(e.target.value)}
@@ -176,8 +186,12 @@ export function EyeRecordForm({ onSubmit, onCancel }: Props) {
       </label>
 
       {(['left', 'right'] as Eye[]).map((eye) => (
-        <fieldset className="eye-fieldset" key={eye}>
-          <legend>{eye === 'left' ? 'Left' : 'Right'} eye</legend>
+        // min-w-0 is required: fieldsets don't shrink in flex layouts by
+        // default, so without it this overflows past the card's edge.
+        <fieldset className="min-w-0 rounded-xl border border-border p-3" key={eye}>
+          <legend className="px-2 text-[17px] font-bold text-text-h">
+            {eye === 'left' ? 'Left' : 'Right'} eye
+          </legend>
           <RefractionCell
             visionType="distance"
             cell={grid[eye].distance}
@@ -191,33 +205,41 @@ export function EyeRecordForm({ onSubmit, onCancel }: Props) {
         </fieldset>
       ))}
 
-      <label className="field">
-        <span>Lenses (optional)</span>
+      <label className={fieldLabel}>
+        <span className={fieldLabelText}>Lenses (optional)</span>
         <input
           type="text"
+          className={fieldInput}
           value={lenses}
           onChange={(e) => setLenses(e.target.value)}
           placeholder="Progressive, bifocal, single vision…"
         />
       </label>
 
-      <label className="field">
-        <span>Diagnosis (optional)</span>
-        <textarea value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} rows={2} />
+      <label className={fieldLabel}>
+        <span className={fieldLabelText}>Diagnosis (optional)</span>
+        <textarea
+          className={fieldInput}
+          value={diagnosis}
+          onChange={(e) => setDiagnosis(e.target.value)}
+          rows={2}
+        />
       </label>
 
-      <label className="field">
-        <span>Treatment plan (optional)</span>
+      <label className={fieldLabel}>
+        <span className={fieldLabelText}>Treatment plan (optional)</span>
         <textarea
+          className={fieldInput}
           value={treatmentPlan}
           onChange={(e) => setTreatmentPlan(e.target.value)}
           rows={2}
         />
       </label>
 
-      <label className="field">
-        <span>Notes (optional)</span>
+      <label className={fieldLabel}>
+        <span className={fieldLabelText}>Notes (optional)</span>
         <textarea
+          className={fieldInput}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
@@ -226,16 +248,16 @@ export function EyeRecordForm({ onSubmit, onCancel }: Props) {
       </label>
 
       {isEmpty && (
-        <p className="form-hint">
+        <p className="text-right text-[13px] text-text">
           Enter at least one value below the visit date to save a record.
         </p>
       )}
 
-      <div className="form-actions">
-        <button type="button" className="btn-secondary" onClick={onCancel}>
+      <div className="flex justify-end gap-2.5">
+        <button type="button" className={btnSecondary} onClick={onCancel}>
           Cancel
         </button>
-        <button type="submit" className="btn-primary" disabled={isEmpty}>
+        <button type="submit" className={btnPrimary} disabled={isEmpty}>
           Save record
         </button>
       </div>

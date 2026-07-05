@@ -3,6 +3,7 @@ import type { Patient, PatientGroup } from '../types'
 import { getPatientAge } from '../utils/age'
 import { MIN_SEARCH_LENGTH, queryPatients } from '../utils/patientQuery'
 import type { PatientSort } from '../utils/patientQuery'
+import { fieldInput, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   patients: Patient[]
@@ -23,22 +24,23 @@ export function PatientList({ patients, groups, onSelect }: Props) {
   const groupName = (id?: string) => groups.find((g) => g.id === id)?.name
 
   return (
-    <div className="patient-list-controls">
-      <div className="field-row">
-        <label className="field">
-          <span>Search</span>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap gap-2.5">
+        <label className={fieldLabel}>
+          <span className={fieldLabelText}>Search</span>
           <input
             type="search"
+            className={fieldInput}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={`Name or patient number (${MIN_SEARCH_LENGTH}+ chars)`}
           />
         </label>
       </div>
-      <div className="field-row">
-        <label className="field">
-          <span>Group</span>
-          <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+      <div className="flex flex-wrap gap-2.5">
+        <label className={`${fieldLabel} min-w-[90px]`}>
+          <span className={fieldLabelText}>Group</span>
+          <select className={fieldInput} value={groupId} onChange={(e) => setGroupId(e.target.value)}>
             <option value="">All groups</option>
             {groups.map((g) => (
               <option key={g.id} value={g.id}>
@@ -47,9 +49,13 @@ export function PatientList({ patients, groups, onSelect }: Props) {
             ))}
           </select>
         </label>
-        <label className="field">
-          <span>Sort</span>
-          <select value={sort} onChange={(e) => setSort(e.target.value as PatientSort)}>
+        <label className={`${fieldLabel} min-w-[90px]`}>
+          <span className={fieldLabelText}>Sort</span>
+          <select
+            className={fieldInput}
+            value={sort}
+            onChange={(e) => setSort(e.target.value as PatientSort)}
+          >
             <option value="default">Newest first</option>
             <option value="group">By group</option>
           </select>
@@ -57,22 +63,29 @@ export function PatientList({ patients, groups, onSelect }: Props) {
       </div>
 
       {visible.length === 0 ? (
-        <p className="empty-state">
+        <p className="py-8 text-center text-sm text-text">
           {patients.length === 0 ? 'No patients yet. Add the first one.' : 'No patients match.'}
         </p>
       ) : (
-        <ul className="patient-list">
+        <ul className="flex flex-col gap-2">
           {visible.map((patient) => {
             const age = getPatientAge(patient)
             const group = groupName(patient.groupId)
             return (
               <li key={patient.id}>
-                <button className="patient-card" onClick={() => onSelect(patient.id)}>
-                  <span className="patient-name">
+                <button
+                  className="flex w-full flex-col gap-1 rounded-xl border border-border bg-surface px-4 py-3.5 text-left cursor-pointer"
+                  onClick={() => onSelect(patient.id)}
+                >
+                  <span className="font-semibold text-text-h">
                     {patient.name}
-                    {group && <span className="group-chip">{group}</span>}
+                    {group && (
+                      <span className="ml-2 rounded-full border border-border bg-bg px-2 py-0.5 text-[11px] font-medium text-text">
+                        {group}
+                      </span>
+                    )}
                   </span>
-                  <span className="patient-meta">
+                  <span className="text-[13px] capitalize text-text">
                     {patient.patientNumber} · {age != null ? `${age} yrs` : 'Age unknown'} ·{' '}
                     {patient.gender === 'unspecified' ? 'Gender unspecified' : patient.gender}
                   </span>

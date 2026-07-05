@@ -12,7 +12,7 @@ import { ManageGroupsScreen } from './components/ManageGroupsScreen'
 import { LoginScreen } from './components/LoginScreen'
 import { OfflineBanner } from './components/OfflineBanner'
 import { InstallBanner } from './components/InstallBanner'
-import './App.css'
+import { btnLink, btnPrimary } from './styles'
 
 type View = 'list' | 'newPatient' | 'editPatient' | 'patientDetail' | 'newRecord' | 'manageGroups'
 
@@ -36,30 +36,33 @@ function AppShell() {
   }
 
   return (
-    <div className="app">
+    <div className="mx-auto flex min-h-svh max-w-[560px] flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
       <OfflineBanner />
       <InstallBanner />
 
-      <header className="app-header">
-        <div className="app-header-row">
-          <h1>Eye Care Records</h1>
-          <div className="app-header-user">
+      <header className="px-5 pt-7 pb-2">
+        <div className="flex items-baseline justify-between gap-3">
+          <h1 className="text-[28px] font-bold tracking-[-0.4px] text-text-h">Eye Care Records</h1>
+          <div className="flex items-center gap-2.5 text-[13px] text-text">
             <span>
-              {user.fullName} <span className="role-badge">{user.role}</span>
+              {user.fullName}{' '}
+              <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-[11px] capitalize">
+                {user.role}
+              </span>
             </span>
-            <button className="btn-link" onClick={logout}>
+            <button className={btnLink} onClick={logout}>
               Sign out
             </button>
           </div>
         </div>
-        <p className="subtitle">
+        <p className="mt-1 text-sm text-text">
           {patients.length === 0
             ? 'No patients yet'
             : `${patients.length} patient${patients.length === 1 ? '' : 's'}`}
           {isAdmin && (
             <>
               {' · '}
-              <button className="btn-link" onClick={() => setView('manageGroups')}>
+              <button className={btnLink} onClick={() => setView('manageGroups')}>
                 Manage groups
               </button>
             </>
@@ -67,10 +70,10 @@ function AppShell() {
         </p>
       </header>
 
-      <main className="app-main">
+      <main className="flex flex-1 flex-col gap-4 px-5 pb-10 pt-3">
         {view === 'list' && (
           <>
-            <button className="btn-primary btn-block" onClick={() => setView('newPatient')}>
+            <button className={`${btnPrimary} w-full`} onClick={() => setView('newPatient')}>
               Add patient
             </button>
             <PatientList

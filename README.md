@@ -109,6 +109,8 @@ src/
   utils/        age.ts (age from DOB), patientNumber.ts (ID generation),
                 patientQuery.ts (search/filter/sort)
   types.ts      Shared User / Patient / PatientGroup / EyeVisit types
+  styles.ts     Shared Tailwind class-string constants (buttons, fields,
+                cards) — the single source of truth for repeated UI patterns
 public/icons/   App icons (regular + maskable, generated from scripts/icon*.svg)
 scripts/        Icon source SVGs + generation script
 docs/design.md  Target backend-synced architecture and schema
@@ -116,6 +118,19 @@ docs/design.md  Target backend-synced architecture and schema
 
 PWA configuration (manifest, service worker/caching strategy) lives in
 `vite.config.ts` via [`vite-plugin-pwa`](https://vite-pwa-org.netlify.app/).
+
+## Styling
+
+Styling is [Tailwind CSS v4](https://tailwindcss.com/) via `@tailwindcss/vite`
+— utility classes directly in JSX, no separate component stylesheet. Design
+tokens (colors, shadow) are CSS custom properties in `src/index.css`, mapped
+into Tailwind's theme with `@theme inline` so `bg-surface`/`text-text-h`/etc.
+utilities automatically follow the `prefers-color-scheme: dark` override
+without any `dark:` variant classes. The handful of patterns repeated across
+every screen (buttons, form fields, card surfaces) are pulled into shared
+class-string constants in `src/styles.ts` rather than duplicated per
+component — the same reasoning as extracting a repeated CSS class, just for
+utility strings.
 
 ## Regenerating icons
 

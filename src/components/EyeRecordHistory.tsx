@@ -1,4 +1,5 @@
 import type { Eye, EyeRefraction, EyeVisit, VisionType } from '../types'
+import { btnIcon } from '../styles'
 
 interface Props {
   visits: EyeVisit[]
@@ -14,25 +15,22 @@ function formatSigned(value?: number): string {
 function RefractionRow({ visionType, refraction }: { visionType: VisionType; refraction: EyeRefraction }) {
   const label = visionType === 'distance' ? 'Dist' : 'Read'
   return (
-    <div className="eye-values-row">
-      <span className="eye-values-label">{label}</span>
-      <span className="eye-values-cell">SPH {formatSigned(refraction.sphere)}</span>
-      <span className="eye-values-cell">CYL {formatSigned(refraction.cylinder)}</span>
-      <span className="eye-values-cell">
-        Axis {refraction.axis != null ? refraction.axis : '—'}
-      </span>
-      {visionType === 'reading' && (
-        <span className="eye-values-cell">Add {formatSigned(refraction.addPower)}</span>
-      )}
-      <span className="eye-values-cell">VA {refraction.visualAcuity || '—'}</span>
+    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-text">
+      {/* Deliberately subdued relative to the Left/Right eye label above. */}
+      <span className="text-[11px] font-medium uppercase tracking-wide text-text">{label}</span>
+      <span>SPH {formatSigned(refraction.sphere)}</span>
+      <span>CYL {formatSigned(refraction.cylinder)}</span>
+      <span>Axis {refraction.axis != null ? refraction.axis : '—'}</span>
+      {visionType === 'reading' && <span>Add {formatSigned(refraction.addPower)}</span>}
+      <span>VA {refraction.visualAcuity || '—'}</span>
     </div>
   )
 }
 
 function EyeSection({ eye, refractions }: { eye: Eye; refractions: EyeVisit['refractions'][Eye] }) {
   return (
-    <div className="eye-section">
-      <span className="eye-section-label">{eye === 'left' ? 'Left' : 'Right'} eye</span>
+    <div className="flex flex-col gap-1 border-t border-border py-2 first:border-t-0 first:pt-0">
+      <span className="text-base font-bold text-text-h">{eye === 'left' ? 'Left' : 'Right'} eye</span>
       <RefractionRow visionType="distance" refraction={refractions.distance} />
       <RefractionRow visionType="reading" refraction={refractions.reading} />
     </div>
@@ -41,15 +39,15 @@ function EyeSection({ eye, refractions }: { eye: Eye; refractions: EyeVisit['ref
 
 export function EyeRecordHistory({ visits, canDelete, onDelete }: Props) {
   if (visits.length === 0) {
-    return <p className="empty-state">No history yet. Add the first eye record.</p>
+    return <p className="py-8 text-center text-sm text-text">No history yet. Add the first eye record.</p>
   }
 
   return (
-    <ul className="record-list">
+    <ul className="flex flex-col gap-2.5">
       {visits.map((visit) => (
-        <li key={visit.id} className="record-card">
-          <div className="record-card-header">
-            <span className="record-date">
+        <li key={visit.id} className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface px-3.5 py-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-text-h">
               {new Date(visit.visitAt).toLocaleString(undefined, {
                 year: 'numeric',
                 month: 'short',
@@ -59,7 +57,7 @@ export function EyeRecordHistory({ visits, canDelete, onDelete }: Props) {
               })}
             </span>
             {canDelete && (
-              <button className="btn-icon" aria-label="Delete record" onClick={() => onDelete(visit.id)}>
+              <button className={btnIcon} aria-label="Delete record" onClick={() => onDelete(visit.id)}>
                 ×
               </button>
             )}
@@ -67,21 +65,21 @@ export function EyeRecordHistory({ visits, canDelete, onDelete }: Props) {
           <EyeSection eye="left" refractions={visit.refractions.left} />
           <EyeSection eye="right" refractions={visit.refractions.right} />
           {visit.lenses && (
-            <p className="record-notes">
+            <p className="mt-1 text-[13px] text-text">
               <strong>Lenses:</strong> {visit.lenses}
             </p>
           )}
           {visit.diagnosis && (
-            <p className="record-notes">
+            <p className="mt-1 text-[13px] text-text">
               <strong>Diagnosis:</strong> {visit.diagnosis}
             </p>
           )}
           {visit.treatmentPlan && (
-            <p className="record-notes">
+            <p className="mt-1 text-[13px] text-text">
               <strong>Treatment plan:</strong> {visit.treatmentPlan}
             </p>
           )}
-          {visit.notes && <p className="record-notes">{visit.notes}</p>}
+          {visit.notes && <p className="mt-1 text-[13px] text-text">{visit.notes}</p>}
         </li>
       ))}
     </ul>

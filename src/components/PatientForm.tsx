@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import type { Gender, Patient, PatientGroup } from '../types'
 import type { PatientInput } from '../hooks/usePatients'
 import { computeAgeFromDob } from '../utils/age'
+import { btnPrimary, btnSecondary, card, fieldInput, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   initial?: Patient
@@ -45,11 +46,12 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
   }
 
   return (
-    <form className="panel-form" onSubmit={submit}>
-      <label className="field">
-        <span>Name</span>
+    <form className={`${card} flex flex-col gap-3.5`} onSubmit={submit}>
+      <label className={fieldLabel}>
+        <span className={fieldLabelText}>Name</span>
         <input
           type="text"
+          className={fieldInput}
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Full name"
@@ -57,21 +59,23 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
         />
       </label>
 
-      <div className="field-row">
-        <label className="field">
-          <span>Date of birth</span>
+      <div className="flex flex-wrap gap-2.5">
+        <label className={`${fieldLabel} min-w-[90px]`}>
+          <span className={fieldLabelText}>Date of birth</span>
           <input
             type="date"
+            className={fieldInput}
             value={dob}
             max={new Date().toISOString().slice(0, 10)}
             onChange={(e) => setDob(e.target.value)}
           />
         </label>
 
-        <label className="field">
-          <span>Age {dob ? '(from DOB)' : ''}</span>
+        <label className={`${fieldLabel} min-w-[90px]`}>
+          <span className={fieldLabelText}>Age {dob ? '(from DOB)' : ''}</span>
           <input
             type="number"
+            className={fieldInput}
             inputMode="numeric"
             min={0}
             max={130}
@@ -84,9 +88,13 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
         </label>
       </div>
 
-      <label className="field">
-        <span>Gender</span>
-        <select value={gender} onChange={(e) => setGender(e.target.value as Gender)}>
+      <label className={fieldLabel}>
+        <span className={fieldLabelText}>Gender</span>
+        <select
+          className={fieldInput}
+          value={gender}
+          onChange={(e) => setGender(e.target.value as Gender)}
+        >
           {GENDER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
@@ -95,9 +103,9 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
         </select>
       </label>
 
-      <label className="field">
-        <span>Group</span>
-        <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+      <label className={fieldLabel}>
+        <span className={fieldLabelText}>Group</span>
+        <select className={fieldInput} value={groupId} onChange={(e) => setGroupId(e.target.value)}>
           <option value="">No group</option>
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
@@ -107,9 +115,10 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
         </select>
       </label>
 
-      <label className="field">
-        <span>Address</span>
+      <label className={fieldLabel}>
+        <span className={fieldLabelText}>Address</span>
         <textarea
+          className={fieldInput}
           value={address}
           onChange={(e) => setAddress(e.target.value)}
           placeholder="Street, city, postal code"
@@ -117,11 +126,11 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
         />
       </label>
 
-      <div className="form-actions">
-        <button type="button" className="btn-secondary" onClick={onCancel}>
+      <div className="flex justify-end gap-2.5">
+        <button type="button" className={btnSecondary} onClick={onCancel}>
           Cancel
         </button>
-        <button type="submit" className="btn-primary" disabled={!name.trim()}>
+        <button type="submit" className={btnPrimary} disabled={!name.trim()}>
           {initial ? 'Save changes' : 'Add patient'}
         </button>
       </div>
