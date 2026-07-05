@@ -236,6 +236,12 @@ erDiagram
     A leading-wildcard `LIKE` can't use the `patient_number`/`name` indexes,
     but at clinic scale (§10: hundreds–low thousands of rows) a full scan is
     still sub-millisecond — no need for FTS5 or trigram indexing yet.
+  - **Minimum query length: 3 characters.** A 1–2 character query against a
+    leading-wildcard `LIKE` on `name` matches a large fraction of any real
+    patient list (e.g. `"an"` matches every "*an*"), which is neither a
+    useful result nor a cheap query at scale. The API rejects
+    `search` values shorter than 3 characters with `400 Bad Request`; the
+    client never sends one in the first place (§7).
 - **Age**: never stored as a derived value. If `patients.dob` is set, age is
   computed at read time (same logic as today's `computeAgeFromDob`). If
   `dob` is null, `manual_age` is authoritative. Exactly one of the two
@@ -456,7 +462,7 @@ but the unsorted default is never "whatever order the DB happened to return."
 | `GET /users` | admin | List staff accounts | `full_name` asc |
 | `POST /users` | admin | Create staff account | — |
 | `PATCH /users/:id` | admin | Update role/active status | — |
-| `GET /patients?search=` | any | List/search patients — one query box, matches **name** (substring, case-insensitive) **or** `patient_number` (substring match, so typing a partial number or a date prefix like `P-20260705` also works) in a single OR'd query (§5.2). Summary rows only (`patient_number`/name/age/gender); full clinical detail lives on the visit endpoints below | `created_at` **desc** (newest-registered first) |
+| `GET /patients?search=` | any | List/search patients — one query box, matches **name** (substring, case-insensitive) **or** `patient_number` (substring match, so typing a partial number or a date prefix like `P-20260705` also works) in a single OR'd query (§5.2). `search` must be ≥3 characters or omitted; shorter values → `400`. Summary rows only (`patient_number`/name/age/gender); full clinical detail lives on the visit endpoints below | `created_at` **desc** (newest-registered first) |
 | `POST /patients` | admin, doctor, front_desk | Create patient (demographics only — request body may not include clinical fields). Response includes the generated `patient_number` | — |
 | `GET /patients/:id` | any | Patient detail (demographics; visit history fetched separately via `/patients/:id/visits`) | — |
 | `GET /patients/by-number/:patient_number` | any | **Exact-match** convenience alias for the common case of already having the full ID (e.g. a barcode/QR scan) — skips the substring search. Resolves to the same detail response as `GET /patients/:id` | — |
@@ -500,6 +506,9 @@ but the unsorted default is never "whatever order the DB happened to return."
   list, backed by `GET /patients?search=`, which matches name or
   `patient_number` — staff don't need to pick "search by name" vs "search by
   ID" as separate modes, they just type either one.
+- The search box debounces input and only calls the API once the query is
+  **3+ characters**; below that it shows the unfiltered (or previous) list
+  rather than firing a request, matching the API's enforced minimum (§5.2).
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 
