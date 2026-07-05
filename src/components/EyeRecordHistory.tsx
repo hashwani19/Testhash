@@ -1,5 +1,6 @@
 import type { Eye, EyeRefraction, EyeVisit, VisionType } from '../types'
 import { btnIcon } from '../styles'
+import { hasRefractionData } from '../utils/eyeVisit'
 
 interface Props {
   visits: EyeVisit[]
@@ -8,27 +9,33 @@ interface Props {
   onDelete: (id: string) => void
 }
 
-function formatSigned(value?: number): string {
-  if (value == null) return '—'
+function formatSigned(value: number): string {
   return value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2)
 }
 
 function RefractionRow({ visionType, refraction }: { visionType: VisionType; refraction: EyeRefraction }) {
+  if (!hasRefractionData(refraction)) return null
+
   const label = visionType === 'distance' ? 'Dist' : 'Read'
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-text">
       {/* Deliberately subdued relative to the Left/Right eye label above. */}
       <span className="text-[11px] font-medium uppercase tracking-wide text-text">{label}</span>
-      <span>SPH {formatSigned(refraction.sphere)}</span>
-      <span>CYL {formatSigned(refraction.cylinder)}</span>
-      <span>Axis {refraction.axis != null ? refraction.axis : '—'}</span>
-      {visionType === 'reading' && <span>Add {formatSigned(refraction.addPower)}</span>}
-      <span>VA {refraction.visualAcuity || '—'}</span>
+      {refraction.sphere != null && <span>SPH {formatSigned(refraction.sphere)}</span>}
+      {refraction.cylinder != null && <span>CYL {formatSigned(refraction.cylinder)}</span>}
+      {refraction.axis != null && <span>Axis {refraction.axis}</span>}
+      {visionType === 'reading' && refraction.addPower != null && (
+        <span>Add {formatSigned(refraction.addPower)}</span>
+      )}
+      {refraction.visualAcuity && <span>VA {refraction.visualAcuity}</span>}
     </div>
   )
 }
 
 function EyeSection({ eye, refractions }: { eye: Eye; refractions: EyeVisit['refractions'][Eye] }) {
+  if (!hasRefractionData(refractions.distance) && !hasRefractionData(refractions.reading)) {
+    return null
+  }
   return (
     <div className="flex flex-col gap-1 border-t border-border py-2 first:border-t-0 first:pt-0">
       <span className="text-base font-bold text-text-h">{eye === 'left' ? 'Left' : 'Right'} eye</span>

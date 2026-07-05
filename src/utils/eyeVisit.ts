@@ -1,6 +1,6 @@
 import type { EyeRefraction, RefractionGrid } from '../types'
 
-function hasRefractionData(refraction: EyeRefraction): boolean {
+export function hasRefractionData(refraction: EyeRefraction): boolean {
   return (
     refraction.sphere != null ||
     refraction.cylinder != null ||
