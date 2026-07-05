@@ -15,11 +15,10 @@ interface CellState {
   sphere: string
   cylinder: string
   axis: string
-  addPower: string
   visualAcuity: string
 }
 
-const EMPTY_CELL: CellState = { sphere: '', cylinder: '', axis: '', addPower: '', visualAcuity: '' }
+const EMPTY_CELL: CellState = { sphere: '', cylinder: '', axis: '', visualAcuity: '' }
 
 type GridState = Record<Eye, Record<VisionType, CellState>>
 
@@ -42,7 +41,6 @@ function cellToRefraction(cell: CellState): EyeRefraction {
     sphere: cell.sphere ? Number(cell.sphere) : undefined,
     cylinder: cell.cylinder ? Number(cell.cylinder) : undefined,
     axis: cell.axis ? Number(cell.axis) : undefined,
-    addPower: cell.addPower ? Number(cell.addPower) : undefined,
     visualAcuity: cell.visualAcuity.trim() || undefined,
   }
 }
@@ -52,7 +50,6 @@ function refractionToCell(refraction: EyeRefraction): CellState {
     sphere: refraction.sphere != null ? String(refraction.sphere) : '',
     cylinder: refraction.cylinder != null ? String(refraction.cylinder) : '',
     axis: refraction.axis != null ? String(refraction.axis) : '',
-    addPower: refraction.addPower != null ? String(refraction.addPower) : '',
     visualAcuity: refraction.visualAcuity ?? '',
   }
 }
@@ -125,22 +122,6 @@ function RefractionCell({
             placeholder="0-180"
           />
         </label>
-      </div>
-      <div className="flex flex-wrap gap-2.5">
-        {visionType === 'reading' && (
-          <label className={`${fieldLabel} min-w-[90px]`}>
-            <span className={fieldLabelText}>Add</span>
-            <input
-              type="number"
-              className={fieldInput}
-              step="any"
-              inputMode="decimal"
-              value={cell.addPower}
-              onChange={(e) => onChange({ ...cell, addPower: e.target.value })}
-              placeholder="0.00"
-            />
-          </label>
-        )}
         <label className={`${fieldLabel} min-w-[90px]`}>
           <span className={fieldLabelText}>Visual acuity</span>
           <input

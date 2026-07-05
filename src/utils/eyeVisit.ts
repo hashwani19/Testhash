@@ -5,7 +5,6 @@ export function hasRefractionData(refraction: EyeRefraction): boolean {
     refraction.sphere != null ||
     refraction.cylinder != null ||
     refraction.axis != null ||
-    refraction.addPower != null ||
     Boolean(refraction.visualAcuity)
   )
 }

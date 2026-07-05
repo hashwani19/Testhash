@@ -14,7 +14,7 @@ These were confirmed before writing this doc and drive every section below:
 |---|---|
 | Data architecture | Backend + database (not local-only) — multi-device sync, durable storage |
 | User accounts | Multiple staff accounts with distinct logins, roles, and an audit trail |
-| Clinical fields | Per eye, **Distance** and **Reading** prescriptions (sphere, cylinder, axis, visual acuity each), Add power for reading, a free-text Lenses line, diagnosis/treatment plan text, attachments (images/scans) — modeled directly on a real prescription pad (see §5.2) |
+| Clinical fields | Per eye, **Distance** and **Reading** prescriptions (sphere, cylinder, axis, visual acuity each), a free-text Lenses line, diagnosis/treatment plan text, attachments (images/scans) — modeled directly on a real prescription pad (see §5.2). Add power was considered but dropped as unneeded (§13) |
 | Compliance | Design includes health-data safeguards (encryption, audit logging, retention/export/erasure, consent) from the start |
 
 ## 2. Goals / Non-goals
@@ -22,7 +22,7 @@ These were confirmed before writing this doc and drive every section below:
 **Goals**
 - Durable, centralized storage for patient and clinical data — survives device loss, accessible from multiple staff devices.
 - Distinct staff accounts with role-appropriate access (front desk can enter/edit clinical records but never deletes them; deletion is admin-only).
-- A complete refraction record per visit — distance and reading prescriptions (sphere, cylinder, axis, visual acuity) per eye, plus add power, lenses, diagnosis/treatment plan, and file attachments.
+- A complete refraction record per visit — distance and reading prescriptions (sphere, cylinder, axis, visual acuity) per eye, plus lenses, diagnosis/treatment plan, and file attachments.
 - An audit trail of who created/changed what, and when.
 - A defensible baseline for handling health data: encryption, retention, export, and erasure.
 - The existing PWA (install, offline shell) is preserved — this is additive, not a rewrite of the client framework.
@@ -184,7 +184,6 @@ erDiagram
         real sphere
         real cylinder
         int axis
-        real add_power
         text visual_acuity
     }
     ATTACHMENTS {
@@ -300,19 +299,25 @@ erDiagram
   Reading     Add +1.5  ...    ...    N/6          ...     ...    ...    N/6
   ```
 
+  (This is the real card's own layout, reproduced for context — our schema
+  does *not* model the "Add" value it shows; see below.)
+
   This replaces the earlier single ambiguous "distance" field from the first
   draft of this document — resolving Open Question #1 below.
 - **`eye` enum**: `'left' | 'right'`.
 - **`vision_type` enum**: `'distance' | 'reading'` — which row of the
   prescription this is.
 - **Sphere / cylinder**: signed decimals, diopters (e.g. `-0.25`, `+2.00`).
-  Nullable — a reading row may only carry `add_power` and leave sphere/
-  cylinder blank if the clinic's convention is "same as distance, see Add".
+  Nullable — a reading row can be left entirely blank if a clinic doesn't
+  compute a separate near prescription for a given patient.
   Stored as `REAL` (D1/SQLite) — see §5.3 for Postgres equivalent (`NUMERIC(5,2)`).
 - **Axis**: integer 0–180 (degrees). Not signed — enforce range in application
   validation (`CHECK` constraint optionally added in D1/SQLite 3.37+).
-- **`add_power`**: signed decimal, diopters — the near-vision addition,
-  primarily meaningful when `vision_type = 'reading'`.
+- **No `add_power` field.** The near-vision "Add" value on the physical card
+  was considered and deliberately dropped — not needed for this clinic's
+  records (§13). Sphere/cylinder/axis/VA are captured per row regardless of
+  vision type; a reading prescription is entered as its own absolute values,
+  not as a delta on top of distance.
 - **`visual_acuity`**: free text (e.g. `"6/6"` for distance, `"N/6"` for
   reading) rather than a fixed enum — acuity notations vary by clinic/chart
   (Snellen feet, Snellen metric, Snellen near-point) and forcing a single
@@ -431,7 +436,6 @@ CREATE TABLE eye_refractions (
     sphere        REAL,
     cylinder      REAL,
     axis          INTEGER CHECK (axis IS NULL OR (axis >= 0 AND axis <= 180)),
-    add_power     REAL,                         -- near-vision addition; mainly for 'reading' rows
     visual_acuity TEXT,                         -- e.g. "6/6", "N/6" — free text, chart-dependent notation
     UNIQUE (visit_id, eye, vision_type)
 );
@@ -615,14 +619,10 @@ data.
 - "Eye treatment history" below: visit cards, most-recent-visit-first
   (`visit_at` desc, §6).
 - Each visit card shows: visit date + time, the Distance/Reading ×
-  Left/Right refraction grid (Sphere, Cylinder, Axis, Visual Acuity —
-  **Add power is captured on the form (§8.4) but deliberately not shown
-  here**, keeping the summary card focused), Lenses, diagnosis/treatment
-  plan text, and any attachment thumbnails.
+  Left/Right refraction grid (Sphere, Cylinder, Axis, Visual Acuity),
+  Lenses, diagnosis/treatment plan text, and any attachment thumbnails.
 - A row (Distance or Reading) or an entire eye section is omitted from the
-  card if it has nothing to show — no `—` placeholders for unset fields,
-  and Add power alone (with nothing else in that row) doesn't count as
-  "something to show" here, since it isn't displayed.
+  card if it has nothing to show — no `—` placeholders for unset fields.
 - "Add record" button — visible to `admin`, `doctor`, *and* `front_desk`
   (front desk can create/edit clinical records, §4). Delete on a visit card
   is **admin-only**.
@@ -634,8 +634,8 @@ data.
 - Date + time picker for `visit_at`, defaulting to "now," adjustable (for
   backdating a transcribed paper chart, §5.2).
 - Refraction grid: 2×2 layout — rows Distance/Reading, columns Left/Right —
-  each cell holding Sphere, Cylinder, Axis, Visual Acuity. Add power sits
-  with the Reading row (§5.2).
+  each cell holding Sphere, Cylinder, Axis, Visual Acuity (§5.2 — no Add
+  power field).
 - Lenses (free text), Diagnosis, Treatment Plan fields.
 - Attachment upload control — rendered only for `admin`/`doctor`.
 - Save / Cancel.
@@ -753,6 +753,12 @@ build them if multi-device offline editing turns out to be a real need.
   **resolved: yes.** Front desk can create/edit demographics (name, DOB,
   address, gender) but the API blocks any `front_desk` request touching
   `eye_visits`/`eye_refractions`/`attachments` (§4, §6).
+- ~~Should `eye_refractions` carry an `add_power` (near-vision addition)
+  field~~ — **resolved: no, dropped.** Considered during design (real
+  prescription pads carry an "Add" value on the Reading row, §5.2) and
+  briefly implemented, but not needed for this clinic's records. Reading
+  prescriptions are entered as absolute sphere/cylinder/axis/VA values, not
+  as a delta on top of Distance.
 - **Patient groups: one per patient, assumed.** Modeled as a single nullable
   `patients.group_id`, not many-to-many — matches "Friends"/"Family" reading
   as mutually-exclusive categories, but wasn't asked explicitly. If a patient

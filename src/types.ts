@@ -42,7 +42,6 @@ export interface EyeRefraction {
   sphere?: number
   cylinder?: number
   axis?: number
-  addPower?: number
   visualAcuity?: string
 }
 
