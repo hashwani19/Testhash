@@ -637,6 +637,8 @@ data.
   each cell holding Sphere, Cylinder, Axis, Visual Acuity (§5.2 — no Add
   power field).
 - Lenses (free text), Diagnosis, Treatment Plan fields.
+- Follow-up date (optional date picker, `follow_up_date`, §5.2) — cannot
+  predate `visit_at`.
 - Attachment upload control — rendered only for `admin`/`doctor`.
 - Save / Cancel.
 

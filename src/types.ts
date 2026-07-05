@@ -57,6 +57,8 @@ export interface EyeVisit {
   lenses?: string
   diagnosis?: string
   treatmentPlan?: string
+  /** ISO date string (YYYY-MM-DD). When to bring the patient back next. */
+  followUpDate?: string
   notes?: string
   createdAt: number
   updatedAt: number

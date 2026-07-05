@@ -147,6 +147,7 @@ export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
   const [lenses, setLenses] = useState(initial?.lenses ?? '')
   const [diagnosis, setDiagnosis] = useState(initial?.diagnosis ?? '')
   const [treatmentPlan, setTreatmentPlan] = useState(initial?.treatmentPlan ?? '')
+  const [followUpDate, setFollowUpDate] = useState(initial?.followUpDate ?? '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
 
   const setCell = (eye: Eye, visionType: VisionType, next: CellState) => {
@@ -167,7 +168,7 @@ export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
     [grid],
   )
 
-  const isEmpty = isEmptyVisit(refractions, [lenses, diagnosis, treatmentPlan, notes])
+  const isEmpty = isEmptyVisit(refractions, [lenses, diagnosis, treatmentPlan, followUpDate, notes])
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -178,6 +179,7 @@ export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
       lenses,
       diagnosis,
       treatmentPlan,
+      followUpDate,
       notes,
     })
   }
@@ -248,13 +250,24 @@ export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
       </label>
 
       <label className={fieldLabel}>
+        <span className={fieldLabelText}>Follow-up date (optional)</span>
+        <input
+          type="date"
+          className={fieldInput}
+          value={followUpDate}
+          min={visitAt.slice(0, 10)}
+          onChange={(e) => setFollowUpDate(e.target.value)}
+        />
+      </label>
+
+      <label className={fieldLabel}>
         <span className={fieldLabelText}>Notes (optional)</span>
         <textarea
           className={fieldInput}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
-          placeholder="Other observations, follow-up…"
+          placeholder="Other observations…"
         />
       </label>
 

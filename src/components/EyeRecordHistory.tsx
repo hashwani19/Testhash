@@ -13,6 +13,18 @@ function formatSigned(value: number): string {
   return value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2)
 }
 
+// new Date("YYYY-MM-DD") parses as UTC midnight, which can display as the
+// previous day in timezones behind UTC — build the Date from local
+// components instead.
+function formatDateOnly(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
 function RefractionRow({ visionType, refraction }: { visionType: VisionType; refraction: EyeRefraction }) {
   if (!hasRefractionData(refraction)) return null
 
@@ -95,6 +107,11 @@ export function EyeRecordHistory({ visits, canDelete, onEdit, onDelete }: Props)
           {visit.treatmentPlan && (
             <p className="mt-1 text-[13px] text-text">
               <strong>Treatment plan:</strong> {visit.treatmentPlan}
+            </p>
+          )}
+          {visit.followUpDate && (
+            <p className="mt-1 text-[13px] text-text">
+              <strong>Follow-up:</strong> {formatDateOnly(visit.followUpDate)}
             </p>
           )}
           {visit.notes && <p className="mt-1 text-[13px] text-text">{visit.notes}</p>}

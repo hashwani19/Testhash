@@ -12,6 +12,8 @@ import type { EyeVisit, Patient, PatientGroup } from './types'
 const DAY = 24 * 60 * 60 * 1000
 const ago = (days: number) => Date.now() - days * DAY
 const agoIso = (days: number) => new Date(ago(days)).toISOString()
+// Negative `days` gives a date in the future — used for follow-up dates.
+const agoDateOnly = (days: number) => new Date(ago(days)).toISOString().slice(0, 10)
 
 export const SEED_GROUPS: PatientGroup[] = [
   { id: 'seed-group-family', name: 'Family', createdAt: ago(85), updatedAt: ago(85) },
@@ -151,6 +153,7 @@ export const SEED_VISITS: EyeVisit[] = [
     lenses: 'Progressive',
     diagnosis: 'Cataract progressing, left eye more affected',
     treatmentPlan: 'Referral for cataract surgery evaluation',
+    followUpDate: agoDateOnly(-2),
     notes: 'Patient reports increased glare at night while driving',
     createdAt: ago(12),
     updatedAt: ago(12),
@@ -239,6 +242,7 @@ export const SEED_VISITS: EyeVisit[] = [
     lenses: 'Single vision, myopia control coating',
     diagnosis: 'Myopia progressing as expected for age',
     treatmentPlan: 'Follow-up in 3 months',
+    followUpDate: agoDateOnly(-87),
     notes: 'Recommend increased outdoor time to help slow progression',
     createdAt: ago(3),
     updatedAt: ago(3),
@@ -270,6 +274,7 @@ export const SEED_VISITS: EyeVisit[] = [
     lenses: 'Single vision, anti-glare',
     diagnosis: 'Mild myopia, slight progression',
     treatmentPlan: 'Updated prescription; review in 1 year',
+    followUpDate: agoDateOnly(-361),
     createdAt: ago(4),
     updatedAt: ago(4),
   },
@@ -372,6 +377,7 @@ export const SEED_VISITS: EyeVisit[] = [
     lenses: 'Progressive',
     diagnosis: 'Presbyopia stable; mild astigmatism newly noted, monitoring',
     treatmentPlan: 'Recheck astigmatism at next visit',
+    followUpDate: agoDateOnly(-89),
     createdAt: ago(1),
     updatedAt: ago(1),
   },

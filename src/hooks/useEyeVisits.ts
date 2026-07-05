@@ -22,6 +22,7 @@ export interface EyeVisitInput {
   lenses?: string
   diagnosis?: string
   treatmentPlan?: string
+  followUpDate?: string
   notes?: string
 }
 
@@ -34,7 +35,15 @@ export function useEyeVisits() {
 
   const addVisit = useCallback((patientId: string, input: EyeVisitInput) => {
     // A visit date alone isn't a record — require at least one real value.
-    if (isEmptyVisit(input.refractions, [input.lenses, input.diagnosis, input.treatmentPlan, input.notes])) {
+    if (
+      isEmptyVisit(input.refractions, [
+        input.lenses,
+        input.diagnosis,
+        input.treatmentPlan,
+        input.followUpDate,
+        input.notes,
+      ])
+    ) {
       return false
     }
     const now = Date.now()
@@ -46,6 +55,7 @@ export function useEyeVisits() {
       lenses: input.lenses?.trim() || undefined,
       diagnosis: input.diagnosis?.trim() || undefined,
       treatmentPlan: input.treatmentPlan?.trim() || undefined,
+      followUpDate: input.followUpDate || undefined,
       notes: input.notes?.trim() || undefined,
       createdAt: now,
       updatedAt: now,
@@ -56,7 +66,15 @@ export function useEyeVisits() {
 
   const updateVisit = useCallback((id: string, input: EyeVisitInput) => {
     // Same rule as create — editing everything away shouldn't leave an empty record behind.
-    if (isEmptyVisit(input.refractions, [input.lenses, input.diagnosis, input.treatmentPlan, input.notes])) {
+    if (
+      isEmptyVisit(input.refractions, [
+        input.lenses,
+        input.diagnosis,
+        input.treatmentPlan,
+        input.followUpDate,
+        input.notes,
+      ])
+    ) {
       return false
     }
     setVisits((prev) =>
@@ -69,6 +87,7 @@ export function useEyeVisits() {
               lenses: input.lenses?.trim() || undefined,
               diagnosis: input.diagnosis?.trim() || undefined,
               treatmentPlan: input.treatmentPlan?.trim() || undefined,
+              followUpDate: input.followUpDate || undefined,
               notes: input.notes?.trim() || undefined,
               updatedAt: Date.now(),
             }
