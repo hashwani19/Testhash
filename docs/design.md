@@ -144,7 +144,7 @@ erDiagram
     EYE_VISITS {
         text id PK
         text patient_id FK
-        text visit_date
+        text visit_at
         text examiner_id FK
         text diagnosis
         text treatment_plan
@@ -250,6 +250,23 @@ erDiagram
 - **`audit_log.before_json` / `after_json`**: snapshot of the changed row
   (JSON-encoded), not full-table diffs — enough to reconstruct history without
   a general-purpose event-sourcing system.
+- **Timestamps & default sort order**: every record-bearing table carries a
+  proper datetime, and every list view has a defined default sort — never
+  incidental insertion order:
+  - `patients.created_at` — when the patient was registered. Patient lists
+    default to **newest-registered-first** (`created_at DESC`), backed by
+    `idx_patients_created_at`.
+  - `eye_visits.visit_at` — a full **date + time** of the exam (not just a
+    date), distinct from `eye_visits.created_at` (when the row was entered
+    into the system, which may be later — e.g. front desk transcribing a
+    paper chart the next day). Visit history defaults to
+    **most-recent-visit-first** (`visit_at DESC`), backed by
+    `idx_visits_patient`. Using a full timestamp (rather than a date) means
+    two same-day visits sort deterministically by time, not by insertion
+    order.
+  - This is a formal contract of the API (§6), not just a UI convenience —
+    the server guarantees the order, so the client never needs its own
+    sort-by-date logic to get a correct default view.
 
 ### 5.3 Schema (Cloudflare D1 / SQLite dialect)
 
@@ -289,11 +306,12 @@ CREATE TABLE patients (
 );
 CREATE INDEX idx_patients_name ON patients(name);
 CREATE INDEX idx_patients_deleted_at ON patients(deleted_at);
+CREATE INDEX idx_patients_created_at ON patients(created_at DESC);  -- supports default sort (§6)
 
 CREATE TABLE eye_visits (
     id             TEXT PRIMARY KEY,
     patient_id     TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    visit_date     TEXT NOT NULL,               -- ISO date
+    visit_at       TEXT NOT NULL,               -- ISO-8601 datetime (date + time) of the exam
     examiner_id    TEXT REFERENCES users(id),
     diagnosis      TEXT,
     treatment_plan TEXT,
@@ -303,7 +321,7 @@ CREATE TABLE eye_visits (
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX idx_visits_patient ON eye_visits(patient_id, visit_date DESC);
+CREATE INDEX idx_visits_patient ON eye_visits(patient_id, visit_at DESC);
 
 -- One row per (eye, vision_type): up to 4 rows per visit
 -- (left/distance, left/reading, right/distance, right/reading),
@@ -366,31 +384,34 @@ CREATE INDEX idx_audit_actor ON audit_log(actor_user_id, created_at);
 ## 6. API surface (v1)
 
 All endpoints under `/api`, JSON in/out, session cookie required except `/auth/login`.
-Every mutating endpoint writes an `audit_log` row server-side.
+Every mutating endpoint writes an `audit_log` row server-side. Every endpoint
+that returns a list has a fixed **default sort order** (noted per row below);
+callers can override with an explicit `?sort=` param later if ever needed,
+but the unsorted default is never "whatever order the DB happened to return."
 
-| Method & path | Role required | Purpose |
-|---|---|---|
-| `POST /auth/login` | — | Authenticate, set session cookie |
-| `POST /auth/logout` | any | Invalidate session |
-| `GET /auth/me` | any | Current user + role |
-| `GET /users` | admin | List staff accounts |
-| `POST /users` | admin | Create staff account |
-| `PATCH /users/:id` | admin | Update role/active status |
-| `GET /patients?search=` | any | List/search patients (summary row only — name/age/gender; full clinical detail lives on the visit endpoints below) |
-| `POST /patients` | admin, doctor, front_desk | Create patient (demographics only — request body may not include clinical fields) |
-| `GET /patients/:id` | any | Patient detail (demographics; visit history fetched separately via `/patients/:id/visits`) |
-| `PATCH /patients/:id` | admin, doctor, front_desk | Update demographics |
-| `DELETE /patients/:id` | admin | Soft-delete patient (+ cascade note in audit log) |
-| `GET /patients/:id/visits` | admin, doctor, front_desk | Visit history for a patient |
-| `POST /patients/:id/visits` | admin, doctor, front_desk | Create a visit — one payload containing up to 4 refraction rows (distance/reading × left/right), diagnosis, treatment plan, and lenses |
-| `GET /visits/:id` | admin, doctor, front_desk | Single visit detail |
-| `PATCH /visits/:id` | admin, doctor, front_desk | Update a visit |
-| `DELETE /visits/:id` | admin | Delete a visit |
-| `POST /visits/:id/attachments` | admin, doctor | Upload a file (multipart → R2) |
-| `GET /attachments/:id` | admin, doctor | Fetch (redirect to a short-lived signed R2 URL) |
-| `DELETE /attachments/:id` | admin | Remove attachment |
-| `GET /patients/:id/export` | admin | Full patient data export (JSON/PDF) — data portability |
-| `GET /audit-log?entity_type=&entity_id=` | admin | Audit trail lookup |
+| Method & path | Role required | Purpose | Default sort |
+|---|---|---|---|
+| `POST /auth/login` | — | Authenticate, set session cookie | — |
+| `POST /auth/logout` | any | Invalidate session | — |
+| `GET /auth/me` | any | Current user + role | — |
+| `GET /users` | admin | List staff accounts | `full_name` asc |
+| `POST /users` | admin | Create staff account | — |
+| `PATCH /users/:id` | admin | Update role/active status | — |
+| `GET /patients?search=` | any | List/search patients (summary row only — name/age/gender; full clinical detail lives on the visit endpoints below) | `created_at` **desc** (newest-registered first) |
+| `POST /patients` | admin, doctor, front_desk | Create patient (demographics only — request body may not include clinical fields) | — |
+| `GET /patients/:id` | any | Patient detail (demographics; visit history fetched separately via `/patients/:id/visits`) | — |
+| `PATCH /patients/:id` | admin, doctor, front_desk | Update demographics | — |
+| `DELETE /patients/:id` | admin | Soft-delete patient (+ cascade note in audit log) | — |
+| `GET /patients/:id/visits` | admin, doctor, front_desk | Visit history for a patient | `visit_at` **desc** (most recent visit first) |
+| `POST /patients/:id/visits` | admin, doctor, front_desk | Create a visit — one payload containing a `visit_at` datetime, up to 4 refraction rows (distance/reading × left/right), diagnosis, treatment plan, and lenses | — |
+| `GET /visits/:id` | admin, doctor, front_desk | Single visit detail | — |
+| `PATCH /visits/:id` | admin, doctor, front_desk | Update a visit | — |
+| `DELETE /visits/:id` | admin | Delete a visit | — |
+| `POST /visits/:id/attachments` | admin, doctor | Upload a file (multipart → R2) | — |
+| `GET /attachments/:id` | admin, doctor | Fetch (redirect to a short-lived signed R2 URL) | — |
+| `DELETE /attachments/:id` | admin | Remove attachment | — |
+| `GET /patients/:id/export` | admin | Full patient data export (JSON/PDF) — data portability | — |
+| `GET /audit-log?entity_type=&entity_id=` | admin | Audit trail lookup | `created_at` **desc** (most recent activity first) |
 
 ## 7. Client changes (high level)
 
@@ -406,6 +427,14 @@ Every mutating endpoint writes an `audit_log` row server-side.
   Left/Right grid (§5.2) instead of the current single sphere/cylinder/
   distance-per-eye fields — plus diagnosis/treatment plan, lenses, and
   attachment upload/preview.
+- The visit form captures `visit_at` as a date **and** time (not just a
+  date picker) — default it to "now" on create, but let staff adjust it
+  (e.g. entering a visit that happened earlier and is only now being typed
+  up).
+- Patient list and visit history render in whatever order the API returns
+  (§6) — the client does not re-sort client-side. This keeps "sorted by date
+  by default" a server-guaranteed property rather than something that can
+  drift if a client is added/changed later.
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 
