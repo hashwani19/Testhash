@@ -21,7 +21,7 @@ These were confirmed before writing this doc and drive every section below:
 
 **Goals**
 - Durable, centralized storage for patient and clinical data — survives device loss, accessible from multiple staff devices.
-- Distinct staff accounts with role-appropriate access (front desk shouldn't see clinical detail; only clinicians record prescriptions/diagnoses).
+- Distinct staff accounts with role-appropriate access (front desk can enter/edit clinical records but never deletes them; deletion is admin-only).
 - A complete refraction record per visit — distance and reading prescriptions (sphere, cylinder, axis, visual acuity) per eye, plus add power, lenses, diagnosis/treatment plan, and file attachments.
 - An audit trail of who created/changed what, and when.
 - A defensible baseline for handling health data: encryption, retention, export, and erasure.
@@ -82,17 +82,22 @@ changes (see column-type notes in §5.3).
 
 ## 4. User roles & permissions
 
-| Role | Can view demographics | Can create/edit demographics | Can view/edit clinical records (visits, refraction, diagnosis) | Can manage attachments | Can manage staff accounts | Can view audit log |
-|---|---|---|---|---|---|---|
-| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `doctor` | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
-| `front_desk` | ✅ | ✅ | ❌ (no SPH/CYL/diagnosis) | ❌ | ❌ | ❌ |
+| Role | Can view demographics | Can create/edit demographics | Can view/create/edit clinical records (visits, refraction, diagnosis) | Can delete clinical records | Can manage attachments (upload/view) | Can manage staff accounts | Can view audit log |
+|---|---|---|---|---|---|---|---|
+| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `doctor` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
+| `front_desk` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 Front desk can register a new patient and edit name/DOB/address/gender —
-e.g. at check-in, before a clinician ever opens the chart — but the API
-rejects any `front_desk`-authenticated request touching `eye_visits`,
-`eye_refractions`, or `attachments` (§6), regardless of what the client
-sends.
+e.g. at check-in, before a clinician ever opens the chart. Front desk can
+also **create and edit** clinical records — a common workflow is
+transcribing a doctor's handwritten prescription card into the system —
+but cannot **delete** a visit, refraction row, or attachment; deletion of
+any clinical record is admin-only, same restriction doctors already have.
+The API rejects any `front_desk`-authenticated request touching
+`attachments` at all (upload or delete), and rejects any `DELETE` on
+`eye_visits`/`eye_refractions` from anyone but `admin` (§6), regardless of
+what the client sends.
 
 Permissions are enforced **server-side** on every API call — the role in the
 session determines what the API returns/accepts, never trust the client.
@@ -371,15 +376,15 @@ Every mutating endpoint writes an `audit_log` row server-side.
 | `GET /users` | admin | List staff accounts |
 | `POST /users` | admin | Create staff account |
 | `PATCH /users/:id` | admin | Update role/active status |
-| `GET /patients?search=` | any | List/search patients (front desk sees demographics only — response shaped by role) |
+| `GET /patients?search=` | any | List/search patients (summary row only — name/age/gender; full clinical detail lives on the visit endpoints below) |
 | `POST /patients` | admin, doctor, front_desk | Create patient (demographics only — request body may not include clinical fields) |
-| `GET /patients/:id` | any | Patient detail (role-shaped response) |
+| `GET /patients/:id` | any | Patient detail (demographics; visit history fetched separately via `/patients/:id/visits`) |
 | `PATCH /patients/:id` | admin, doctor, front_desk | Update demographics |
 | `DELETE /patients/:id` | admin | Soft-delete patient (+ cascade note in audit log) |
-| `GET /patients/:id/visits` | admin, doctor | Visit history for a patient |
-| `POST /patients/:id/visits` | admin, doctor | Create a visit — one payload containing up to 4 refraction rows (distance/reading × left/right), diagnosis, treatment plan, and lenses |
-| `GET /visits/:id` | admin, doctor | Single visit detail |
-| `PATCH /visits/:id` | admin, doctor | Update a visit |
+| `GET /patients/:id/visits` | admin, doctor, front_desk | Visit history for a patient |
+| `POST /patients/:id/visits` | admin, doctor, front_desk | Create a visit — one payload containing up to 4 refraction rows (distance/reading × left/right), diagnosis, treatment plan, and lenses |
+| `GET /visits/:id` | admin, doctor, front_desk | Single visit detail |
+| `PATCH /visits/:id` | admin, doctor, front_desk | Update a visit |
 | `DELETE /visits/:id` | admin | Delete a visit |
 | `POST /visits/:id/attachments` | admin, doctor | Upload a file (multipart → R2) |
 | `GET /attachments/:id` | admin, doctor | Fetch (redirect to a short-lived signed R2 URL) |
@@ -392,9 +397,11 @@ Every mutating endpoint writes an `audit_log` row server-side.
 - Replace direct `localStorage` reads/writes in `usePatients`/`useEyeRecords`
   with calls to the API, backed by an IndexedDB cache for offline reads
   (e.g. via a small wrapper or a library like `idb`).
-- Add a login screen + auth context; role gates which UI sections render
-  (front-desk users don't see refraction/diagnosis forms at all, not just
-  disabled).
+- Add a login screen + auth context; role gates which UI controls render —
+  front desk sees and can edit the same refraction/diagnosis forms as a
+  doctor, but the delete button on a visit/refraction/attachment is hidden
+  (not just disabled) for anyone but `admin`. Attachment upload/view is
+  hidden entirely for `front_desk`.
 - Rework `EyeRecordForm`/`EyeRecordHistory` around the Distance/Reading ×
   Left/Right grid (§5.2) instead of the current single sphere/cylinder/
   distance-per-eye fields — plus diagnosis/treatment plan, lenses, and
