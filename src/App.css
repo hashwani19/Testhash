@@ -176,6 +176,9 @@
   color: var(--text-h);
   min-width: 0;
   font-family: inherit;
+  /* iOS Safari auto-zooms the viewport on focusing any field under 16px —
+     browsers don't inherit body font-size onto form controls by default. */
+  font-size: 16px;
   resize: vertical;
 }
 
@@ -546,6 +549,7 @@
   padding: 6px 10px;
   background: var(--bg);
   color: var(--text-h);
+  font-size: 16px;
 }
 
 .group-count {

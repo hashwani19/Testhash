@@ -47,14 +47,16 @@ export function ManageGroupsScreen({ groups, patients, onAdd, onRename, onDelete
       <p className="subtitle">Admin-only. Doctors and front desk can assign patients to these groups but can't create or remove them.</p>
 
       <form className="panel-form" onSubmit={submitNew}>
-        <div className="task-form-row">
-          <input
-            type="text"
-            placeholder="New group name…"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            aria-label="New group name"
-          />
+        <div className="field-row">
+          <label className="field">
+            <input
+              type="text"
+              placeholder="New group name…"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              aria-label="New group name"
+            />
+          </label>
           <button type="submit" className="btn-primary" disabled={!newName.trim()}>
             Add
           </button>
