@@ -1,0 +1,466 @@
+# Eye Care Records — System Design
+
+Status: **draft, for future implementation**. This document specifies the
+target architecture and schema for evolving the current client-only MVP into
+a multi-user, backend-synced clinical records system. Nothing here is
+implemented yet — it is the blueprint the next implementation phases build
+against.
+
+## 1. Scope decisions (locked in for this design)
+
+These were confirmed before writing this doc and drive every section below:
+
+| Decision | Choice |
+|---|---|
+| Data architecture | Backend + database (not local-only) — multi-device sync, durable storage |
+| User accounts | Multiple staff accounts with distinct logins, roles, and an audit trail |
+| Clinical fields | Sphere, cylinder, axis, add power, distance (existing), visual acuity, diagnosis/treatment plan text, attachments (images/scans) |
+| Compliance | Design includes health-data safeguards (encryption, audit logging, retention/export/erasure, consent) from the start |
+
+## 2. Goals / Non-goals
+
+**Goals**
+- Durable, centralized storage for patient and clinical data — survives device loss, accessible from multiple staff devices.
+- Distinct staff accounts with role-appropriate access (front desk shouldn't see clinical detail; only clinicians record prescriptions/diagnoses).
+- A complete refraction record per visit (sphere, cylinder, axis, add, distance) plus visual acuity, diagnosis/treatment plan, and file attachments.
+- An audit trail of who created/changed what, and when.
+- A defensible baseline for handling health data: encryption, retention, export, and erasure.
+- The existing PWA (install, offline shell) is preserved — this is additive, not a rewrite of the client framework.
+
+**Non-goals (this phase)**
+- Real-time collaborative editing (two staff editing the same record simultaneously).
+- Billing/insurance, scheduling/appointments, e-prescribing integrations.
+- Full offline write support (queued writes while offline, synced later) — Phase 1 targets **online-required writes, offline-cached reads**; true offline writes are called out as a later phase (§8).
+- HIPAA/GDPR certification — this document establishes the technical safeguards a compliance program would need, not a legal compliance sign-off.
+
+## 3. Architecture
+
+### 3.1 Current state (recap)
+
+React + Vite PWA, all state in `localStorage`, no backend, no auth. Single
+implicit user (whoever has the device). This is what exists in the repo today.
+
+### 3.2 Target architecture
+
+```mermaid
+flowchart LR
+    subgraph Client["React PWA (Cloudflare Pages)"]
+        UI[UI components]
+        Cache[(IndexedDB read cache)]
+        SW[Service worker]
+    end
+
+    subgraph Edge["Cloudflare Workers / Pages Functions"]
+        API[REST API]
+        Auth[Auth: session/JWT]
+    end
+
+    DB[(Cloudflare D1 — relational DB)]
+    Store[(Cloudflare R2 — attachments)]
+
+    UI -->|HTTPS/JSON| API
+    API --> Auth
+    API --> DB
+    API --> Store
+    UI -.reads/cache.-> Cache
+    SW -.precache app shell.-> UI
+```
+
+### 3.3 Platform choice
+
+The frontend is already deployed on Cloudflare Pages, so the backend stays in
+the same ecosystem to avoid a second platform/bill:
+
+- **API**: Cloudflare Pages Functions (or a Worker) — same deploy pipeline, same account.
+- **Database**: Cloudflare D1 (SQLite-compatible, serverless, free tier fits a small clinic's data volume).
+- **File storage**: Cloudflare R2 (S3-compatible) for attachments (images/scans).
+- **Auth**: server-issued session cookie (httpOnly, `Secure`, `SameSite=Strict`) backed by a `sessions` table — simpler to reason about and revoke than raw JWTs for a low-traffic internal tool.
+
+If data volume or query complexity later outgrows D1, the schema in §5 is
+standard relational SQL and ports to Postgres (Neon/Supabase) with minimal
+changes (see column-type notes in §5.3).
+
+## 4. User roles & permissions
+
+| Role | Can view demographics | Can view/edit clinical records (visits, refraction, diagnosis) | Can manage attachments | Can manage staff accounts | Can view audit log |
+|---|---|---|---|---|---|
+| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `doctor` | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `front_desk` | ✅ | ❌ (read-only demographics; no SPH/CYL/diagnosis) | ❌ | ❌ | ❌ |
+
+Permissions are enforced **server-side** on every API call — the role in the
+session determines what the API returns/accepts, never trust the client.
+Modeled as a `role` enum on the user for now (§5); if permission needs get
+more granular later (e.g. per-patient access lists), split into `roles` +
+`permissions` + join tables without changing the rest of the schema.
+
+## 5. Data model
+
+### 5.1 Entity overview
+
+```mermaid
+erDiagram
+    USERS ||--o{ SESSIONS : has
+    USERS ||--o{ AUDIT_LOG : "acts in"
+    USERS ||--o{ PATIENTS : "created by"
+    USERS ||--o{ EYE_VISITS : "examined by"
+    PATIENTS ||--o{ EYE_VISITS : has
+    PATIENTS ||--o{ CONSENTS : has
+    EYE_VISITS ||--o{ EYE_REFRACTIONS : has
+    EYE_VISITS ||--o{ VISUAL_ACUITY_READINGS : has
+    EYE_VISITS ||--o{ ATTACHMENTS : has
+
+    USERS {
+        text id PK
+        text email
+        text password_hash
+        text full_name
+        text role
+        int active
+        text created_at
+    }
+    PATIENTS {
+        text id PK
+        text name
+        text dob
+        int manual_age
+        text address
+        text gender
+        text created_by FK
+        text created_at
+        text updated_at
+        text deleted_at
+    }
+    EYE_VISITS {
+        text id PK
+        text patient_id FK
+        text visit_date
+        text examiner_id FK
+        text diagnosis
+        text treatment_plan
+        text follow_up_date
+        text notes
+        text created_at
+    }
+    EYE_REFRACTIONS {
+        text id PK
+        text visit_id FK
+        text eye
+        real sphere
+        real cylinder
+        int axis
+        real add_power
+        real distance
+    }
+    VISUAL_ACUITY_READINGS {
+        text id PK
+        text visit_id FK
+        text eye
+        int corrected
+        text notation
+    }
+    ATTACHMENTS {
+        text id PK
+        text visit_id FK
+        text uploaded_by FK
+        text file_name
+        text content_type
+        text storage_key
+        int size_bytes
+        text created_at
+    }
+    CONSENTS {
+        text id PK
+        text patient_id FK
+        text consent_type
+        text granted_at
+        text revoked_at
+        text document_ref
+    }
+    AUDIT_LOG {
+        text id PK
+        text actor_user_id FK
+        text action
+        text entity_type
+        text entity_id
+        text before_json
+        text after_json
+        text ip_address
+        text created_at
+    }
+    SESSIONS {
+        text id PK
+        text user_id FK
+        text expires_at
+        text created_at
+    }
+```
+
+### 5.2 Field notes / definitions
+
+- **Age**: never stored as a derived value. If `patients.dob` is set, age is
+  computed at read time (same logic as today's `computeAgeFromDob`). If
+  `dob` is null, `manual_age` is authoritative. Exactly one of the two
+  should be considered "current" at a time — enforced in application logic,
+  not a DB constraint (SQLite has no partial-exclusion constraints worth the
+  complexity here).
+- **`eye` enum**: `'left' | 'right'` — used on both `eye_refractions` and
+  `visual_acuity_readings` so each visit has exactly two refraction rows and
+  two-or-more acuity rows (one per eye, optionally both corrected/uncorrected).
+- **Sphere / cylinder / add_power**: signed decimals, diopters. Stored as
+  `REAL` (D1/SQLite) — see §5.3 for Postgres equivalent (`NUMERIC(5,2)`).
+- **Axis**: integer 0–180 (degrees). Not signed — enforce range in application
+  validation (`CHECK` constraint optionally added in D1/SQLite 3.37+).
+- **Distance**: signed decimal, carried over unchanged from the existing
+  implementation. *Open question (§9): confirm whether this represents
+  pupillary distance (PD, mm) or another clinic-specific measurement —
+  currently implemented generically per the original spec.*
+- **`manual_age`**: nullable integer, only meaningful when `dob` is null.
+- **Soft delete**: `patients.deleted_at` — patient rows are never hard-deleted
+  by normal staff action (needed for audit trail integrity); hard delete is a
+  separate admin-triggered erasure workflow (§8.4).
+- **`audit_log.before_json` / `after_json`**: snapshot of the changed row
+  (JSON-encoded), not full-table diffs — enough to reconstruct history without
+  a general-purpose event-sourcing system.
+
+### 5.3 Schema (Cloudflare D1 / SQLite dialect)
+
+```sql
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE users (
+    id            TEXT PRIMARY KEY,             -- uuid, generated by application
+    email         TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,                -- argon2id/bcrypt hash, never plaintext
+    full_name     TEXT NOT NULL,
+    role          TEXT NOT NULL CHECK (role IN ('admin', 'doctor', 'front_desk')),
+    active        INTEGER NOT NULL DEFAULT 1,   -- boolean
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    last_login_at TEXT
+);
+
+CREATE TABLE sessions (
+    id         TEXT PRIMARY KEY,                -- opaque random token, hashed before storage
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_sessions_user ON sessions(user_id);
+
+CREATE TABLE patients (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    dob         TEXT,                           -- ISO date (YYYY-MM-DD); null if unknown
+    manual_age  INTEGER,                        -- only used when dob is null
+    address     TEXT,
+    gender      TEXT NOT NULL CHECK (gender IN ('female', 'male', 'other', 'unspecified')),
+    created_by  TEXT REFERENCES users(id),
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    deleted_at  TEXT                            -- soft delete; null = active
+);
+CREATE INDEX idx_patients_name ON patients(name);
+CREATE INDEX idx_patients_deleted_at ON patients(deleted_at);
+
+CREATE TABLE eye_visits (
+    id             TEXT PRIMARY KEY,
+    patient_id     TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    visit_date     TEXT NOT NULL,               -- ISO date
+    examiner_id    TEXT REFERENCES users(id),
+    diagnosis      TEXT,
+    treatment_plan TEXT,
+    follow_up_date TEXT,
+    notes          TEXT,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_visits_patient ON eye_visits(patient_id, visit_date DESC);
+
+CREATE TABLE eye_refractions (
+    id         TEXT PRIMARY KEY,
+    visit_id   TEXT NOT NULL REFERENCES eye_visits(id) ON DELETE CASCADE,
+    eye        TEXT NOT NULL CHECK (eye IN ('left', 'right')),
+    sphere     REAL NOT NULL DEFAULT 0,
+    cylinder   REAL NOT NULL DEFAULT 0,
+    axis       INTEGER CHECK (axis IS NULL OR (axis >= 0 AND axis <= 180)),
+    add_power  REAL,
+    distance   REAL NOT NULL DEFAULT 0,
+    UNIQUE (visit_id, eye)
+);
+
+CREATE TABLE visual_acuity_readings (
+    id         TEXT PRIMARY KEY,
+    visit_id   TEXT NOT NULL REFERENCES eye_visits(id) ON DELETE CASCADE,
+    eye        TEXT NOT NULL CHECK (eye IN ('left', 'right')),
+    corrected  INTEGER NOT NULL DEFAULT 0,      -- boolean: with (1) or without (0) correction
+    notation   TEXT NOT NULL,                   -- e.g. "20/20", "6/6"
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_acuity_visit ON visual_acuity_readings(visit_id);
+
+CREATE TABLE attachments (
+    id           TEXT PRIMARY KEY,
+    visit_id     TEXT NOT NULL REFERENCES eye_visits(id) ON DELETE CASCADE,
+    uploaded_by  TEXT REFERENCES users(id),
+    file_name    TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    storage_key  TEXT NOT NULL,                 -- R2 object key
+    size_bytes   INTEGER NOT NULL,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_attachments_visit ON attachments(visit_id);
+
+CREATE TABLE consents (
+    id            TEXT PRIMARY KEY,
+    patient_id    TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    consent_type  TEXT NOT NULL,                -- e.g. "treatment", "data_processing"
+    granted_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    revoked_at    TEXT,
+    document_ref  TEXT                          -- R2 key for a signed consent form, if any
+);
+CREATE INDEX idx_consents_patient ON consents(patient_id);
+
+CREATE TABLE audit_log (
+    id             TEXT PRIMARY KEY,
+    actor_user_id  TEXT REFERENCES users(id),
+    action         TEXT NOT NULL CHECK (action IN ('create', 'update', 'delete', 'export')),
+    entity_type    TEXT NOT NULL,               -- 'patient' | 'eye_visit' | 'attachment' | ...
+    entity_id      TEXT NOT NULL,
+    before_json    TEXT,
+    after_json     TEXT,
+    ip_address     TEXT,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_audit_entity ON audit_log(entity_type, entity_id);
+CREATE INDEX idx_audit_actor ON audit_log(actor_user_id, created_at);
+```
+
+**Porting to Postgres later**: `TEXT` timestamp/date columns → `TIMESTAMPTZ`/`DATE`;
+`TEXT` id columns → native `UUID` with `gen_random_uuid()`; `REAL` → `NUMERIC(5,2)`;
+`INTEGER` booleans → native `BOOLEAN`; `CHECK (... IN (...))` → native `ENUM` types.
+
+## 6. API surface (v1)
+
+All endpoints under `/api`, JSON in/out, session cookie required except `/auth/login`.
+Every mutating endpoint writes an `audit_log` row server-side.
+
+| Method & path | Role required | Purpose |
+|---|---|---|
+| `POST /auth/login` | — | Authenticate, set session cookie |
+| `POST /auth/logout` | any | Invalidate session |
+| `GET /auth/me` | any | Current user + role |
+| `GET /users` | admin | List staff accounts |
+| `POST /users` | admin | Create staff account |
+| `PATCH /users/:id` | admin | Update role/active status |
+| `GET /patients?search=` | any | List/search patients (front desk sees demographics only — response shaped by role) |
+| `POST /patients` | admin, doctor | Create patient |
+| `GET /patients/:id` | any | Patient detail (role-shaped response) |
+| `PATCH /patients/:id` | admin, doctor | Update demographics |
+| `DELETE /patients/:id` | admin | Soft-delete patient (+ cascade note in audit log) |
+| `GET /patients/:id/visits` | admin, doctor | Visit history for a patient |
+| `POST /patients/:id/visits` | admin, doctor | Create a visit (refraction + acuity + diagnosis in one payload) |
+| `GET /visits/:id` | admin, doctor | Single visit detail |
+| `PATCH /visits/:id` | admin, doctor | Update a visit |
+| `DELETE /visits/:id` | admin | Delete a visit |
+| `POST /visits/:id/attachments` | admin, doctor | Upload a file (multipart → R2) |
+| `GET /attachments/:id` | admin, doctor | Fetch (redirect to a short-lived signed R2 URL) |
+| `DELETE /attachments/:id` | admin | Remove attachment |
+| `GET /patients/:id/export` | admin | Full patient data export (JSON/PDF) — data portability |
+| `GET /audit-log?entity_type=&entity_id=` | admin | Audit trail lookup |
+
+## 7. Client changes (high level)
+
+- Replace direct `localStorage` reads/writes in `usePatients`/`useEyeRecords`
+  with calls to the API, backed by an IndexedDB cache for offline reads
+  (e.g. via a small wrapper or a library like `idb`).
+- Add a login screen + auth context; role gates which UI sections render
+  (front-desk users don't see refraction/diagnosis forms at all, not just
+  disabled).
+- Extend `EyeRecordForm`/`EyeRecordHistory` for axis, add power, visual
+  acuity, diagnosis/treatment plan, and attachment upload/preview.
+- Existing offline-shell behavior (service worker precache, install banners)
+  is unaffected — it's a separate concern from data sync.
+
+## 8. Offline sync strategy (phased)
+
+1. **Phase 1 (this design's target)**: writes require connectivity; reads are
+   served from an IndexedDB cache populated on last successful fetch, so the
+   app is still browsable offline, just not editable.
+2. **Phase 2**: queued writes — mutations made offline are stored in an
+   "outbox" table client-side and replayed on reconnect, in order.
+3. **Phase 3**: conflict handling for the outbox — add a `version` integer
+   column to mutable tables (`patients`, `eye_visits`), incremented per
+   update; the API rejects writes whose `version` doesn't match current
+   state, and the client surfaces a merge/overwrite prompt.
+
+Phases 2–3 are called out but explicitly deferred (see Non-goals) — only
+build them if multi-device offline editing turns out to be a real need.
+
+## 9. Security & compliance
+
+- **Transport**: TLS everywhere (Cloudflare terminates this automatically).
+- **At rest**: D1 and R2 encrypt at rest by default; no additional
+  application-level encryption planned initially. Revisit field-level
+  encryption for `patients.address`/`name` only if a future threat model
+  requires it (adds significant key-management complexity for a small
+  clinic tool).
+- **Authentication**: password hashed with argon2id (or bcrypt if the
+  runtime lacks argon2 support); session tokens are random, hashed before
+  storage in `sessions`, short expiry with sliding renewal.
+- **Authorization**: enforced per-request server-side from `users.role`
+  (§4) — never inferred from client state.
+- **Audit trail**: every create/update/delete/export is logged to
+  `audit_log` with actor, before/after snapshot, and timestamp (§5.3).
+  Read-access logging (who *viewed* a chart, not just who changed it) is
+  not in Phase 1 — add an `action = 'view'` audit path later if required by
+  a specific compliance regime.
+- **Consent**: `consents` table tracks what a patient has agreed to, with
+  grant/revoke timestamps and an optional signed-document reference in R2.
+- **Retention / right to erasure**: patients are soft-deleted by default
+  (`deleted_at`); a separate admin-only **hard delete** workflow physically
+  removes the row and cascaded visits/attachments after confirmation, and
+  records the erasure itself in `audit_log` (actor + timestamp only — no
+  patient PHI retained in that log entry once erased).
+- **Data portability**: `GET /patients/:id/export` produces a full JSON (or
+  PDF) export of everything the schema holds for that patient.
+
+## 10. Non-functional requirements
+
+- **Scale**: designed for a single small-to-mid clinic (hundreds to low
+  thousands of patients, tens of visits/day) — well within D1's free-tier
+  limits. Revisit if usage crosses into multi-clinic/enterprise territory.
+- **Backup**: rely on Cloudflare D1's built-in point-in-time recovery;
+  supplement with a scheduled export job (reuses the `/export` endpoint) to
+  R2 as an independent backup if stronger guarantees are needed later.
+- **Availability**: Cloudflare's edge network; no additional HA design needed
+  at this scale.
+
+## 11. Migration plan from current MVP
+
+1. Stand up the D1 database and Pages Functions API with the schema in §5,
+   deployed alongside the existing static site (no client changes yet).
+2. Add auth (login screen, session handling) gated behind a feature flag so
+   the current localStorage flow keeps working until the API is verified.
+3. Swap `usePatients`/`useEyeRecords` to call the API instead of
+   `localStorage`, with a one-time client-side import tool that reads any
+   existing `localStorage` data and POSTs it to the new API (so early
+   testers/demo data isn't lost).
+4. Add the new clinical fields (axis, add, visual acuity, diagnosis/plan,
+   attachments) to the forms and history view.
+5. Remove the localStorage code path once the API path is confirmed stable.
+
+## 12. Open questions / future extensions
+
+- **"Distance" field semantics**: confirm with the practitioner whether this
+  is pupillary distance (PD, mm) or something else — affects display
+  formatting/units and validation range, though the underlying signed-float
+  column works either way.
+- Should `front_desk` be able to *create* a patient (demographics only) even
+  though they can't see clinical data? Current role table (§4) assumes yes
+  for create/edit demographics — confirm before implementing.
+- Multi-clinic / multi-location support is not modeled (no `clinic_id`
+  anywhere) — add a `clinics` table and scope everything to it if/when a
+  second location is added.
+- Appointment scheduling and billing are intentionally out of scope; if
+  needed later, they're additive tables (`appointments`, `invoices`) that
+  reference `patients`/`eye_visits` without changing what's here.
