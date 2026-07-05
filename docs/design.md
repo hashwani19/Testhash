@@ -615,8 +615,14 @@ data.
 - "Eye treatment history" below: visit cards, most-recent-visit-first
   (`visit_at` desc, §6).
 - Each visit card shows: visit date + time, the Distance/Reading ×
-  Left/Right refraction grid, Add power, Lenses, diagnosis/treatment plan
-  text, and any attachment thumbnails.
+  Left/Right refraction grid (Sphere, Cylinder, Axis, Visual Acuity —
+  **Add power is captured on the form (§8.4) but deliberately not shown
+  here**, keeping the summary card focused), Lenses, diagnosis/treatment
+  plan text, and any attachment thumbnails.
+- A row (Distance or Reading) or an entire eye section is omitted from the
+  card if it has nothing to show — no `—` placeholders for unset fields,
+  and Add power alone (with nothing else in that row) doesn't count as
+  "something to show" here, since it isn't displayed.
 - "Add record" button — visible to `admin`, `doctor`, *and* `front_desk`
   (front desk can create/edit clinical records, §4). Delete on a visit card
   is **admin-only**.

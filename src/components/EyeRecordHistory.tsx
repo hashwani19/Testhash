@@ -1,6 +1,5 @@
 import type { Eye, EyeRefraction, EyeVisit, VisionType } from '../types'
 import { btnIcon } from '../styles'
-import { hasRefractionData } from '../utils/eyeVisit'
 
 interface Props {
   visits: EyeVisit[]
@@ -13,8 +12,21 @@ function formatSigned(value: number): string {
   return value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2)
 }
 
+// Add power is captured on the form but intentionally not shown in this
+// summary view, so visibility here is based only on what's actually
+// displayed (sphere/cylinder/axis/VA) — a row with only an Add power set
+// would otherwise render its label with nothing next to it.
+function hasDisplayedValues(refraction: EyeRefraction): boolean {
+  return (
+    refraction.sphere != null ||
+    refraction.cylinder != null ||
+    refraction.axis != null ||
+    Boolean(refraction.visualAcuity)
+  )
+}
+
 function RefractionRow({ visionType, refraction }: { visionType: VisionType; refraction: EyeRefraction }) {
-  if (!hasRefractionData(refraction)) return null
+  if (!hasDisplayedValues(refraction)) return null
 
   const label = visionType === 'distance' ? 'Dist' : 'Read'
   return (
@@ -28,16 +40,13 @@ function RefractionRow({ visionType, refraction }: { visionType: VisionType; ref
       {refraction.sphere != null && <span>SPH {formatSigned(refraction.sphere)}</span>}
       {refraction.cylinder != null && <span>CYL {formatSigned(refraction.cylinder)}</span>}
       {refraction.axis != null && <span>Axis {refraction.axis}</span>}
-      {visionType === 'reading' && refraction.addPower != null && (
-        <span>Add {formatSigned(refraction.addPower)}</span>
-      )}
       {refraction.visualAcuity && <span>VA {refraction.visualAcuity}</span>}
     </div>
   )
 }
 
 function EyeSection({ eye, refractions }: { eye: Eye; refractions: EyeVisit['refractions'][Eye] }) {
-  if (!hasRefractionData(refractions.distance) && !hasRefractionData(refractions.reading)) {
+  if (!hasDisplayedValues(refractions.distance) && !hasDisplayedValues(refractions.reading)) {
     return null
   }
   return (
