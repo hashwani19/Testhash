@@ -18,9 +18,13 @@ function RefractionRow({ visionType, refraction }: { visionType: VisionType; ref
 
   const label = visionType === 'distance' ? 'Dist' : 'Read'
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-text">
-      {/* Deliberately subdued relative to the Left/Right eye label above. */}
-      <span className="text-[11px] font-medium uppercase tracking-wide text-text">{label}</span>
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[13px] text-text">
+      {/* Deliberately subdued relative to the Left/Right eye label above,
+          but same baseline/family as the values so the row reads as one
+          row rather than two mismatched fonts. */}
+      <span className="min-w-[34px] text-[12px] font-semibold uppercase tracking-wide text-text-h">
+        {label}
+      </span>
       {refraction.sphere != null && <span>SPH {formatSigned(refraction.sphere)}</span>}
       {refraction.cylinder != null && <span>CYL {formatSigned(refraction.cylinder)}</span>}
       {refraction.axis != null && <span>Axis {refraction.axis}</span>}
