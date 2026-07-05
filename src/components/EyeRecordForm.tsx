@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { EyeVisitInput } from '../hooks/useEyeVisits'
-import type { Eye, EyeRefraction, RefractionGrid, VisionType } from '../types'
+import type { Eye, EyeRefraction, EyeVisit, RefractionGrid, VisionType } from '../types'
 import { isEmptyVisit } from '../utils/eyeVisit'
 import { btnPrimary, btnSecondary, card, fieldInput, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
+  initial?: EyeVisit
   onSubmit: (input: EyeVisitInput) => void
   onCancel: () => void
 }
@@ -27,12 +28,14 @@ const EMPTY_GRID: GridState = {
   right: { distance: { ...EMPTY_CELL }, reading: { ...EMPTY_CELL } },
 }
 
-const nowLocal = () => {
-  const d = new Date()
+const toLocalInputValue = (date: Date) => {
+  const d = new Date(date)
   d.setSeconds(0, 0)
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
   return d.toISOString().slice(0, 16)
 }
+
+const nowLocal = () => toLocalInputValue(new Date())
 
 function cellToRefraction(cell: CellState): EyeRefraction {
   return {
@@ -41,6 +44,29 @@ function cellToRefraction(cell: CellState): EyeRefraction {
     axis: cell.axis ? Number(cell.axis) : undefined,
     addPower: cell.addPower ? Number(cell.addPower) : undefined,
     visualAcuity: cell.visualAcuity.trim() || undefined,
+  }
+}
+
+function refractionToCell(refraction: EyeRefraction): CellState {
+  return {
+    sphere: refraction.sphere != null ? String(refraction.sphere) : '',
+    cylinder: refraction.cylinder != null ? String(refraction.cylinder) : '',
+    axis: refraction.axis != null ? String(refraction.axis) : '',
+    addPower: refraction.addPower != null ? String(refraction.addPower) : '',
+    visualAcuity: refraction.visualAcuity ?? '',
+  }
+}
+
+function gridToState(refractions: RefractionGrid): GridState {
+  return {
+    left: {
+      distance: refractionToCell(refractions.left.distance),
+      reading: refractionToCell(refractions.left.reading),
+    },
+    right: {
+      distance: refractionToCell(refractions.right.distance),
+      reading: refractionToCell(refractions.right.reading),
+    },
   }
 }
 
@@ -130,13 +156,17 @@ function RefractionCell({
   )
 }
 
-export function EyeRecordForm({ onSubmit, onCancel }: Props) {
-  const [visitAt, setVisitAt] = useState(nowLocal())
-  const [grid, setGrid] = useState<GridState>(EMPTY_GRID)
-  const [lenses, setLenses] = useState('')
-  const [diagnosis, setDiagnosis] = useState('')
-  const [treatmentPlan, setTreatmentPlan] = useState('')
-  const [notes, setNotes] = useState('')
+export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
+  const [visitAt, setVisitAt] = useState(
+    initial ? toLocalInputValue(new Date(initial.visitAt)) : nowLocal(),
+  )
+  const [grid, setGrid] = useState<GridState>(
+    initial ? gridToState(initial.refractions) : EMPTY_GRID,
+  )
+  const [lenses, setLenses] = useState(initial?.lenses ?? '')
+  const [diagnosis, setDiagnosis] = useState(initial?.diagnosis ?? '')
+  const [treatmentPlan, setTreatmentPlan] = useState(initial?.treatmentPlan ?? '')
+  const [notes, setNotes] = useState(initial?.notes ?? '')
 
   const setCell = (eye: Eye, visionType: VisionType, next: CellState) => {
     setGrid((prev) => ({ ...prev, [eye]: { ...prev[eye], [visionType]: next } }))
@@ -258,7 +288,7 @@ export function EyeRecordForm({ onSubmit, onCancel }: Props) {
           Cancel
         </button>
         <button type="submit" className={btnPrimary} disabled={isEmpty}>
-          Save record
+          {initial ? 'Save changes' : 'Save record'}
         </button>
       </div>
     </form>

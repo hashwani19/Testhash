@@ -13,17 +13,27 @@ import { LoginScreen } from './components/LoginScreen'
 import { OfflineBanner } from './components/OfflineBanner'
 import { InstallBanner } from './components/InstallBanner'
 import { btnLink, btnPrimary } from './styles'
+import type { EyeVisit } from './types'
 
-type View = 'list' | 'newPatient' | 'editPatient' | 'patientDetail' | 'newRecord' | 'manageGroups'
+type View =
+  | 'list'
+  | 'newPatient'
+  | 'editPatient'
+  | 'patientDetail'
+  | 'newRecord'
+  | 'editRecord'
+  | 'manageGroups'
 
 function AppShell() {
   const { user, logout } = useAuth()
   const { patients, addPatient, updatePatient, deletePatient } = usePatients()
-  const { addVisit, deleteVisit, deleteVisitsForPatient, getVisitsForPatient } = useEyeVisits()
+  const { addVisit, updateVisit, deleteVisit, deleteVisitsForPatient, getVisitsForPatient } =
+    useEyeVisits()
   const { groups, addGroup, renameGroup, deleteGroup } = usePatientGroups()
 
   const [view, setView] = useState<View>('list')
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
+  const [editingVisit, setEditingVisit] = useState<EyeVisit | null>(null)
 
   if (!user) return <LoginScreen />
 
@@ -32,6 +42,7 @@ function AppShell() {
 
   const goToList = () => {
     setSelectedPatientId(null)
+    setEditingVisit(null)
     setView('list')
   }
 
@@ -126,6 +137,10 @@ function AppShell() {
               goToList()
             }}
             onAddRecord={() => setView('newRecord')}
+            onEditRecord={(visit) => {
+              setEditingVisit(visit)
+              setView('editRecord')
+            }}
             onDeleteRecord={(id) => {
               if (!confirm('Delete this record?')) return
               deleteVisit(id)
@@ -140,6 +155,22 @@ function AppShell() {
               if (addVisit(selectedPatient.id, input)) setView('patientDetail')
             }}
             onCancel={() => setView('patientDetail')}
+          />
+        )}
+
+        {view === 'editRecord' && selectedPatient && editingVisit && (
+          <EyeRecordForm
+            initial={editingVisit}
+            onSubmit={(input) => {
+              if (updateVisit(editingVisit.id, input)) {
+                setEditingVisit(null)
+                setView('patientDetail')
+              }
+            }}
+            onCancel={() => {
+              setEditingVisit(null)
+              setView('patientDetail')
+            }}
           />
         )}
 

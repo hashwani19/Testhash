@@ -12,6 +12,7 @@ interface Props {
   onEdit: () => void
   onDelete: () => void
   onAddRecord: () => void
+  onEditRecord: (visit: EyeVisit) => void
   onDeleteRecord: (id: string) => void
   onBack: () => void
 }
@@ -25,6 +26,7 @@ export function PatientDetail({
   onEdit,
   onDelete,
   onAddRecord,
+  onEditRecord,
   onDeleteRecord,
   onBack,
 }: Props) {
@@ -85,7 +87,12 @@ export function PatientDetail({
         </button>
       </div>
 
-      <EyeRecordHistory visits={visits} canDelete={canDeleteRecords} onDelete={onDeleteRecord} />
+      <EyeRecordHistory
+        visits={visits}
+        canDelete={canDeleteRecords}
+        onEdit={onEditRecord}
+        onDelete={onDeleteRecord}
+      />
     </div>
   )
 }

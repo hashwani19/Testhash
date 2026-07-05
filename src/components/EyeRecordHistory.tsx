@@ -4,6 +4,7 @@ import { btnIcon } from '../styles'
 interface Props {
   visits: EyeVisit[]
   canDelete: boolean
+  onEdit: (visit: EyeVisit) => void
   onDelete: (id: string) => void
 }
 
@@ -37,7 +38,7 @@ function EyeSection({ eye, refractions }: { eye: Eye; refractions: EyeVisit['ref
   )
 }
 
-export function EyeRecordHistory({ visits, canDelete, onDelete }: Props) {
+export function EyeRecordHistory({ visits, canDelete, onEdit, onDelete }: Props) {
   if (visits.length === 0) {
     return <p className="py-8 text-center text-sm text-text">No history yet. Add the first eye record.</p>
   }
@@ -56,11 +57,20 @@ export function EyeRecordHistory({ visits, canDelete, onDelete }: Props) {
                 minute: '2-digit',
               })}
             </span>
-            {canDelete && (
-              <button className={btnIcon} aria-label="Delete record" onClick={() => onDelete(visit.id)}>
-                ×
+            <div className="flex items-center gap-1">
+              <button
+                className="cursor-pointer rounded-lg border-none bg-transparent px-2 py-1 text-[13px] font-medium text-accent"
+                aria-label="Edit record"
+                onClick={() => onEdit(visit)}
+              >
+                Edit
               </button>
-            )}
+              {canDelete && (
+                <button className={btnIcon} aria-label="Delete record" onClick={() => onDelete(visit.id)}>
+                  ×
+                </button>
+              )}
+            </div>
           </div>
           <EyeSection eye="left" refractions={visit.refractions.left} />
           <EyeSection eye="right" refractions={visit.refractions.right} />

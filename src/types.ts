@@ -60,4 +60,5 @@ export interface EyeVisit {
   treatmentPlan?: string
   notes?: string
   createdAt: number
+  updatedAt: number
 }

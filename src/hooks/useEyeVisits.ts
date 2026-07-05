@@ -34,6 +34,7 @@ export function useEyeVisits() {
     if (isEmptyVisit(input.refractions, [input.lenses, input.diagnosis, input.treatmentPlan, input.notes])) {
       return false
     }
+    const now = Date.now()
     const visit: EyeVisit = {
       id: crypto.randomUUID(),
       patientId,
@@ -43,9 +44,34 @@ export function useEyeVisits() {
       diagnosis: input.diagnosis?.trim() || undefined,
       treatmentPlan: input.treatmentPlan?.trim() || undefined,
       notes: input.notes?.trim() || undefined,
-      createdAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
     }
     setVisits((prev) => [visit, ...prev])
+    return true
+  }, [])
+
+  const updateVisit = useCallback((id: string, input: EyeVisitInput) => {
+    // Same rule as create — editing everything away shouldn't leave an empty record behind.
+    if (isEmptyVisit(input.refractions, [input.lenses, input.diagnosis, input.treatmentPlan, input.notes])) {
+      return false
+    }
+    setVisits((prev) =>
+      prev.map((v) =>
+        v.id === id
+          ? {
+              ...v,
+              visitAt: input.visitAt,
+              refractions: input.refractions,
+              lenses: input.lenses?.trim() || undefined,
+              diagnosis: input.diagnosis?.trim() || undefined,
+              treatmentPlan: input.treatmentPlan?.trim() || undefined,
+              notes: input.notes?.trim() || undefined,
+              updatedAt: Date.now(),
+            }
+          : v,
+      ),
+    )
     return true
   }, [])
 
@@ -65,5 +91,5 @@ export function useEyeVisits() {
     [visits],
   )
 
-  return { visits, addVisit, deleteVisit, deleteVisitsForPatient, getVisitsForPatient }
+  return { visits, addVisit, updateVisit, deleteVisit, deleteVisitsForPatient, getVisitsForPatient }
 }
