@@ -1,34 +1,60 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import type { EyeRecordInput } from '../hooks/useEyeRecords'
+import type { EyeVisitInput } from '../hooks/useEyeVisits'
+import type { Eye, EyeRefraction, RefractionGrid, VisionType } from '../types'
 
 interface Props {
-  onSubmit: (input: EyeRecordInput) => void
+  onSubmit: (input: EyeVisitInput) => void
   onCancel: () => void
 }
 
-const today = () => new Date().toISOString().slice(0, 10)
-
-function EyeFieldset({
-  side,
-  sphere,
-  cylinder,
-  distance,
-  onSphere,
-  onCylinder,
-  onDistance,
-}: {
-  side: 'Left' | 'Right'
+interface CellState {
   sphere: string
   cylinder: string
-  distance: string
-  onSphere: (v: string) => void
-  onCylinder: (v: string) => void
-  onDistance: (v: string) => void
+  axis: string
+  addPower: string
+  visualAcuity: string
+}
+
+const EMPTY_CELL: CellState = { sphere: '', cylinder: '', axis: '', addPower: '', visualAcuity: '' }
+
+type GridState = Record<Eye, Record<VisionType, CellState>>
+
+const EMPTY_GRID: GridState = {
+  left: { distance: { ...EMPTY_CELL }, reading: { ...EMPTY_CELL } },
+  right: { distance: { ...EMPTY_CELL }, reading: { ...EMPTY_CELL } },
+}
+
+const nowLocal = () => {
+  const d = new Date()
+  d.setSeconds(0, 0)
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 16)
+}
+
+function cellToRefraction(cell: CellState): EyeRefraction {
+  return {
+    sphere: cell.sphere ? Number(cell.sphere) : undefined,
+    cylinder: cell.cylinder ? Number(cell.cylinder) : undefined,
+    axis: cell.axis ? Number(cell.axis) : undefined,
+    addPower: cell.addPower ? Number(cell.addPower) : undefined,
+    visualAcuity: cell.visualAcuity.trim() || undefined,
+  }
+}
+
+function RefractionCell({
+  visionType,
+  cell,
+  onChange,
+}: {
+  visionType: VisionType
+  cell: CellState
+  onChange: (next: CellState) => void
 }) {
+  const label = visionType === 'distance' ? 'Distance' : 'Reading'
   return (
-    <fieldset className="eye-fieldset">
-      <legend>{side} eye</legend>
+    <div className="refraction-cell">
+      <span className="refraction-cell-label">{label}</span>
       <div className="field-row">
         <label className="field">
           <span>Sphere</span>
@@ -36,8 +62,8 @@ function EyeFieldset({
             type="number"
             step="any"
             inputMode="decimal"
-            value={sphere}
-            onChange={(e) => onSphere(e.target.value)}
+            value={cell.sphere}
+            onChange={(e) => onChange({ ...cell, sphere: e.target.value })}
             placeholder="0.00"
           />
         </label>
@@ -47,51 +73,83 @@ function EyeFieldset({
             type="number"
             step="any"
             inputMode="decimal"
-            value={cylinder}
-            onChange={(e) => onCylinder(e.target.value)}
+            value={cell.cylinder}
+            onChange={(e) => onChange({ ...cell, cylinder: e.target.value })}
             placeholder="0.00"
           />
         </label>
         <label className="field">
-          <span>Distance</span>
+          <span>Axis</span>
           <input
             type="number"
-            step="any"
-            inputMode="decimal"
-            value={distance}
-            onChange={(e) => onDistance(e.target.value)}
-            placeholder="0.00"
+            min={0}
+            max={180}
+            step={1}
+            inputMode="numeric"
+            value={cell.axis}
+            onChange={(e) => onChange({ ...cell, axis: e.target.value })}
+            placeholder="0-180"
           />
         </label>
       </div>
-    </fieldset>
+      <div className="field-row">
+        {visionType === 'reading' && (
+          <label className="field">
+            <span>Add</span>
+            <input
+              type="number"
+              step="any"
+              inputMode="decimal"
+              value={cell.addPower}
+              onChange={(e) => onChange({ ...cell, addPower: e.target.value })}
+              placeholder="0.00"
+            />
+          </label>
+        )}
+        <label className="field">
+          <span>Visual acuity</span>
+          <input
+            type="text"
+            value={cell.visualAcuity}
+            onChange={(e) => onChange({ ...cell, visualAcuity: e.target.value })}
+            placeholder={visionType === 'distance' ? '6/6' : 'N/6'}
+          />
+        </label>
+      </div>
+    </div>
   )
 }
 
 export function EyeRecordForm({ onSubmit, onCancel }: Props) {
-  const [date, setDate] = useState(today())
-  const [leftSphere, setLeftSphere] = useState('')
-  const [leftCylinder, setLeftCylinder] = useState('')
-  const [leftDistance, setLeftDistance] = useState('')
-  const [rightSphere, setRightSphere] = useState('')
-  const [rightCylinder, setRightCylinder] = useState('')
-  const [rightDistance, setRightDistance] = useState('')
+  const [visitAt, setVisitAt] = useState(nowLocal())
+  const [grid, setGrid] = useState<GridState>(EMPTY_GRID)
+  const [lenses, setLenses] = useState('')
+  const [diagnosis, setDiagnosis] = useState('')
+  const [treatmentPlan, setTreatmentPlan] = useState('')
   const [notes, setNotes] = useState('')
+
+  const setCell = (eye: Eye, visionType: VisionType, next: CellState) => {
+    setGrid((prev) => ({ ...prev, [eye]: { ...prev[eye], [visionType]: next } }))
+  }
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    onSubmit({
-      date,
+    const refractions: RefractionGrid = {
       left: {
-        sphere: Number(leftSphere) || 0,
-        cylinder: Number(leftCylinder) || 0,
-        distance: Number(leftDistance) || 0,
+        distance: cellToRefraction(grid.left.distance),
+        reading: cellToRefraction(grid.left.reading),
       },
       right: {
-        sphere: Number(rightSphere) || 0,
-        cylinder: Number(rightCylinder) || 0,
-        distance: Number(rightDistance) || 0,
+        distance: cellToRefraction(grid.right.distance),
+        reading: cellToRefraction(grid.right.reading),
       },
+    }
+    onSubmit({
+      visitAt: new Date(visitAt).toISOString(),
+      refractions,
+      lenses,
+      diagnosis,
+      treatmentPlan,
       notes,
     })
   }
@@ -99,35 +157,55 @@ export function EyeRecordForm({ onSubmit, onCancel }: Props) {
   return (
     <form className="panel-form" onSubmit={submit}>
       <label className="field">
-        <span>Visit date</span>
+        <span>Visit date &amp; time</span>
         <input
-          type="date"
-          value={date}
-          max={today()}
-          onChange={(e) => setDate(e.target.value)}
+          type="datetime-local"
+          value={visitAt}
+          max={nowLocal()}
+          onChange={(e) => setVisitAt(e.target.value)}
           required
         />
       </label>
 
-      <EyeFieldset
-        side="Left"
-        sphere={leftSphere}
-        cylinder={leftCylinder}
-        distance={leftDistance}
-        onSphere={setLeftSphere}
-        onCylinder={setLeftCylinder}
-        onDistance={setLeftDistance}
-      />
+      {(['left', 'right'] as Eye[]).map((eye) => (
+        <fieldset className="eye-fieldset" key={eye}>
+          <legend>{eye === 'left' ? 'Left' : 'Right'} eye</legend>
+          <RefractionCell
+            visionType="distance"
+            cell={grid[eye].distance}
+            onChange={(next) => setCell(eye, 'distance', next)}
+          />
+          <RefractionCell
+            visionType="reading"
+            cell={grid[eye].reading}
+            onChange={(next) => setCell(eye, 'reading', next)}
+          />
+        </fieldset>
+      ))}
 
-      <EyeFieldset
-        side="Right"
-        sphere={rightSphere}
-        cylinder={rightCylinder}
-        distance={rightDistance}
-        onSphere={setRightSphere}
-        onCylinder={setRightCylinder}
-        onDistance={setRightDistance}
-      />
+      <label className="field">
+        <span>Lenses (optional)</span>
+        <input
+          type="text"
+          value={lenses}
+          onChange={(e) => setLenses(e.target.value)}
+          placeholder="Progressive, bifocal, single vision…"
+        />
+      </label>
+
+      <label className="field">
+        <span>Diagnosis (optional)</span>
+        <textarea value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} rows={2} />
+      </label>
+
+      <label className="field">
+        <span>Treatment plan (optional)</span>
+        <textarea
+          value={treatmentPlan}
+          onChange={(e) => setTreatmentPlan(e.target.value)}
+          rows={2}
+        />
+      </label>
 
       <label className="field">
         <span>Notes (optional)</span>
@@ -135,7 +213,7 @@ export function EyeRecordForm({ onSubmit, onCancel }: Props) {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
-          placeholder="Observations, diagnosis, follow-up…"
+          placeholder="Other observations, follow-up…"
         />
       </label>
 

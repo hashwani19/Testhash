@@ -6,24 +6,57 @@ the home screen on both iOS and Android, where it behaves like a native app
 (own icon, splash/status bar theming, full-screen standalone window, works
 with no network).
 
+> **This build is local-storage-only, for initial testing.** There is no
+> backend — patients, visits, groups, and even user accounts all live in the
+> browser's `localStorage`, matching the schema in `docs/design.md` but
+> without the server/database described there. See "Local-only test build"
+> below before treating this as production-ready (no real auth, no
+> multi-device sync, no attachments).
+
 ## Features
 
-- **Patient records**: name, date of birth, address, and gender. Age is
-  computed automatically from the date of birth; if no DOB is provided, age
-  can be entered manually instead.
-- **Eye treatment history**: each patient can have any number of dated visit
-  records. Every record captures **sphere**, **cylinder**, and **distance**
-  values for the **left** and **right** eye independently, each a signed
-  (positive or negative) decimal number.
+- **Patient records**: a human-facing **patient number** (`P-YYYYMMDD-NNNN`,
+  date-seeded and monotonically increasing), name, date of birth, address,
+  and gender. Age is computed automatically from the date of birth; if no
+  DOB is provided, age can be entered manually instead.
+- **Patient groups**: admin-managed categories (e.g. "Friends", "Family").
+  Only admins can create/rename/delete groups; every role can assign a
+  patient to an existing group.
+- **Eye treatment history**: each patient can have any number of dated
+  (date + time) visit records. Every visit captures **Distance** and
+  **Reading** prescriptions — sphere, cylinder, axis, and visual acuity —
+  independently for the **left** and **right** eye, plus add power, lenses,
+  diagnosis, and treatment plan.
+- **Search, filter, and sort**: search matches name or patient number
+  (3+ characters); filter by group; sort newest-first (default) or by group.
+- **Role-based access**: `admin`, `doctor`, and `front_desk` accounts.
+  Front desk and doctors can create/edit patients and clinical records but
+  can't delete anything or manage groups — see `docs/design.md` §4 for the
+  full permission matrix.
 - **Installable** on iOS (Safari "Add to Home Screen") and Android/Chrome
   (native install prompt), plus desktop Chrome/Edge.
 - **Offline-first** — a service worker precaches the app shell, so it loads
-  with no network connection. All patient and record data is persisted to
-  `localStorage` on-device.
+  with no network connection.
 - **Responsive, mobile-first UI** with safe-area handling for notches/home
   indicators.
 - **Auto-updating** service worker — new deployments are picked up on next
   launch without an app-store review process.
+
+## Local-only test build
+
+There is no backend in this build. Three test accounts are seeded into
+`localStorage` on first load:
+
+| Email | Password | Role |
+|---|---|---|
+| `admin@example.com` | `admin123` | admin |
+| `doctor@example.com` | `doctor123` | doctor |
+| `frontdesk@example.com` | `frontdesk123` | front_desk |
+
+These credentials are stored in plaintext in the browser and are **not
+secure** — this is a throwaway setup for exercising the UI/roles/schema
+before the real backend (`docs/design.md`) is built. Clearing site data /
+`localStorage` resets everything, including these accounts.
 
 ## Getting started
 
@@ -67,13 +100,18 @@ working offline.
 
 ```
 src/
-  components/   Patient list/form/detail, eye-record form/history, install/offline banners
-  hooks/        usePatients, useEyeRecords (state + localStorage persistence),
-                useOnlineStatus, useInstallPrompt
-  utils/age.ts  Age computation from date of birth
-  types.ts      Shared Patient / EyeRecord / EyeValues types
+  auth/         AuthProvider (localStorage-backed accounts/session)
+  components/   Login, patient list/form/detail, visit form/history,
+                 Manage Groups screen, install/offline banners
+  hooks/        useAuth, usePatients, usePatientGroups, useEyeVisits
+                (state + localStorage persistence), useOnlineStatus,
+                useInstallPrompt
+  utils/        age.ts (age from DOB), patientNumber.ts (ID generation),
+                patientQuery.ts (search/filter/sort)
+  types.ts      Shared User / Patient / PatientGroup / EyeVisit types
 public/icons/   App icons (regular + maskable, generated from scripts/icon*.svg)
 scripts/        Icon source SVGs + generation script
+docs/design.md  Target backend-synced architecture and schema
 ```
 
 PWA configuration (manifest, service worker/caching strategy) lives in

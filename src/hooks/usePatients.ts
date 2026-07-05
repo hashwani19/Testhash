@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Gender, Patient } from '../types'
+import { generatePatientNumber } from '../utils/patientNumber'
 
 const STORAGE_KEY = 'testhash.patients.v1'
 
@@ -18,6 +19,7 @@ export interface PatientInput {
   manualAge?: number
   address?: string
   gender: Gender
+  groupId?: string
 }
 
 export function usePatients() {
@@ -28,14 +30,18 @@ export function usePatients() {
   }, [patients])
 
   const addPatient = useCallback((input: PatientInput) => {
+    const now = Date.now()
     const patient: Patient = {
       id: crypto.randomUUID(),
+      patientNumber: generatePatientNumber(),
       name: input.name.trim(),
       dob: input.dob || undefined,
       manualAge: input.dob ? undefined : input.manualAge,
       address: input.address?.trim() || undefined,
       gender: input.gender,
-      createdAt: Date.now(),
+      groupId: input.groupId || undefined,
+      createdAt: now,
+      updatedAt: now,
     }
     setPatients((prev) => [patient, ...prev])
     return patient.id
@@ -52,6 +58,8 @@ export function usePatients() {
               manualAge: input.dob ? undefined : input.manualAge,
               address: input.address?.trim() || undefined,
               gender: input.gender,
+              groupId: input.groupId || undefined,
+              updatedAt: Date.now(),
             }
           : p,
       ),

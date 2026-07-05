@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import type { Gender, Patient } from '../types'
+import type { Gender, Patient, PatientGroup } from '../types'
 import type { PatientInput } from '../hooks/usePatients'
 import { computeAgeFromDob } from '../utils/age'
 
 interface Props {
   initial?: Patient
+  groups: PatientGroup[]
   onSubmit: (input: PatientInput) => void
   onCancel: () => void
 }
@@ -17,7 +18,7 @@ const GENDER_OPTIONS: { value: Gender; label: string }[] = [
   { value: 'unspecified', label: 'Prefer not to say' },
 ]
 
-export function PatientForm({ initial, onSubmit, onCancel }: Props) {
+export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
   const [name, setName] = useState(initial?.name ?? '')
   const [dob, setDob] = useState(initial?.dob ?? '')
   const [manualAge, setManualAge] = useState(
@@ -25,6 +26,7 @@ export function PatientForm({ initial, onSubmit, onCancel }: Props) {
   )
   const [address, setAddress] = useState(initial?.address ?? '')
   const [gender, setGender] = useState<Gender>(initial?.gender ?? 'unspecified')
+  const [groupId, setGroupId] = useState(initial?.groupId ?? '')
 
   const computedAge = dob ? computeAgeFromDob(dob) : undefined
 
@@ -38,6 +40,7 @@ export function PatientForm({ initial, onSubmit, onCancel }: Props) {
       manualAge: manualAge ? Number(manualAge) : undefined,
       address,
       gender,
+      groupId: groupId || undefined,
     })
   }
 
@@ -87,6 +90,18 @@ export function PatientForm({ initial, onSubmit, onCancel }: Props) {
           {GENDER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="field">
+        <span>Group</span>
+        <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+          <option value="">No group</option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
             </option>
           ))}
         </select>

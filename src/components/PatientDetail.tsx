@@ -1,10 +1,13 @@
-import type { EyeRecord, Patient } from '../types'
+import type { EyeVisit, Patient, PatientGroup } from '../types'
 import { getPatientAge } from '../utils/age'
 import { EyeRecordHistory } from './EyeRecordHistory'
 
 interface Props {
   patient: Patient
-  records: EyeRecord[]
+  groups: PatientGroup[]
+  visits: EyeVisit[]
+  canDeleteRecords: boolean
+  canDeletePatient: boolean
   onEdit: () => void
   onDelete: () => void
   onAddRecord: () => void
@@ -14,7 +17,10 @@ interface Props {
 
 export function PatientDetail({
   patient,
-  records,
+  groups,
+  visits,
+  canDeleteRecords,
+  canDeletePatient,
   onEdit,
   onDelete,
   onAddRecord,
@@ -22,6 +28,7 @@ export function PatientDetail({
   onBack,
 }: Props) {
   const age = getPatientAge(patient)
+  const groupName = groups.find((g) => g.id === patient.groupId)?.name
 
   return (
     <div className="patient-detail">
@@ -31,6 +38,7 @@ export function PatientDetail({
 
       <div className="patient-summary">
         <h2>{patient.name}</h2>
+        <p className="subtitle">{patient.patientNumber}</p>
         <dl className="patient-facts">
           <div>
             <dt>Age</dt>
@@ -45,6 +53,10 @@ export function PatientDetail({
             <dd>{patient.gender === 'unspecified' ? 'Unspecified' : patient.gender}</dd>
           </div>
           <div>
+            <dt>Group</dt>
+            <dd>{groupName || 'No group'}</dd>
+          </div>
+          <div>
             <dt>Address</dt>
             <dd>{patient.address || 'Not provided'}</dd>
           </div>
@@ -53,9 +65,11 @@ export function PatientDetail({
           <button className="btn-secondary" onClick={onEdit}>
             Edit patient
           </button>
-          <button className="btn-danger" onClick={onDelete}>
-            Delete patient
-          </button>
+          {canDeletePatient && (
+            <button className="btn-danger" onClick={onDelete}>
+              Delete patient
+            </button>
+          )}
         </div>
       </div>
 
@@ -66,7 +80,7 @@ export function PatientDetail({
         </button>
       </div>
 
-      <EyeRecordHistory records={records} onDelete={onDeleteRecord} />
+      <EyeRecordHistory visits={visits} canDelete={canDeleteRecords} onDelete={onDeleteRecord} />
     </div>
   )
 }
