@@ -131,7 +131,6 @@ function AppShell() {
             canDeletePatient={isAdmin}
             onEdit={() => setView('editPatient')}
             onDelete={() => {
-              if (!confirm(`Delete ${selectedPatient.name} and all their records?`)) return
               deleteVisitsForPatient(selectedPatient.id)
               deletePatient(selectedPatient.id)
               goToList()

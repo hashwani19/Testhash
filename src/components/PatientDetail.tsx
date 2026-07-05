@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import type { EyeVisit, Patient, PatientGroup } from '../types'
 import { getPatientAge } from '../utils/age'
 import { EyeRecordHistory } from './EyeRecordHistory'
+import { ConfirmDeleteModal } from './ConfirmDeleteModal'
 import { btnDanger, btnLink, btnPrimary, btnSecondary, card } from '../styles'
 
 interface Props {
@@ -32,6 +34,7 @@ export function PatientDetail({
 }: Props) {
   const age = getPatientAge(patient)
   const groupName = groups.find((g) => g.id === patient.groupId)?.name
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   return (
     <div className="flex flex-col gap-4">
@@ -73,7 +76,7 @@ export function PatientDetail({
             Edit patient
           </button>
           {canDeletePatient && (
-            <button className={btnDanger} onClick={onDelete}>
+            <button className={btnDanger} onClick={() => setConfirmingDelete(true)}>
               Delete patient
             </button>
           )}
@@ -93,6 +96,24 @@ export function PatientDetail({
         onEdit={onEditRecord}
         onDelete={onDeleteRecord}
       />
+
+      {confirmingDelete && (
+        <ConfirmDeleteModal
+          title="Delete this patient?"
+          warning={
+            visits.length === 0
+              ? `This permanently deletes ${patient.name} (${patient.patientNumber}). This cannot be undone.`
+              : `This permanently deletes ${patient.name} (${patient.patientNumber}) along with their ${
+                  visits.length
+                } eye treatment history record${visits.length === 1 ? '' : 's'}. This cannot be undone.`
+          }
+          onConfirm={() => {
+            setConfirmingDelete(false)
+            onDelete()
+          }}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
     </div>
   )
 }
