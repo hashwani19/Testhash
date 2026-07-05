@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { EyeVisitInput } from '../hooks/useEyeVisits'
 import type { Eye, EyeRefraction, RefractionGrid, VisionType } from '../types'
+import { isEmptyVisit } from '../utils/eyeVisit'
 
 interface Props {
   onSubmit: (input: EyeVisitInput) => void
@@ -132,9 +133,8 @@ export function EyeRecordForm({ onSubmit, onCancel }: Props) {
     setGrid((prev) => ({ ...prev, [eye]: { ...prev[eye], [visionType]: next } }))
   }
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
-    const refractions: RefractionGrid = {
+  const refractions: RefractionGrid = useMemo(
+    () => ({
       left: {
         distance: cellToRefraction(grid.left.distance),
         reading: cellToRefraction(grid.left.reading),
@@ -143,7 +143,15 @@ export function EyeRecordForm({ onSubmit, onCancel }: Props) {
         distance: cellToRefraction(grid.right.distance),
         reading: cellToRefraction(grid.right.reading),
       },
-    }
+    }),
+    [grid],
+  )
+
+  const isEmpty = isEmptyVisit(refractions, [lenses, diagnosis, treatmentPlan, notes])
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (isEmpty) return
     onSubmit({
       visitAt: new Date(visitAt).toISOString(),
       refractions,
@@ -217,11 +225,17 @@ export function EyeRecordForm({ onSubmit, onCancel }: Props) {
         />
       </label>
 
+      {isEmpty && (
+        <p className="form-hint">
+          Enter at least one value below the visit date to save a record.
+        </p>
+      )}
+
       <div className="form-actions">
         <button type="button" className="btn-secondary" onClick={onCancel}>
           Cancel
         </button>
-        <button type="submit" className="btn-primary">
+        <button type="submit" className="btn-primary" disabled={isEmpty}>
           Save record
         </button>
       </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { EyeVisit, RefractionGrid } from '../types'
+import { isEmptyVisit } from '../utils/eyeVisit'
 
 const STORAGE_KEY = 'testhash.eyeVisits.v1'
 
@@ -29,6 +30,10 @@ export function useEyeVisits() {
   }, [visits])
 
   const addVisit = useCallback((patientId: string, input: EyeVisitInput) => {
+    // A visit date alone isn't a record — require at least one real value.
+    if (isEmptyVisit(input.refractions, [input.lenses, input.diagnosis, input.treatmentPlan, input.notes])) {
+      return false
+    }
     const visit: EyeVisit = {
       id: crypto.randomUUID(),
       patientId,
@@ -41,6 +46,7 @@ export function useEyeVisits() {
       createdAt: Date.now(),
     }
     setVisits((prev) => [visit, ...prev])
+    return true
   }, [])
 
   const deleteVisit = useCallback((id: string) => {

@@ -134,8 +134,7 @@ function AppShell() {
         {view === 'newRecord' && selectedPatient && (
           <EyeRecordForm
             onSubmit={(input) => {
-              addVisit(selectedPatient.id, input)
-              setView('patientDetail')
+              if (addVisit(selectedPatient.id, input)) setView('patientDetail')
             }}
             onCancel={() => setView('patientDetail')}
           />

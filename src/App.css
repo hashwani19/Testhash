@@ -192,7 +192,12 @@
 
 .field-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+.field-row .field {
+  min-width: 90px;
 }
 
 .form-actions {
@@ -206,12 +211,15 @@
   border-radius: 12px;
   padding: 12px;
   margin: 0;
+  /* Fieldsets don't shrink in flex layouts by default; without this the
+     field grid below forces the fieldset (and page) wider than the panel. */
+  min-width: 0;
 }
 
 .eye-fieldset legend {
-  padding: 0 6px;
-  font-size: 13px;
-  font-weight: 600;
+  padding: 0 8px;
+  font-size: 17px;
+  font-weight: 700;
   color: var(--text-h);
 }
 
@@ -354,7 +362,7 @@
 .eye-section-label {
   font-weight: 700;
   color: var(--text-h);
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .eye-values-row {
@@ -366,8 +374,11 @@
 }
 
 .eye-values-label {
-  font-weight: 700;
-  color: var(--text-h);
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .record-notes {
@@ -390,11 +401,12 @@
 }
 
 .refraction-cell-label {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--text);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.3px;
+  opacity: 0.85;
 }
 
 /* Login */
@@ -419,6 +431,13 @@
   color: var(--high);
   font-size: 13px;
   margin: 0;
+}
+
+.form-hint {
+  color: var(--text);
+  font-size: 13px;
+  margin: 0;
+  text-align: right;
 }
 
 .login-hint {
