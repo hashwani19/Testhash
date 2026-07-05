@@ -58,6 +58,14 @@ secure** — this is a throwaway setup for exercising the UI/roles/schema
 before the real backend (`docs/design.md`) is built. Clearing site data /
 `localStorage` resets everything, including these accounts.
 
+Sample data (`src/seedData.ts`) is likewise seeded on first load — two
+patient groups and five patients with realistic demographics, some with
+multiple eye treatment history records (showing prescription changes over
+time) and some with none (showing the empty-history state), so the app
+isn't blank on a fresh install. Like the test accounts, this only seeds
+once per `localStorage` key: real edits/deletions are never overwritten,
+and clearing site data resets back to the sample set.
+
 ## Getting started
 
 ```bash
@@ -111,6 +119,7 @@ src/
   types.ts      Shared User / Patient / PatientGroup / EyeVisit types
   styles.ts     Shared Tailwind class-string constants (buttons, fields,
                 cards) — the single source of truth for repeated UI patterns
+  seedData.ts   Sample groups/patients/visits loaded on first run
 public/icons/   App icons (regular + maskable, generated from scripts/logo-source.png)
 scripts/        Logo source PNG + generation script
 docs/design.md  Target backend-synced architecture and schema

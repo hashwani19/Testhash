@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { EyeVisit, RefractionGrid } from '../types'
 import { isEmptyVisit } from '../utils/eyeVisit'
+import { SEED_VISITS } from '../seedData'
 
 const STORAGE_KEY = 'testhash.eyeVisits.v1'
 
 function loadVisits(): EyeVisit[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as EyeVisit[]) : []
+    if (raw) return JSON.parse(raw) as EyeVisit[]
   } catch {
-    return []
+    // fall through to reseed
   }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_VISITS))
+  return SEED_VISITS
 }
 
 export interface EyeVisitInput {

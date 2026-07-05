@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { PatientGroup } from '../types'
+import { SEED_GROUPS } from '../seedData'
 
 const STORAGE_KEY = 'testhash.patientGroups.v1'
 
 function loadGroups(): PatientGroup[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as PatientGroup[]) : []
+    if (raw) return JSON.parse(raw) as PatientGroup[]
   } catch {
-    return []
+    // fall through to reseed
   }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_GROUPS))
+  return SEED_GROUPS
 }
 
 export function usePatientGroups() {

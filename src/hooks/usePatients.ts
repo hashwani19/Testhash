@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Gender, Patient } from '../types'
 import { generatePatientNumber } from '../utils/patientNumber'
+import { SEED_PATIENTS } from '../seedData'
 
 const STORAGE_KEY = 'testhash.patients.v1'
 
 function loadPatients(): Patient[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as Patient[]) : []
+    if (raw) return JSON.parse(raw) as Patient[]
   } catch {
-    return []
+    // fall through to reseed
   }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_PATIENTS))
+  return SEED_PATIENTS
 }
 
 export interface PatientInput {
