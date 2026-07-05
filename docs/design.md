@@ -30,7 +30,7 @@ These were confirmed before writing this doc and drive every section below:
 **Non-goals (this phase)**
 - Real-time collaborative editing (two staff editing the same record simultaneously).
 - Billing/insurance, scheduling/appointments, e-prescribing integrations.
-- Full offline write support (queued writes while offline, synced later) — Phase 1 targets **online-required writes, offline-cached reads**; true offline writes are called out as a later phase (§8).
+- Full offline write support (queued writes while offline, synced later) — Phase 1 targets **online-required writes, offline-cached reads**; true offline writes are called out as a later phase (§9).
 - HIPAA/GDPR certification — this document establishes the technical safeguards a compliance program would need, not a legal compliance sign-off.
 
 ## 3. Architecture
@@ -220,7 +220,7 @@ erDiagram
     the same transaction as the `INSERT INTO patients`, so two concurrent
     registrations on the same day never collide — no read-then-write race.
   - **Capacity**: 4 digits supports 9,999 new registrations/day, far beyond
-    a small clinic's volume (§10); widen to 5+ digits if that changes.
+    a small clinic's volume (§11); widen to 5+ digits if that changes.
   - `UNIQUE NOT NULL` — enforced at the DB level as a backstop even though
     generation is already collision-free by construction.
   - **Search**: `GET /patients?search=` (§6) matches name or `patient_number`
@@ -234,7 +234,7 @@ erDiagram
     ORDER BY created_at DESC;
     ```
     A leading-wildcard `LIKE` can't use the `patient_number`/`name` indexes,
-    but at clinic scale (§10: hundreds–low thousands of rows) a full scan is
+    but at clinic scale (§11: hundreds–low thousands of rows) a full scan is
     still sub-millisecond — no need for FTS5 or trigram indexing yet.
   - **Minimum query length: 3 characters.** A 1–2 character query against a
     leading-wildcard `LIKE` on `name` matches a large fraction of any real
@@ -285,7 +285,7 @@ erDiagram
 - **`manual_age`**: nullable integer, only meaningful when `dob` is null.
 - **Soft delete**: `patients.deleted_at` — patient rows are never hard-deleted
   by normal staff action (needed for audit trail integrity); hard delete is a
-  separate admin-triggered erasure workflow (§8.4).
+  separate admin-triggered erasure workflow (§10).
 - **`audit_log.before_json` / `after_json`**: snapshot of the changed row
   (JSON-encoded), not full-table diffs — enough to reconstruct history without
   a general-purpose event-sourcing system.
@@ -512,7 +512,73 @@ but the unsorted default is never "whatever order the DB happened to return."
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 
-## 8. Offline sync strategy (phased)
+## 8. UI / Screens
+
+Screen-by-screen breakdown implied by §4 (roles), §5 (schema), and §6 (API) —
+this is the concrete shape §7's bullets describe in the abstract.
+
+### 8.1 Login (new — doesn't exist in the current MVP)
+
+Email + password. On success, `GET /auth/me` resolves the session's role
+(`admin` / `doctor` / `front_desk`), held in an auth context that every other
+screen reads from. There is no "guest"/unauthenticated view of any patient
+data.
+
+### 8.2 Patient List (home screen)
+
+- One search box at the top — debounced, ignores input under 3 characters,
+  calls `GET /patients?search=`. Matches name *or* `patient_number` in the
+  same box; no separate "search by ID" mode (§5.2, §6).
+- Below it, summary rows: `patient_number`, name, age, gender. Default order
+  is newest-registered-first (`created_at` desc) — a server-guaranteed order,
+  not incidental array order (§6).
+- "Add patient" button — visible to `admin`, `doctor`, and `front_desk`.
+- Tapping a row opens Patient Detail.
+
+### 8.3 Patient Detail
+
+- Header: name, `patient_number`, age (computed from DOB, or the manual
+  value when DOB is absent), DOB, gender, address.
+- Edit / Delete patient buttons — delete is **admin-only**, hidden entirely
+  (not disabled) for the other two roles (§4).
+- "Eye treatment history" below: visit cards, most-recent-visit-first
+  (`visit_at` desc, §6).
+- Each visit card shows: visit date + time, the Distance/Reading ×
+  Left/Right refraction grid, Add power, Lenses, diagnosis/treatment plan
+  text, and any attachment thumbnails.
+- "Add record" button — visible to `admin`, `doctor`, *and* `front_desk`
+  (front desk can create/edit clinical records, §4). Delete on a visit card
+  is **admin-only**.
+- Attachments are not rendered at all for `front_desk` — not greyed out,
+  simply absent from the page.
+
+### 8.4 Visit Record Form (create/edit)
+
+- Date + time picker for `visit_at`, defaulting to "now," adjustable (for
+  backdating a transcribed paper chart, §5.2).
+- Refraction grid: 2×2 layout — rows Distance/Reading, columns Left/Right —
+  each cell holding Sphere, Cylinder, Axis, Visual Acuity. Add power sits
+  with the Reading row (§5.2).
+- Lenses (free text), Diagnosis, Treatment Plan fields.
+- Attachment upload control — rendered only for `admin`/`doctor`.
+- Save / Cancel.
+
+### 8.5 Role-based UI differences, summarized
+
+| | `admin` | `doctor` | `front_desk` |
+|---|---|---|---|
+| View/create/edit patients & visits | ✅ | ✅ | ✅ |
+| Delete anything (patient, visit, attachment) | ✅ | ❌ | ❌ |
+| Attachments (upload/view) | ✅ | ✅ | ❌ (hidden) |
+| Manage staff accounts, audit log | ✅ | ❌ | ❌ |
+
+### 8.6 Carried over unchanged
+
+The offline/install banners (`OfflineBanner`, `InstallBanner`) and the PWA
+install experience are exactly what's already live in the current MVP —
+this is additive on top of that shell, not a rewrite of it.
+
+## 9. Offline sync strategy (phased)
 
 1. **Phase 1 (this design's target)**: writes require connectivity; reads are
    served from an IndexedDB cache populated on last successful fetch, so the
@@ -527,7 +593,7 @@ but the unsorted default is never "whatever order the DB happened to return."
 Phases 2–3 are called out but explicitly deferred (see Non-goals) — only
 build them if multi-device offline editing turns out to be a real need.
 
-## 9. Security & compliance
+## 10. Security & compliance
 
 - **Transport**: TLS everywhere (Cloudflare terminates this automatically).
 - **At rest**: D1 and R2 encrypt at rest by default; no additional
@@ -555,7 +621,7 @@ build them if multi-device offline editing turns out to be a real need.
 - **Data portability**: `GET /patients/:id/export` produces a full JSON (or
   PDF) export of everything the schema holds for that patient.
 
-## 10. Non-functional requirements
+## 11. Non-functional requirements
 
 - **Scale**: designed for a single small-to-mid clinic (hundreds to low
   thousands of patients, tens of visits/day) — well within D1's free-tier
@@ -566,7 +632,7 @@ build them if multi-device offline editing turns out to be a real need.
 - **Availability**: Cloudflare's edge network; no additional HA design needed
   at this scale.
 
-## 11. Migration plan from current MVP
+## 12. Migration plan from current MVP
 
 1. Stand up the D1 database and Pages Functions API with the schema in §5,
    deployed alongside the existing static site (no client changes yet).
@@ -583,7 +649,7 @@ build them if multi-device offline editing turns out to be a real need.
    attachments) to the forms and history view.
 5. Remove the localStorage code path once the API path is confirmed stable.
 
-## 12. Open questions / future extensions
+## 13. Open questions / future extensions
 
 - ~~"Distance" field semantics~~ — **resolved**: it's the Distance-vision row
   of a two-row (Distance/Reading) prescription per eye, per a real
