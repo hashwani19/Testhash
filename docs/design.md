@@ -14,7 +14,7 @@ These were confirmed before writing this doc and drive every section below:
 |---|---|
 | Data architecture | Backend + database (not local-only) — multi-device sync, durable storage |
 | User accounts | Multiple staff accounts with distinct logins, roles, and an audit trail |
-| Clinical fields | Sphere, cylinder, axis, add power, distance (existing), visual acuity, diagnosis/treatment plan text, attachments (images/scans) |
+| Clinical fields | Per eye, **Distance** and **Reading** prescriptions (sphere, cylinder, axis, visual acuity each), Add power for reading, a free-text Lenses line, diagnosis/treatment plan text, attachments (images/scans) — modeled directly on a real prescription pad (see §5.2) |
 | Compliance | Design includes health-data safeguards (encryption, audit logging, retention/export/erasure, consent) from the start |
 
 ## 2. Goals / Non-goals
@@ -22,7 +22,7 @@ These were confirmed before writing this doc and drive every section below:
 **Goals**
 - Durable, centralized storage for patient and clinical data — survives device loss, accessible from multiple staff devices.
 - Distinct staff accounts with role-appropriate access (front desk shouldn't see clinical detail; only clinicians record prescriptions/diagnoses).
-- A complete refraction record per visit (sphere, cylinder, axis, add, distance) plus visual acuity, diagnosis/treatment plan, and file attachments.
+- A complete refraction record per visit — distance and reading prescriptions (sphere, cylinder, axis, visual acuity) per eye, plus add power, lenses, diagnosis/treatment plan, and file attachments.
 - An audit trail of who created/changed what, and when.
 - A defensible baseline for handling health data: encryption, retention, export, and erasure.
 - The existing PWA (install, offline shell) is preserved — this is additive, not a rewrite of the client framework.
@@ -107,7 +107,6 @@ erDiagram
     PATIENTS ||--o{ EYE_VISITS : has
     PATIENTS ||--o{ CONSENTS : has
     EYE_VISITS ||--o{ EYE_REFRACTIONS : has
-    EYE_VISITS ||--o{ VISUAL_ACUITY_READINGS : has
     EYE_VISITS ||--o{ ATTACHMENTS : has
 
     USERS {
@@ -138,6 +137,7 @@ erDiagram
         text examiner_id FK
         text diagnosis
         text treatment_plan
+        text lenses
         text follow_up_date
         text notes
         text created_at
@@ -146,18 +146,12 @@ erDiagram
         text id PK
         text visit_id FK
         text eye
+        text vision_type
         real sphere
         real cylinder
         int axis
         real add_power
-        real distance
-    }
-    VISUAL_ACUITY_READINGS {
-        text id PK
-        text visit_id FK
-        text eye
-        int corrected
-        text notation
+        text visual_acuity
     }
     ATTACHMENTS {
         text id PK
@@ -204,17 +198,40 @@ erDiagram
   should be considered "current" at a time — enforced in application logic,
   not a DB constraint (SQLite has no partial-exclusion constraints worth the
   complexity here).
-- **`eye` enum**: `'left' | 'right'` — used on both `eye_refractions` and
-  `visual_acuity_readings` so each visit has exactly two refraction rows and
-  two-or-more acuity rows (one per eye, optionally both corrected/uncorrected).
-- **Sphere / cylinder / add_power**: signed decimals, diopters. Stored as
-  `REAL` (D1/SQLite) — see §5.3 for Postgres equivalent (`NUMERIC(5,2)`).
+- **Refraction shape — modeled directly on a real prescription pad**: a
+  physical prescription (see below) has two *rows* per eye, not one —
+  **Distance** vision and **Reading** (near) vision — each with its own
+  Sphere, Cylinder, Axis, and Visual Acuity. `eye_refractions` captures this
+  as one row per `(eye, vision_type)` pair, so a single visit produces up to
+  four rows: left/distance, left/reading, right/distance, right/reading.
+
+  ```
+                    RIGHT EYE                          LEFT EYE
+              D.Sph   D.Cyl   Axis   V.A         D.Sph   D.Cyl   Axis   V.A
+  Distance     ...     -0.25   110°   6/6         -0.25   -0.25   40°    6/6
+  Reading     Add +1.5  ...    ...    N/6          ...     ...    ...    N/6
+  ```
+
+  This replaces the earlier single ambiguous "distance" field from the first
+  draft of this document — resolving Open Question #1 below.
+- **`eye` enum**: `'left' | 'right'`.
+- **`vision_type` enum**: `'distance' | 'reading'` — which row of the
+  prescription this is.
+- **Sphere / cylinder**: signed decimals, diopters (e.g. `-0.25`, `+2.00`).
+  Nullable — a reading row may only carry `add_power` and leave sphere/
+  cylinder blank if the clinic's convention is "same as distance, see Add".
+  Stored as `REAL` (D1/SQLite) — see §5.3 for Postgres equivalent (`NUMERIC(5,2)`).
 - **Axis**: integer 0–180 (degrees). Not signed — enforce range in application
   validation (`CHECK` constraint optionally added in D1/SQLite 3.37+).
-- **Distance**: signed decimal, carried over unchanged from the existing
-  implementation. *Open question (§9): confirm whether this represents
-  pupillary distance (PD, mm) or another clinic-specific measurement —
-  currently implemented generically per the original spec.*
+- **`add_power`**: signed decimal, diopters — the near-vision addition,
+  primarily meaningful when `vision_type = 'reading'`.
+- **`visual_acuity`**: free text (e.g. `"6/6"` for distance, `"N/6"` for
+  reading) rather than a fixed enum — acuity notations vary by clinic/chart
+  (Snellen feet, Snellen metric, Snellen near-point) and forcing a single
+  format would lose information from the source chart.
+- **`eye_visits.lenses`**: free-text line (e.g. "progressive", "bifocal",
+  "single vision, anti-glare") — matches the "Lenses …" line on the
+  prescription pad; one per visit, not per eye.
 - **`manual_age`**: nullable integer, only meaningful when `dob` is null.
 - **Soft delete**: `patients.deleted_at` — patient rows are never hard-deleted
   by normal staff action (needed for audit trail integrity); hard delete is a
@@ -269,6 +286,7 @@ CREATE TABLE eye_visits (
     examiner_id    TEXT REFERENCES users(id),
     diagnosis      TEXT,
     treatment_plan TEXT,
+    lenses         TEXT,                        -- free text, e.g. "progressive", "bifocal"
     follow_up_date TEXT,
     notes          TEXT,
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
@@ -276,27 +294,22 @@ CREATE TABLE eye_visits (
 );
 CREATE INDEX idx_visits_patient ON eye_visits(patient_id, visit_date DESC);
 
+-- One row per (eye, vision_type): up to 4 rows per visit
+-- (left/distance, left/reading, right/distance, right/reading),
+-- mirroring a standard Distance/Reading x Right/Left prescription pad.
 CREATE TABLE eye_refractions (
-    id         TEXT PRIMARY KEY,
-    visit_id   TEXT NOT NULL REFERENCES eye_visits(id) ON DELETE CASCADE,
-    eye        TEXT NOT NULL CHECK (eye IN ('left', 'right')),
-    sphere     REAL NOT NULL DEFAULT 0,
-    cylinder   REAL NOT NULL DEFAULT 0,
-    axis       INTEGER CHECK (axis IS NULL OR (axis >= 0 AND axis <= 180)),
-    add_power  REAL,
-    distance   REAL NOT NULL DEFAULT 0,
-    UNIQUE (visit_id, eye)
+    id            TEXT PRIMARY KEY,
+    visit_id      TEXT NOT NULL REFERENCES eye_visits(id) ON DELETE CASCADE,
+    eye           TEXT NOT NULL CHECK (eye IN ('left', 'right')),
+    vision_type   TEXT NOT NULL CHECK (vision_type IN ('distance', 'reading')),
+    sphere        REAL,
+    cylinder      REAL,
+    axis          INTEGER CHECK (axis IS NULL OR (axis >= 0 AND axis <= 180)),
+    add_power     REAL,                         -- near-vision addition; mainly for 'reading' rows
+    visual_acuity TEXT,                         -- e.g. "6/6", "N/6" — free text, chart-dependent notation
+    UNIQUE (visit_id, eye, vision_type)
 );
-
-CREATE TABLE visual_acuity_readings (
-    id         TEXT PRIMARY KEY,
-    visit_id   TEXT NOT NULL REFERENCES eye_visits(id) ON DELETE CASCADE,
-    eye        TEXT NOT NULL CHECK (eye IN ('left', 'right')),
-    corrected  INTEGER NOT NULL DEFAULT 0,      -- boolean: with (1) or without (0) correction
-    notation   TEXT NOT NULL,                   -- e.g. "20/20", "6/6"
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX idx_acuity_visit ON visual_acuity_readings(visit_id);
+CREATE INDEX idx_refractions_visit ON eye_refractions(visit_id);
 
 CREATE TABLE attachments (
     id           TEXT PRIMARY KEY,
@@ -358,7 +371,7 @@ Every mutating endpoint writes an `audit_log` row server-side.
 | `PATCH /patients/:id` | admin, doctor | Update demographics |
 | `DELETE /patients/:id` | admin | Soft-delete patient (+ cascade note in audit log) |
 | `GET /patients/:id/visits` | admin, doctor | Visit history for a patient |
-| `POST /patients/:id/visits` | admin, doctor | Create a visit (refraction + acuity + diagnosis in one payload) |
+| `POST /patients/:id/visits` | admin, doctor | Create a visit — one payload containing up to 4 refraction rows (distance/reading × left/right), diagnosis, treatment plan, and lenses |
 | `GET /visits/:id` | admin, doctor | Single visit detail |
 | `PATCH /visits/:id` | admin, doctor | Update a visit |
 | `DELETE /visits/:id` | admin | Delete a visit |
@@ -376,8 +389,10 @@ Every mutating endpoint writes an `audit_log` row server-side.
 - Add a login screen + auth context; role gates which UI sections render
   (front-desk users don't see refraction/diagnosis forms at all, not just
   disabled).
-- Extend `EyeRecordForm`/`EyeRecordHistory` for axis, add power, visual
-  acuity, diagnosis/treatment plan, and attachment upload/preview.
+- Rework `EyeRecordForm`/`EyeRecordHistory` around the Distance/Reading ×
+  Left/Right grid (§5.2) instead of the current single sphere/cylinder/
+  distance-per-eye fields — plus diagnosis/treatment plan, lenses, and
+  attachment upload/preview.
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 
@@ -451,10 +466,10 @@ build them if multi-device offline editing turns out to be a real need.
 
 ## 12. Open questions / future extensions
 
-- **"Distance" field semantics**: confirm with the practitioner whether this
-  is pupillary distance (PD, mm) or something else — affects display
-  formatting/units and validation range, though the underlying signed-float
-  column works either way.
+- ~~"Distance" field semantics~~ — **resolved**: it's the Distance-vision row
+  of a two-row (Distance/Reading) prescription per eye, per a real
+  prescription pad reviewed during design (§5.2), not a single ambiguous
+  measurement.
 - Should `front_desk` be able to *create* a patient (demographics only) even
   though they can't see clinical data? Current role table (§4) assumes yes
   for create/edit demographics — confirm before implementing.
