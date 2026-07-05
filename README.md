@@ -59,12 +59,15 @@ before the real backend (`docs/design.md`) is built. Clearing site data /
 `localStorage` resets everything, including these accounts.
 
 Sample data (`src/seedData.ts`) is likewise seeded on first load — two
-patient groups and five patients with realistic demographics, some with
-multiple eye treatment history records (showing prescription changes over
-time) and some with none (showing the empty-history state), so the app
-isn't blank on a fresh install. Like the test accounts, this only seeds
-once per `localStorage` key: real edits/deletions are never overwritten,
-and clearing site data resets back to the sample set.
+patient groups and nine patients with realistic demographics and clinical
+variety (pediatric myopia progressing over three visits, presbyopia with
+increasing reading power, early cataract with a surgical referral,
+astigmatism, a routine normal-vision checkup). Nearly all of them have
+multiple eye treatment history records showing a prescription changing
+over time; exactly one has none, so the empty-history state is still
+visible without deleting anything. Like the test accounts, this only
+seeds once per `localStorage` key: real edits/deletions are never
+overwritten, and clearing site data resets back to the sample set.
 
 ## Getting started
 
