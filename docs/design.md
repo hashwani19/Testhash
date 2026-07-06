@@ -102,7 +102,7 @@ what the client sends.
 **Patient groups** (e.g. "Friends", "Family" — a free-form category a
 clinic assigns patients to) are **admin-managed, everyone-usable**: only
 `admin` can create, rename, or delete a group (via the dedicated screen,
-§8.7), but `doctor` and `front_desk` can both *see* the list of groups and
+§8.8), but `doctor` and `front_desk` can both *see* the list of groups and
 *assign* a patient to one when creating/editing demographics — assigning a
 patient to an existing group is part of ordinary demographics editing, not
 a separate permission. The API enforces this the same way as everything
@@ -237,7 +237,7 @@ erDiagram
   - Soft-deleted the same way as `patients` (`deleted_at`) rather than hard
     deleted — so a patient's historical group assignment still resolves to
     a name even after a group is retired, but retired groups drop out of
-    the assignable/filterable list (§6, §8.7).
+    the assignable/filterable list (§6, §8.8).
   - Mutation (`POST`/`PATCH`/`DELETE /patient-groups`) is **admin-only**;
     reading the list and setting `patients.group_id` is open to any role
     that can edit demographics — i.e. all three roles (§4).
@@ -568,7 +568,7 @@ but the unsorted default is never "whatever order the DB happened to return."
 - The search box debounces input and only calls the API once the query is
   **3+ characters**; below that it shows the unfiltered (or previous) list
   rather than firing a request, matching the API's enforced minimum (§5.2).
-- A new admin-only Manage Groups screen (§8.7), plus a group filter/sort
+- A new admin-only Manage Groups screen (§8.8), plus a group filter/sort
   control and a group selector added to the existing patient list and
   patient form.
 - Existing offline-shell behavior (service worker precache, install banners)
@@ -586,7 +586,36 @@ Email + password. On success, `GET /auth/me` resolves the session's role
 screen reads from. There is no "guest"/unauthenticated view of any patient
 data.
 
-### 8.2 Patient List (home screen)
+### 8.2 Navigation (hamburger menu)
+
+- A hamburger icon in the top app bar opens a slide-in drawer — the client
+  moves from a single implicit screen to a small set of top-level
+  destinations now that `admin` has four and `doctor`/`front_desk` have two
+  each.
+- Menu items are role-gated client-side, mirroring the server-side route
+  guards (§4) — a role never sees an item it has no access to; nothing is
+  shown-but-disabled:
+
+  | Nav item | `admin` | `doctor` | `front_desk` |
+  |---|---|---|---|
+  | Patients | ✅ | ✅ | ✅ |
+  | Groups | ✅ | ❌ | ❌ |
+  | Activity | ✅ | ❌ | ❌ |
+  | Appointments | ✅ | ✅ | ✅ |
+
+- **Patients** → Patient List (§8.3), unchanged as the default landing
+  screen right after login for every role.
+- **Groups** → Manage Groups (§8.8), admin-only.
+- **Activity** → the new Activity (Audit Log) screen (§8.9), admin-only.
+- **Appointments** → reserved nav destination for all three roles. The
+  route exists in the shell so adding the feature later doesn't require
+  another nav rework, but the screen itself, its schema, and its API are
+  deferred to a follow-up design pass (§13) — not specified here.
+- Selecting an item highlights it as active, closes the drawer, and
+  navigates. No breadcrumbs or nested nav in this phase — every
+  destination is a flat, single-level screen.
+
+### 8.3 Patient List (home screen)
 
 - One search box at the top — debounced, ignores input under 3 characters,
   calls `GET /patients?search=`. Matches name *or* `patient_number` in the
@@ -604,18 +633,18 @@ data.
 - "Add patient" button — visible to `admin`, `doctor`, and `front_desk`.
 - Tapping a row opens Patient Detail.
 
-### 8.3 Patient Detail
+### 8.4 Patient Detail
 
 - Header: name, `patient_number`, age (computed from DOB, or the manual
   value when DOB is absent), DOB, gender, address, group.
 - Edit / Delete patient buttons — delete is **admin-only**, hidden entirely
   (not disabled) for the other two roles (§4). Edit opens the same patient
-  form as creation (§8.2), including the group selector.
+  form as creation (§8.3), including the group selector.
 - The patient create/edit form's **Group** field is a plain dropdown
   populated from `GET /patient-groups` (name asc), plus "No group." It's a
   *picker*, not a group editor — every role that can edit demographics can
   assign an existing group to a patient, but only `admin` can add a new
-  option to that dropdown, from the separate Manage Groups screen (§8.7).
+  option to that dropdown, from the separate Manage Groups screen (§8.8).
 - "Eye treatment history" below: visit cards, most-recent-visit-first
   (`visit_at` desc, §6).
 - Each visit card shows: visit date + time, the Distance/Reading ×
@@ -629,7 +658,7 @@ data.
 - Attachments are not rendered at all for `front_desk` — not greyed out,
   simply absent from the page.
 
-### 8.4 Visit Record Form (create/edit)
+### 8.5 Visit Record Form (create/edit)
 
 - Date + time picker for `visit_at`, defaulting to "now," adjustable (for
   backdating a transcribed paper chart, §5.2).
@@ -642,7 +671,7 @@ data.
 - Attachment upload control — rendered only for `admin`/`doctor`.
 - Save / Cancel.
 
-### 8.5 Role-based UI differences, summarized
+### 8.6 Role-based UI differences, summarized
 
 | | `admin` | `doctor` | `front_desk` |
 |---|---|---|---|
@@ -651,15 +680,17 @@ data.
 | Attachments (upload/view) | ✅ | ✅ | ❌ (hidden) |
 | Assign a patient to an existing group | ✅ | ✅ | ✅ |
 | Manage patient groups (create/rename/delete) | ✅ | ❌ | ❌ |
-| Manage staff accounts, audit log | ✅ | ❌ | ❌ |
+| View Activity (audit log) | ✅ | ❌ | ❌ |
+| Manage staff accounts | ✅ | ❌ | ❌ |
+| Appointments nav item (screen deferred, §13) | ✅ | ✅ | ✅ |
 
-### 8.6 Carried over unchanged
+### 8.7 Carried over unchanged
 
 The offline/install banners (`OfflineBanner`, `InstallBanner`) and the PWA
 install experience are exactly what's already live in the current MVP —
 this is additive on top of that shell, not a rewrite of it.
 
-### 8.7 Manage Groups (admin-only screen)
+### 8.8 Manage Groups (admin-only screen)
 
 - A route only `admin` can reach — hidden from the nav entirely for
   `doctor`/`front_desk` (a direct URL hit gets the same server-side `403`
@@ -673,6 +704,29 @@ this is additive on top of that shell, not a rewrite of it.
 - No bulk reassignment tool in this phase — if a group is deleted, patients
   who had it keep showing that (now-retired) name read-only; reassigning
   them individually is a normal patient-edit action.
+
+### 8.9 Activity (Audit Log) — admin-only screen
+
+- Reachable only via the **Activity** nav item (§8.2); hidden entirely for
+  `doctor`/`front_desk` (§4), same as Manage Groups (§8.8) — a direct URL
+  hit gets the server-side `403` any other admin-only endpoint would.
+- Reverse-chronological feed over `audit_log` (§5.1, §5.3): actor (staff
+  name), action (create/update/delete/export/erase), entity type + a
+  reference to the affected record (where it still exists to link to), and
+  timestamp.
+- Filters: entity type and a date range, plus an actor filter — extending
+  `GET /audit-log?entity_type=&entity_id=` (§6) with `actor_user_id` and
+  `from`/`to` params when this screen is built.
+- Read-only — no edit or delete of audit entries themselves; `audit_log` is
+  meant to be tamper-evident (§5.2).
+- Row tap opens a detail view showing the `before_json`/`after_json`
+  snapshot (§5.2) for that entry; the list view itself only needs the
+  summary fields above.
+- Not implemented in the local-storage test build: genuine audit logging
+  requires server-side write interception on every mutating endpoint
+  (§10), which a client-only localStorage app has no equivalent for. This
+  section describes the real-backend screen now that it's a reachable nav
+  destination.
 
 ## 9. Offline sync strategy (phased)
 
@@ -772,4 +826,8 @@ build them if multi-device offline editing turns out to be a real need.
   second location is added.
 - Appointment scheduling and billing are intentionally out of scope; if
   needed later, they're additive tables (`appointments`, `invoices`) that
-  reference `patients`/`eye_visits` without changing what's here.
+  reference `patients`/`eye_visits` without changing what's here. The
+  hamburger nav (§8.2) already reserves an **Appointments** destination for
+  all three roles so the shell won't need another nav rework when this
+  lands, but the screen, schema, and API are a follow-up design pass, not
+  specified here.
