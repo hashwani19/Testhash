@@ -748,6 +748,13 @@ UI at all — only the data-fetching layer.
     placeholder — `localStorage`'s ~5–10MB origin quota means this doesn't
     scale past a modest number of compressed photos; the real backend's R2
     upload (§6) is what actually removes that ceiling, not a client change.
+  - **Viewed in an in-page overlay (`ImageViewer`), not a new tab**: modern
+    browsers block top-level navigation to a `data:` URL from a click
+    (`<a href target="_blank">` silently does nothing), so tapping a
+    thumbnail opens a full-screen preview within the page instead — this is
+    the only option that works given the data-URL storage above, and it's
+    what the real backend's short-lived signed R2 URL (`GET
+    /attachments/:id`, §6) would replace it with once that exists.
   - **Delete is admin-only**; upload and view are open to `admin`/`doctor`
     and hidden entirely for `front_desk` (§8.4/§8.5) — same split as every
     other clinical-record permission (§4). Removing a *not-yet-saved*

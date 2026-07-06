@@ -3,6 +3,7 @@ import type { Attachment, Eye, EyeRefraction, EyeVisit, VisionType } from '../ty
 import { Button } from './common/Button'
 import { Card, CardHeader } from './common/Card'
 import { ListView } from './common/ListView'
+import { ImageViewer } from './common/ImageViewer'
 import { EditIcon } from './common/icons'
 import { ConfirmModal } from './ConfirmModal'
 import { usePreferences } from '../hooks/usePreferences'
@@ -77,14 +78,20 @@ function EyeSection({ eye, refractions }: { eye: Eye; refractions: EyeVisit['ref
   )
 }
 
-function VisitAttachments({ attachments }: { attachments: Attachment[] }) {
+function VisitAttachments({
+  attachments,
+  onView,
+}: {
+  attachments: Attachment[]
+  onView: (attachment: Attachment) => void
+}) {
   if (attachments.length === 0) return null
   return (
     <div className="mt-1 flex flex-wrap gap-2">
       {attachments.map((a) => (
-        <a key={a.id} href={a.dataUrl} target="_blank" rel="noreferrer">
+        <Button key={a.id} variant="unstyled" className="cursor-pointer" onClick={() => onView(a)}>
           <img src={a.dataUrl} alt={a.fileName} className="h-16 w-16 rounded-lg border border-border object-cover" />
-        </a>
+        </Button>
       ))}
     </div>
   )
@@ -100,6 +107,7 @@ export function EyeRecordHistory({
 }: Props) {
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const confirmingVisit = visits.find((v) => v.id === confirmingDeleteId) ?? null
+  const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null)
   const { preferences } = usePreferences()
 
   return (
@@ -155,7 +163,10 @@ export function EyeRecordHistory({
             )}
             {visit.notes && <p className="mt-1 text-[13px] text-text">{visit.notes}</p>}
             {canViewAttachments && (
-              <VisitAttachments attachments={attachments.filter((a) => a.visitId === visit.id)} />
+              <VisitAttachments
+                attachments={attachments.filter((a) => a.visitId === visit.id)}
+                onView={setViewingAttachment}
+              />
             )}
           </Card>
         )}
@@ -175,6 +186,14 @@ export function EyeRecordHistory({
             setConfirmingDeleteId(null)
           }}
           onCancel={() => setConfirmingDeleteId(null)}
+        />
+      )}
+
+      {viewingAttachment && (
+        <ImageViewer
+          src={viewingAttachment.dataUrl}
+          alt={viewingAttachment.fileName}
+          onClose={() => setViewingAttachment(null)}
         />
       )}
     </>

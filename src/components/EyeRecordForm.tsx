@@ -8,6 +8,7 @@ import { compressImageFile } from '../utils/imageCompression'
 import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
 import { Textarea } from './common/Textarea'
+import { ImageViewer } from './common/ImageViewer'
 import { card, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
@@ -172,6 +173,7 @@ export function EyeRecordForm({
 
   const [pendingAttachments, setPendingAttachments] = useState<NewAttachmentInput[]>([])
   const [compressing, setCompressing] = useState(false)
+  const [viewingImage, setViewingImage] = useState<{ dataUrl: string; fileName: string } | null>(null)
 
   const setCell = (eye: Eye, visionType: VisionType, next: CellState) => {
     setGrid((prev) => ({ ...prev, [eye]: { ...prev[eye], [visionType]: next } }))
@@ -228,147 +230,171 @@ export function EyeRecordForm({
   }
 
   return (
-    <form className={`${card} flex flex-col gap-3.5`} onSubmit={submit}>
-      <label className={fieldLabel}>
-        <span className={fieldLabelText}>Visit date &amp; time</span>
-        <TextInput
-          type="datetime-local"
-          value={visitAt}
-          max={nowLocal()}
-          onChange={(e) => setVisitAt(e.target.value)}
-          required
-        />
-      </label>
-
-      {(['left', 'right'] as Eye[]).map((eye) => (
-        // min-w-0 is required: fieldsets don't shrink in flex layouts by
-        // default, so without it this overflows past the card's edge.
-        <fieldset className="min-w-0 rounded-xl border border-border p-3" key={eye}>
-          <legend className="px-2 text-[17px] font-bold text-text-h">
-            {eye === 'left' ? 'Left' : 'Right'} eye
-          </legend>
-          <RefractionCell
-            visionType="distance"
-            cell={grid[eye].distance}
-            onChange={(next) => setCell(eye, 'distance', next)}
+    <>
+      <form className={`${card} flex flex-col gap-3.5`} onSubmit={submit}>
+        <label className={fieldLabel}>
+          <span className={fieldLabelText}>Visit date &amp; time</span>
+          <TextInput
+            type="datetime-local"
+            value={visitAt}
+            max={nowLocal()}
+            onChange={(e) => setVisitAt(e.target.value)}
+            required
           />
-          <RefractionCell
-            visionType="reading"
-            cell={grid[eye].reading}
-            onChange={(next) => setCell(eye, 'reading', next)}
+        </label>
+
+        {(['left', 'right'] as Eye[]).map((eye) => (
+          // min-w-0 is required: fieldsets don't shrink in flex layouts by
+          // default, so without it this overflows past the card's edge.
+          <fieldset className="min-w-0 rounded-xl border border-border p-3" key={eye}>
+            <legend className="px-2 text-[17px] font-bold text-text-h">
+              {eye === 'left' ? 'Left' : 'Right'} eye
+            </legend>
+            <RefractionCell
+              visionType="distance"
+              cell={grid[eye].distance}
+              onChange={(next) => setCell(eye, 'distance', next)}
+            />
+            <RefractionCell
+              visionType="reading"
+              cell={grid[eye].reading}
+              onChange={(next) => setCell(eye, 'reading', next)}
+            />
+          </fieldset>
+        ))}
+
+        <label className={fieldLabel}>
+          <span className={fieldLabelText}>Lenses (optional)</span>
+          <TextInput
+            type="text"
+            value={lenses}
+            onChange={(e) => setLenses(e.target.value)}
+            placeholder="Progressive, bifocal, single vision…"
           />
-        </fieldset>
-      ))}
+        </label>
 
-      <label className={fieldLabel}>
-        <span className={fieldLabelText}>Lenses (optional)</span>
-        <TextInput
-          type="text"
-          value={lenses}
-          onChange={(e) => setLenses(e.target.value)}
-          placeholder="Progressive, bifocal, single vision…"
-        />
-      </label>
+        <label className={fieldLabel}>
+          <span className={fieldLabelText}>Diagnosis (optional)</span>
+          <Textarea value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} rows={2} />
+        </label>
 
-      <label className={fieldLabel}>
-        <span className={fieldLabelText}>Diagnosis (optional)</span>
-        <Textarea value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} rows={2} />
-      </label>
+        <label className={fieldLabel}>
+          <span className={fieldLabelText}>Treatment plan (optional)</span>
+          <Textarea value={treatmentPlan} onChange={(e) => setTreatmentPlan(e.target.value)} rows={2} />
+        </label>
 
-      <label className={fieldLabel}>
-        <span className={fieldLabelText}>Treatment plan (optional)</span>
-        <Textarea value={treatmentPlan} onChange={(e) => setTreatmentPlan(e.target.value)} rows={2} />
-      </label>
+        <label className={fieldLabel}>
+          <span className={fieldLabelText}>Follow-up date (optional)</span>
+          <TextInput
+            type="date"
+            value={followUpDate}
+            min={visitAt.slice(0, 10)}
+            onChange={(e) => setFollowUpDate(e.target.value)}
+          />
+        </label>
 
-      <label className={fieldLabel}>
-        <span className={fieldLabelText}>Follow-up date (optional)</span>
-        <TextInput
-          type="date"
-          value={followUpDate}
-          min={visitAt.slice(0, 10)}
-          onChange={(e) => setFollowUpDate(e.target.value)}
-        />
-      </label>
+        <label className={fieldLabel}>
+          <span className={fieldLabelText}>Notes (optional)</span>
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="Other observations…"
+          />
+        </label>
 
-      <label className={fieldLabel}>
-        <span className={fieldLabelText}>Notes (optional)</span>
-        <Textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={2}
-          placeholder="Other observations…"
-        />
-      </label>
+        {canManageAttachments && (
+          <div className="flex flex-col gap-2">
+            <span className={fieldLabelText}>Prescription photos (optional)</span>
 
-      {canManageAttachments && (
-        <div className="flex flex-col gap-2">
-          <span className={fieldLabelText}>Prescription photos (optional)</span>
-
-          {(attachments.length > 0 || pendingAttachments.length > 0) && (
-            <div className="flex flex-wrap gap-2">
-              {attachments.map((a) => (
-                <div key={a.id} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-border">
-                  <img src={a.dataUrl} alt={a.fileName} className="h-full w-full object-cover" />
-                  {canDeleteAttachments && (
+            {(attachments.length > 0 || pendingAttachments.length > 0) && (
+              <div className="flex flex-wrap gap-2">
+                {attachments.map((a) => (
+                  <div
+                    key={a.id}
+                    className="relative h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border"
+                    onClick={() => setViewingImage({ dataUrl: a.dataUrl, fileName: a.fileName })}
+                  >
+                    <img src={a.dataUrl} alt={a.fileName} className="h-full w-full object-cover" />
+                    {canDeleteAttachments && (
+                      <Button
+                        variant="icon"
+                        aria-label={`Remove ${a.fileName}`}
+                        className="absolute right-0.5 top-0.5 h-6 w-6 rounded-full bg-surface/90 text-base leading-none"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDeleteAttachment(a.id)
+                        }}
+                      >
+                        ×
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {pendingAttachments.map((a, i) => (
+                  <div
+                    key={i}
+                    className="relative h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border"
+                    onClick={() => setViewingImage({ dataUrl: a.dataUrl, fileName: a.fileName })}
+                  >
+                    <img src={a.dataUrl} alt={a.fileName} className="h-full w-full object-cover" />
                     <Button
                       variant="icon"
                       aria-label={`Remove ${a.fileName}`}
                       className="absolute right-0.5 top-0.5 h-6 w-6 rounded-full bg-surface/90 text-base leading-none"
-                      onClick={() => onDeleteAttachment(a.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removePending(i)
+                      }}
                     >
                       ×
                     </Button>
-                  )}
-                </div>
-              ))}
-              {pendingAttachments.map((a, i) => (
-                <div key={i} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-border">
-                  <img src={a.dataUrl} alt={a.fileName} className="h-full w-full object-cover" />
-                  <Button
-                    variant="icon"
-                    aria-label={`Remove ${a.fileName}`}
-                    className="absolute right-0.5 top-0.5 h-6 w-6 rounded-full bg-surface/90 text-base leading-none"
-                    onClick={() => removePending(i)}
-                  >
-                    ×
-                  </Button>
-                </div>
-              ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="relative w-fit">
+              <Button variant="secondary" disabled={compressing}>
+                {compressing ? 'Processing…' : 'Add photo'}
+              </Button>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                multiple
+                disabled={compressing}
+                onChange={handleFilesSelected}
+                className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-default"
+                aria-label="Add prescription photo"
+              />
             </div>
-          )}
-
-          <div className="relative w-fit">
-            <Button variant="secondary" disabled={compressing}>
-              {compressing ? 'Processing…' : 'Add photo'}
-            </Button>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              multiple
-              disabled={compressing}
-              onChange={handleFilesSelected}
-              className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-default"
-              aria-label="Add prescription photo"
-            />
           </div>
+        )}
+
+        {isEmpty && (
+          <p className="text-right text-[13px] text-text">
+            Enter at least one value below the visit date to save a record.
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2.5">
+          <Button variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" disabled={isEmpty}>
+            {initial ? 'Save changes' : 'Save record'}
+          </Button>
         </div>
-      )}
+      </form>
 
-      {isEmpty && (
-        <p className="text-right text-[13px] text-text">
-          Enter at least one value below the visit date to save a record.
-        </p>
+      {viewingImage && (
+        <ImageViewer
+          src={viewingImage.dataUrl}
+          alt={viewingImage.fileName}
+          onClose={() => setViewingImage(null)}
+        />
       )}
-
-      <div className="flex justify-end gap-2.5">
-        <Button variant="secondary" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" variant="primary" disabled={isEmpty}>
-          {initial ? 'Save changes' : 'Save record'}
-        </Button>
-      </div>
-    </form>
+    </>
   )
 }
