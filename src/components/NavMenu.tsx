@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { Role } from '../types'
 import { cx } from '../styles'
 
@@ -20,6 +21,18 @@ interface Props {
 }
 
 export function NavMenu({ open, role, active, onNavigate, onSignOut, onClose }: Props) {
+  // Lock body scroll while the drawer is open so the page behind it can't be
+  // scrolled — the transparent backdrop already blocks clicks, but wheel/touch
+  // scroll bubbles past it to the document by default.
+  useEffect(() => {
+    if (!open) return
+    const original = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = original
+    }
+  }, [open])
+
   if (!open) return null
 
   const items = NAV_ITEMS.filter((item) => !item.adminOnly || role === 'admin')
