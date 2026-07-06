@@ -70,6 +70,26 @@ export interface GlobalSettings {
   autoDeleteAfterDays: number
 }
 
+export type AuditAction = 'create' | 'update' | 'delete'
+export type AuditEntityType = 'patient' | 'patient_group' | 'eye_visit' | 'appointment'
+
+export interface AuditLogEntry {
+  id: string
+  actorUserId: string
+  /** Snapshotted at write time — survives the actor's account being renamed/removed later. */
+  actorName: string
+  action: AuditAction
+  entityType: AuditEntityType
+  entityId: string
+  /** Snapshotted at write time — survives the entity itself being deleted later. */
+  entityLabel: string
+  /** JSON snapshot of the row before the change. Unset for `create`. */
+  beforeJson?: string
+  /** JSON snapshot of the row after the change. Unset for `delete`. */
+  afterJson?: string
+  createdAt: number
+}
+
 export type Eye = 'left' | 'right'
 export type VisionType = 'distance' | 'reading'
 

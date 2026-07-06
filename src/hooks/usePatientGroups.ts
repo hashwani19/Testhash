@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { PatientGroup } from '../types'
 import { SEED_GROUPS } from '../seedData'
+import { useAuditLog } from './useAuditLog'
 
 const STORAGE_KEY = 'testhash.patientGroups.v1'
 
@@ -17,33 +18,48 @@ function loadGroups(): PatientGroup[] {
 
 export function usePatientGroups() {
   const [groups, setGroups] = useState<PatientGroup[]>(() => loadGroups())
+  const { logEntry } = useAuditLog()
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
   }, [groups])
 
-  const addGroup = useCallback((name: string) => {
-    const group: PatientGroup = {
-      id: crypto.randomUUID(),
-      name: name.trim(),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }
-    setGroups((prev) => [...prev, group].sort((a, b) => a.name.localeCompare(b.name)))
-    return group.id
-  }, [])
+  const addGroup = useCallback(
+    (name: string) => {
+      const group: PatientGroup = {
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }
+      setGroups((prev) => [...prev, group].sort((a, b) => a.name.localeCompare(b.name)))
+      logEntry({ action: 'create', entityType: 'patient_group', entityId: group.id, entityLabel: group.name, after: group })
+      return group.id
+    },
+    [logEntry],
+  )
 
-  const renameGroup = useCallback((id: string, name: string) => {
-    setGroups((prev) =>
-      prev
-        .map((g) => (g.id === id ? { ...g, name: name.trim(), updatedAt: Date.now() } : g))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    )
-  }, [])
+  const renameGroup = useCallback(
+    (id: string, name: string) => {
+      const before = groups.find((g) => g.id === id)
+      if (!before) return
+      const after: PatientGroup = { ...before, name: name.trim(), updatedAt: Date.now() }
+      setGroups((prev) => prev.map((g) => (g.id === id ? after : g)).sort((a, b) => a.name.localeCompare(b.name)))
+      logEntry({ action: 'update', entityType: 'patient_group', entityId: id, entityLabel: after.name, before, after })
+    },
+    [groups, logEntry],
+  )
 
-  const deleteGroup = useCallback((id: string) => {
-    setGroups((prev) => prev.filter((g) => g.id !== id))
-  }, [])
+  const deleteGroup = useCallback(
+    (id: string) => {
+      const before = groups.find((g) => g.id === id)
+      setGroups((prev) => prev.filter((g) => g.id !== id))
+      if (before) {
+        logEntry({ action: 'delete', entityType: 'patient_group', entityId: id, entityLabel: before.name, before })
+      }
+    },
+    [groups, logEntry],
+  )
 
   return { groups, addGroup, renameGroup, deleteGroup }
 }

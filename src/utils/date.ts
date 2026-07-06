@@ -14,3 +14,8 @@ export function dateOnlyDaysAgo(days: number): string {
   d.setDate(d.getDate() - days)
   return toDateOnly(d)
 }
+
+/** A millisecond timestamp's own date, as YYYY-MM-DD in local time. */
+export function dateOnlyFromTimestamp(ms: number): string {
+  return toDateOnly(new Date(ms))
+}

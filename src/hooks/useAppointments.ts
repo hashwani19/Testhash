@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Appointment } from '../types'
+import type { Appointment, Patient } from '../types'
 import { dateOnlyDaysAgo } from '../utils/date'
+import { resolveAppointmentName } from '../utils/appointmentQuery'
 import { useGlobalSettings } from './useGlobalSettings'
+import { useAuditLog } from './useAuditLog'
 import { SEED_APPOINTMENTS } from '../seedData'
 
 const STORAGE_KEY = 'testhash.appointments.v1'
@@ -40,10 +42,15 @@ export interface AppointmentInput {
  * admin-configurable auto-delete sweep (§5.2, §8.11) also drops
  * appointments dated more than `autoDeleteAfterDays` in the past whenever
  * this hook (re-)mounts or the global setting changes.
+ *
+ * Takes the current patient list so audit log entries (§7) can resolve a
+ * human-readable label (the linked patient's name, or the prospective
+ * name) the same way the appointments list itself does.
  */
-export function useAppointments() {
+export function useAppointments(patients: Patient[]) {
   const [appointments, setAppointments] = useState<Appointment[]>(() => loadAppointments())
   const { settings } = useGlobalSettings()
+  const { logEntry } = useAuditLog()
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments))
@@ -55,64 +62,122 @@ export function useAppointments() {
     setAppointments((prev) => prev.filter((a) => a.date >= cutoff))
   }, [settings.autoDeleteOldAppointments, settings.autoDeleteAfterDays])
 
-  const addAppointment = useCallback((input: AppointmentInput) => {
-    const now = Date.now()
-    const appointment: Appointment = {
-      id: crypto.randomUUID(),
-      date: input.date,
-      time: input.time || undefined,
-      patientId: input.patientId,
-      name: input.newPatient?.name.trim(),
-      dob: input.newPatient?.dob || undefined,
-      manualAge: input.newPatient?.dob ? undefined : input.newPatient?.manualAge,
-      mobile: input.newPatient?.mobile?.trim() || undefined,
-      address: input.newPatient?.address?.trim() || undefined,
-      createdAt: now,
-      updatedAt: now,
-    }
-    setAppointments((prev) => [appointment, ...prev])
-  }, [])
+  const addAppointment = useCallback(
+    (input: AppointmentInput) => {
+      const now = Date.now()
+      const appointment: Appointment = {
+        id: crypto.randomUUID(),
+        date: input.date,
+        time: input.time || undefined,
+        patientId: input.patientId,
+        name: input.newPatient?.name.trim(),
+        dob: input.newPatient?.dob || undefined,
+        manualAge: input.newPatient?.dob ? undefined : input.newPatient?.manualAge,
+        mobile: input.newPatient?.mobile?.trim() || undefined,
+        address: input.newPatient?.address?.trim() || undefined,
+        createdAt: now,
+        updatedAt: now,
+      }
+      setAppointments((prev) => [appointment, ...prev])
+      logEntry({
+        action: 'create',
+        entityType: 'appointment',
+        entityId: appointment.id,
+        entityLabel: resolveAppointmentName(appointment, patients),
+        after: appointment,
+      })
+    },
+    [logEntry, patients],
+  )
 
   /** Called once an appointment's prospective patient is actually created, so
    *  the appointment resolves through the real patient record from then on. */
-  const linkAppointmentToPatient = useCallback((id: string, patientId: string) => {
-    setAppointments((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, patientId, updatedAt: Date.now() } : a)),
-    )
-  }, [])
+  const linkAppointmentToPatient = useCallback(
+    (id: string, patientId: string) => {
+      const before = appointments.find((a) => a.id === id)
+      if (!before) return
+      const after: Appointment = { ...before, patientId, updatedAt: Date.now() }
+      setAppointments((prev) => prev.map((a) => (a.id === id ? after : a)))
+      logEntry({
+        action: 'update',
+        entityType: 'appointment',
+        entityId: id,
+        entityLabel: resolveAppointmentName(after, patients),
+        before,
+        after,
+      })
+    },
+    [appointments, logEntry, patients],
+  )
 
-  const updateAppointment = useCallback((id: string, input: AppointmentInput) => {
-    setAppointments((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? {
-              ...a,
-              date: input.date,
-              time: input.time || undefined,
-              patientId: input.patientId,
-              name: input.newPatient?.name.trim(),
-              dob: input.newPatient?.dob || undefined,
-              manualAge: input.newPatient?.dob ? undefined : input.newPatient?.manualAge,
-              mobile: input.newPatient?.mobile?.trim() || undefined,
-              address: input.newPatient?.address?.trim() || undefined,
-              updatedAt: Date.now(),
-            }
-          : a,
-      ),
-    )
-  }, [])
+  const updateAppointment = useCallback(
+    (id: string, input: AppointmentInput) => {
+      const before = appointments.find((a) => a.id === id)
+      if (!before) return
+      const after: Appointment = {
+        ...before,
+        date: input.date,
+        time: input.time || undefined,
+        patientId: input.patientId,
+        name: input.newPatient?.name.trim(),
+        dob: input.newPatient?.dob || undefined,
+        manualAge: input.newPatient?.dob ? undefined : input.newPatient?.manualAge,
+        mobile: input.newPatient?.mobile?.trim() || undefined,
+        address: input.newPatient?.address?.trim() || undefined,
+        updatedAt: Date.now(),
+      }
+      setAppointments((prev) => prev.map((a) => (a.id === id ? after : a)))
+      logEntry({
+        action: 'update',
+        entityType: 'appointment',
+        entityId: id,
+        entityLabel: resolveAppointmentName(after, patients),
+        before,
+        after,
+      })
+    },
+    [appointments, logEntry, patients],
+  )
 
-  const deleteAppointment = useCallback((id: string) => {
-    setAppointments((prev) => prev.filter((a) => a.id !== id))
-  }, [])
+  const deleteAppointment = useCallback(
+    (id: string) => {
+      const before = appointments.find((a) => a.id === id)
+      setAppointments((prev) => prev.filter((a) => a.id !== id))
+      if (before) {
+        logEntry({
+          action: 'delete',
+          entityType: 'appointment',
+          entityId: id,
+          entityLabel: resolveAppointmentName(before, patients),
+          before,
+        })
+      }
+    },
+    [appointments, logEntry, patients],
+  )
 
   /** Bulk delete — every role can select multiple rows and remove them in
    *  one confirm (§8.11); there's no separate "select all then delete one
-   *  by one" requirement to satisfy, so this just filters by a set of ids. */
-  const deleteAppointments = useCallback((ids: string[]) => {
-    const idSet = new Set(ids)
-    setAppointments((prev) => prev.filter((a) => !idSet.has(a.id)))
-  }, [])
+   *  by one" requirement to satisfy, so this just filters by a set of ids.
+   *  Still one audit log entry per deleted appointment, same granularity
+   *  a real per-id DELETE /appointments/:id call would produce (§6). */
+  const deleteAppointments = useCallback(
+    (ids: string[]) => {
+      const idSet = new Set(ids)
+      const toDelete = appointments.filter((a) => idSet.has(a.id))
+      setAppointments((prev) => prev.filter((a) => !idSet.has(a.id)))
+      for (const appointment of toDelete) {
+        logEntry({
+          action: 'delete',
+          entityType: 'appointment',
+          entityId: appointment.id,
+          entityLabel: resolveAppointmentName(appointment, patients),
+          before: appointment,
+        })
+      }
+    },
+    [appointments, logEntry, patients],
+  )
 
   return {
     appointments,

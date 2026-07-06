@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { AuthProvider } from './auth/AuthContext'
 import { PreferencesProvider } from './preferences/PreferencesProvider'
 import { GlobalSettingsProvider } from './settings/GlobalSettingsProvider'
+import { AuditLogProvider } from './auditLog/AuditLogProvider'
 import { useAuth } from './hooks/useAuth'
 import { usePatients } from './hooks/usePatients'
 import { useEyeVisits } from './hooks/useEyeVisits'
 import { usePatientGroups } from './hooks/usePatientGroups'
 import { useAppointments } from './hooks/useAppointments'
+import { useAuditLog } from './hooks/useAuditLog'
 import { usePreferences } from './hooks/usePreferences'
 import { useThemeEffect } from './hooks/useThemeEffect'
 import { PatientList } from './components/PatientList'
@@ -14,7 +16,7 @@ import { PatientForm } from './components/PatientForm'
 import { PatientDetail } from './components/PatientDetail'
 import { EyeRecordForm } from './components/EyeRecordForm'
 import { ManageGroupsScreen } from './components/ManageGroupsScreen'
-import { ComingSoonScreen } from './components/ComingSoonScreen'
+import { ActivityScreen } from './components/ActivityScreen'
 import { PreferencesScreen } from './components/PreferencesScreen'
 import { AppointmentsScreen } from './components/AppointmentsScreen'
 import { AppointmentForm } from './components/AppointmentForm'
@@ -50,10 +52,10 @@ const VIEW_TO_NAV_TARGET: Partial<Record<View, NavTarget>> = {
 }
 
 function AppShell() {
-  const { user, logout } = useAuth()
+  const { user, users, logout } = useAuth()
   const { patients, addPatient, updatePatient, deletePatient } = usePatients()
   const { addVisit, updateVisit, deleteVisit, deleteVisitsForPatient, getVisitsForPatient } =
-    useEyeVisits()
+    useEyeVisits(patients)
   const { groups, addGroup, renameGroup, deleteGroup } = usePatientGroups()
   const {
     appointments,
@@ -62,7 +64,8 @@ function AppShell() {
     updateAppointment,
     deleteAppointment,
     deleteAppointments,
-  } = useAppointments()
+  } = useAppointments(patients)
+  const { entries } = useAuditLog()
   const { preferences } = usePreferences()
   useThemeEffect(preferences.theme)
 
@@ -247,11 +250,7 @@ function AppShell() {
         )}
 
         {view === 'activity' && isAdmin && (
-          <ComingSoonScreen
-            title="Activity"
-            description="Requirements not designed yet — coming soon."
-            onBack={goToList}
-          />
+          <ActivityScreen entries={entries} users={users} onBack={goToList} />
         )}
 
         {view === 'appointments' && (
@@ -332,11 +331,13 @@ function AppShell() {
 function App() {
   return (
     <AuthProvider>
-      <GlobalSettingsProvider>
-        <PreferencesProvider>
-          <AppShell />
-        </PreferencesProvider>
-      </GlobalSettingsProvider>
+      <AuditLogProvider>
+        <GlobalSettingsProvider>
+          <PreferencesProvider>
+            <AppShell />
+          </PreferencesProvider>
+        </GlobalSettingsProvider>
+      </AuditLogProvider>
     </AuthProvider>
   )
 }

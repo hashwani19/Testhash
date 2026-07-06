@@ -226,9 +226,11 @@ erDiagram
     AUDIT_LOG {
         text id PK
         text actor_user_id FK
+        text actor_name "snapshotted at write time, §5.2"
         text action
         text entity_type
         text entity_id
+        text entity_label "snapshotted at write time, §5.2"
         text before_json
         text after_json
         text ip_address
@@ -381,7 +383,19 @@ erDiagram
   separate admin-triggered erasure workflow (§10).
 - **`audit_log.before_json` / `after_json`**: snapshot of the changed row
   (JSON-encoded), not full-table diffs — enough to reconstruct history without
-  a general-purpose event-sourcing system.
+  a general-purpose event-sourcing system. `before_json` is unset for
+  `create`; `after_json` is unset for `delete`.
+- **`audit_log.actor_name` / `entity_label`**: snapshotted at write time
+  rather than resolved later via a join to `users`/the entity's own table —
+  the list view (§8.9) needs a human-readable actor and record reference
+  for *every* row without a live lookup that can fail once the referenced
+  row is gone. This matters even for tables that soft-delete (`patients`,
+  `patient_groups` keep their row via `deleted_at`, so a join would still
+  resolve) because `eye_visits` and `appointments` are **hard**-deleted —
+  there the row is genuinely gone, and a live join can never recover its
+  name. Snapshotting both strings once, at the moment of the action, works
+  identically for every entity type regardless of that table's delete
+  semantics.
 - **`user_preferences`**: one row per user, holding personal (not clinical)
   settings — device-independent, since the same account may be used from
   more than one device/browser. One-to-zero-or-one with `users` (a user who
@@ -574,9 +588,11 @@ CREATE INDEX idx_consents_patient ON consents(patient_id);
 CREATE TABLE audit_log (
     id             TEXT PRIMARY KEY,
     actor_user_id  TEXT REFERENCES users(id),
+    actor_name     TEXT NOT NULL,               -- snapshotted at write time (§5.2)
     action         TEXT NOT NULL CHECK (action IN ('create', 'update', 'delete', 'export')),
-    entity_type    TEXT NOT NULL,               -- 'patient' | 'eye_visit' | 'attachment' | ...
+    entity_type    TEXT NOT NULL,               -- 'patient' | 'patient_group' | 'eye_visit' | 'appointment' | 'attachment' | ...
     entity_id      TEXT NOT NULL,
+    entity_label   TEXT NOT NULL,               -- snapshotted at write time (§5.2) — e.g. a patient's name
     before_json    TEXT,
     after_json     TEXT,
     ip_address     TEXT,
@@ -693,7 +709,7 @@ UI at all — only the data-fetching layer.
 | `GET /attachments/:id` | admin, doctor | Fetch (redirect to a short-lived signed R2 URL) | — |
 | `DELETE /attachments/:id` | admin | Remove attachment | — |
 | `GET /patients/:id/export` | admin | Full patient data export (JSON/PDF) — data portability | — |
-| `GET /audit-log?entity_type=&entity_id=&page=&limit=` | admin | Audit trail lookup | `created_at` **desc** (most recent activity first) |
+| `GET /audit-log?search=&entity_type=&actor_user_id=&from=&to=&page=&limit=` | admin | Audit trail lookup (§8.9). `search` matches `actor_name` or `entity_label` (≥3 chars, same rule as `/patients`, §5.2). `entity_type`/`actor_user_id` filter to one value each; `from`/`to` filter to a date range (either or both, inclusive) | `created_at` **desc** (most recent activity first, not user-configurable) |
 | `GET /appointments?search=&from=&to=&sort=&page=&limit=` | any | List/search appointments (§8.11). `search` matches the resolved patient name (linked patient's name, or the prospective `name` — ≥3 chars, same rule as `/patients`, §5.2). `from`/`to` filter to a date range (either or both, inclusive). `sort` overrides the default: `name_asc`/`name_desc` | `date`, `time` asc (soonest first) |
 | `POST /appointments` | any | Book an appointment — either `patient_id` (existing patient) or `name`/`dob`/`manual_age`/`mobile`/`address` (prospective patient), plus `date` (required) and `time` (optional). `date` must be today or later — rejects a past date with `400` (§8.11) | — |
 | `PATCH /appointments/:id` | any | Update any of `date`/`time`/`patient_id`/`name`/`dob`/`manual_age`/`mobile`/`address` — used both for the Edit action (§8.11) and to set `patient_id` once a prospective patient is registered via "Add patient" | — |
@@ -794,13 +810,25 @@ UI at all — only the data-fetching layer.
   inline `<span>` in each place.
 - A new shared **`Breadcrumb`** component is the one place every "back up a
   level" control renders through (Patient Detail, Manage Groups,
-  Preferences, the Coming Soon placeholders) — previously each screen
-  rendered its own `Button variant="link"` with the same "‹ All patients"
-  text, styled as a plain small underlined link. `Breadcrumb` is
-  deliberately larger, semibold, and in the accent color instead — it's the
-  primary way back to the list from a full-screen detail view, not an
-  incidental inline link, so it should read as a real navigation control at
-  a glance rather than blend into body text.
+  Preferences, Activity's detail view) — previously each screen rendered
+  its own `Button variant="link"` with the same "‹ All patients" text,
+  styled as a plain small underlined link. `Breadcrumb` is deliberately
+  larger, semibold, and in the accent color instead — it's the primary way
+  back to the list from a full-screen detail view, not an incidental inline
+  link, so it should read as a real navigation control at a glance rather
+  than blend into body text.
+- **Audit logging is implemented client-side**, reversing this document's
+  earlier position that it needed server-side write interception this app
+  has no equivalent for. In practice every mutation already funnels through
+  exactly one hook per entity (`usePatients`/`usePatientGroups`/
+  `useEyeVisits`/`useAppointments`), so each of those hooks calls
+  `logEntry` itself right next to where it already calls `setState` —
+  functionally the same guarantee "every mutating endpoint writes an
+  audit_log row" (§6) describes, just running in the browser since there's
+  no server here. `AuditLogProvider` (a `PreferencesProvider`-style
+  context) is the one shared store every mutation hook and the Activity
+  screen read/write through, keyed off the current session's user for
+  `actor_user_id`/`actor_name`.
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 
@@ -940,24 +968,35 @@ this is additive on top of that shell, not a rewrite of it.
 
 - Reachable only via the **Activity** nav item (§8.2); hidden entirely for
   `doctor`/`front_desk` (§4), same as Manage Groups (§8.8) — a direct URL
-  hit gets the server-side `403` any other admin-only endpoint would.
-- Reverse-chronological feed over `audit_log` (§5.1, §5.3): actor (staff
-  name), action (create/update/delete/export/erase), entity type + a
-  reference to the affected record (where it still exists to link to), and
-  timestamp.
-- Filters: entity type and a date range, plus an actor filter — extending
-  `GET /audit-log?entity_type=&entity_id=` (§6) with `actor_user_id` and
-  `from`/`to` params when this screen is built.
+  hit gets the server-side `403` any other admin-only endpoint would (and
+  client-side, the view simply isn't rendered for a non-admin session,
+  §7).
+- Reverse-chronological feed over `audit_log` (§5.1, §5.3) — always sorted
+  newest-first, not a user-configurable sort like the patient/appointment
+  lists (§8.3, §8.11). Each row shows the actor's name, the action
+  (created/updated/deleted), the entity type ("patient" / "patient group" /
+  "eye record" / "appointment"), the entity's snapshotted label (§5.2 —
+  e.g. a patient's name), and the timestamp.
+- **Search**: matches actor name or entity label, same ≥3 character rule as
+  the patient list (§8.3).
+- **Filters**: entity type, staff member (a dropdown of every registered
+  user, §5.1 `users`), and an optional date range (`from`/`to`, either or
+  both) — plus the same "reset filters" control every other filtered list
+  in the app has (§8.3, §8.11).
 - Read-only — no edit or delete of audit entries themselves; `audit_log` is
   meant to be tamper-evident (§5.2).
-- Row tap opens a detail view showing the `before_json`/`after_json`
-  snapshot (§5.2) for that entry; the list view itself only needs the
-  summary fields above.
-- Not implemented in the local-storage test build: genuine audit logging
-  requires server-side write interception on every mutating endpoint
-  (§10), which a client-only localStorage app has no equivalent for. This
-  section describes the real-backend screen now that it's a reachable nav
-  destination.
+- Row tap opens a detail view: actor/action/entity summary up top, then a
+  "Before" panel (omitted for `create`) and an "After" panel (omitted for
+  `delete`), each the entity's own JSON snapshot pretty-printed — a direct
+  read of `before_json`/`after_json` (§5.2), not a bespoke diff view. Its
+  own back control reads "‹ Activity" (`Breadcrumb`'s `label` override, §7)
+  rather than "‹ All patients," since it backs out to the Activity list,
+  not the patient list.
+- **Implemented client-side**, reversing this document's earlier position
+  that audit logging needed server-side write interception this app has no
+  equivalent for (§7) — every mutation across patients, patient groups, eye
+  records, and appointments writes a real entry today, not just seeded demo
+  data.
 
 ### 8.10 Preferences (own account, every role)
 
