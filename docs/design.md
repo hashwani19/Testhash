@@ -242,7 +242,7 @@ erDiagram
     APPOINTMENTS {
         text id PK
         text date
-        text time
+        text time "nullable — a day-only booking is valid"
         text patient_id FK "nullable — set once linked to a real patient"
         text name "prospective-patient name; only used while patient_id is null"
         text dob
@@ -413,6 +413,10 @@ erDiagram
     combined datetime — matches how the booking form collects them (§8.11)
     and how filtering by date/date-range (`?from=&to=`, §6) reads most
     naturally as a plain string-range comparison on `date` alone.
+  - **`date` is the only required field besides the patient** — `time` is
+    nullable; a day-only booking (no specific slot yet) is valid. Sorting
+    (`?sort=` default, §6) treats a null `time` as sorting after every timed
+    appointment on the same `date`, not before.
   - **Auto-delete sweep**: whenever `app_settings.auto_delete_old_appointments`
     is true, any appointment whose `date` is more than
     `app_settings.auto_delete_after_days` in the past is deleted. In this
@@ -585,7 +589,7 @@ CREATE TABLE user_preferences (
 CREATE TABLE appointments (
     id          TEXT PRIMARY KEY,
     date        TEXT NOT NULL,                  -- ISO date (YYYY-MM-DD)
-    time        TEXT NOT NULL,                  -- HH:MM, 24h
+    time        TEXT,                           -- HH:MM, 24h; null = day-only booking (§5.2)
     patient_id  TEXT REFERENCES patients(id) ON DELETE SET NULL,  -- null = prospective patient (§5.2)
     name        TEXT,                           -- prospective-patient name; only meaningful while patient_id is null
     dob         TEXT,
@@ -684,7 +688,7 @@ UI at all — only the data-fetching layer.
 | `GET /patients/:id/export` | admin | Full patient data export (JSON/PDF) — data portability | — |
 | `GET /audit-log?entity_type=&entity_id=&page=&limit=` | admin | Audit trail lookup | `created_at` **desc** (most recent activity first) |
 | `GET /appointments?search=&from=&to=&sort=&page=&limit=` | any | List/search appointments (§8.11). `search` matches the resolved patient name (linked patient's name, or the prospective `name` — ≥3 chars, same rule as `/patients`, §5.2). `from`/`to` filter to a date range (either or both, inclusive). `sort` overrides the default: `name_asc`/`name_desc` | `date`, `time` asc (soonest first) |
-| `POST /appointments` | any | Book an appointment — either `patient_id` (existing patient) or `name`/`dob`/`manual_age`/`mobile`/`address` (prospective patient), plus `date`/`time`. `date` must be today or later — rejects a past date with `400` (§8.11) | — |
+| `POST /appointments` | any | Book an appointment — either `patient_id` (existing patient) or `name`/`dob`/`manual_age`/`mobile`/`address` (prospective patient), plus `date` (required) and `time` (optional). `date` must be today or later — rejects a past date with `400` (§8.11) | — |
 | `PATCH /appointments/:id` | any | Set `patient_id` once a prospective patient is actually registered (§5.2) — the only update this endpoint supports in this phase; no other field is ever edited after booking | — |
 | `GET /settings` | admin | App-wide settings (auto-delete toggle + day threshold, §5.2) | — |
 | `PATCH /settings` | admin | Update either/both fields | — |
@@ -972,8 +976,10 @@ this is additive on top of that shell, not a rewrite of it.
 
 - **Booking** (`AppointmentForm`): a **date** (today or later — the form
   rejects a past date client-side and the API would reject one server-side
-  too, §5.2, §6) and a **time**, plus a patient — resolved by lookup, not
-  chosen from an explicit "existing vs. new" toggle:
+  too, §5.2, §6) and an **optional time** (a day-only booking, with the slot
+  worked out later, is valid — `date` and the patient are the only two
+  required things, §5.2), plus a patient — resolved by lookup, not chosen
+  from an explicit "existing vs. new" toggle:
   - The form starts on a single **name-or-number search** (same ≥3 character
     minimum as the patient list's search, §5.2). Picking a match from the
     results books against that **existing** patient.

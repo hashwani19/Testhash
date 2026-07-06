@@ -27,7 +27,7 @@ export interface NewPatientAppointmentInput {
 
 export interface AppointmentInput {
   date: string
-  time: string
+  time?: string
   /** Set for an existing-patient booking; omit and pass `newPatient` instead for a prospective patient. */
   patientId?: string
   newPatient?: NewPatientAppointmentInput
@@ -59,7 +59,7 @@ export function useAppointments() {
     const appointment: Appointment = {
       id: crypto.randomUUID(),
       date: input.date,
-      time: input.time,
+      time: input.time || undefined,
       patientId: input.patientId,
       name: input.newPatient?.name.trim(),
       dob: input.newPatient?.dob || undefined,

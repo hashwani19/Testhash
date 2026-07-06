@@ -49,8 +49,8 @@ export interface Appointment {
   id: string
   /** ISO date string (YYYY-MM-DD) — the day of the appointment. */
   date: string
-  /** 24h "HH:mm" time of day. */
-  time: string
+  /** 24h "HH:mm" time of day. Optional — a day-only booking is valid. */
+  time?: string
   /** Set once booked against (or converted to) an existing patient. */
   patientId?: string
   /** Prospective-patient booking details — meaningful only while `patientId` is unset. */

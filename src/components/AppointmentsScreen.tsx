@@ -104,7 +104,8 @@ export function AppointmentsScreen({ appointments, patients, onAddAsPatient, onA
                   )}
                 </span>
                 <span className="text-[13px] text-text">
-                  {formatDateOnly(appointment.date)} · {formatTime(appointment.time)}
+                  {formatDateOnly(appointment.date)}
+                  {appointment.time ? ` · ${formatTime(appointment.time)}` : ''}
                 </span>
                 {isNewPatient ? (
                   <span className="text-[13px] text-text">

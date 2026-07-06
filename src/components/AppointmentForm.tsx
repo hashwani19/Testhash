@@ -56,7 +56,6 @@ export function AppointmentForm({ patients, onSubmit, onCancel }: Props) {
 
   const canSubmit =
     date >= todayDateOnly() &&
-    time !== '' &&
     (mode === 'existing' ? selectedPatientId !== '' : mode === 'new' ? name.trim() !== '' : false)
 
   const submit = (e: FormEvent) => {
@@ -64,7 +63,7 @@ export function AppointmentForm({ patients, onSubmit, onCancel }: Props) {
     if (!canSubmit) return
     onSubmit({
       date,
-      time,
+      time: time || undefined,
       patientId: mode === 'existing' ? selectedPatientId : undefined,
       newPatient:
         mode === 'new'
@@ -93,8 +92,8 @@ export function AppointmentForm({ patients, onSubmit, onCancel }: Props) {
           />
         </label>
         <label className={`${fieldLabel} min-w-[100px]`}>
-          <span className={fieldLabelText}>Time</span>
-          <TextInput type="time" value={time} onChange={(e) => setTime(e.target.value)} required />
+          <span className={fieldLabelText}>Time (optional)</span>
+          <TextInput type="time" value={time} onChange={(e) => setTime(e.target.value)} />
         </label>
       </div>
 

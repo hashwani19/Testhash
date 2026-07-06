@@ -44,8 +44,10 @@ export function queryAppointments(
     )
   } else {
     // Soonest appointment first — date/time are both zero-padded strings,
-    // so lexicographic order is chronological order.
-    result = [...result].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+    // so lexicographic order is chronological order. A day-only booking
+    // (no time) sorts after every timed one on the same date, not before.
+    const sortKey = (a: Appointment) => a.date + (a.time ?? '99:99')
+    result = [...result].sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
   }
 
   return result
