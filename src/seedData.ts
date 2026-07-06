@@ -1,4 +1,4 @@
-import type { EyeVisit, Patient, PatientGroup } from './types'
+import type { Appointment, EyeVisit, Patient, PatientGroup } from './types'
 
 // Sample data for a fresh install of this local-only test build — lets you
 // explore search/filter/sort/history without manually typing in patients
@@ -414,4 +414,48 @@ export const SEED_VISITS: EyeVisit[] = [
   },
 
   // Anjali Gupta has no visits yet — demonstrates the empty-history state.
+]
+
+export const SEED_APPOINTMENTS: Appointment[] = [
+  // Existing patients, upcoming.
+  {
+    id: 'seed-appt-vikram',
+    date: agoDateOnly(-1),
+    time: '10:00',
+    patientId: 'seed-patient-vikram',
+    createdAt: ago(2),
+    updatedAt: ago(2),
+  },
+  {
+    id: 'seed-appt-priya',
+    date: agoDateOnly(0),
+    time: '15:30',
+    patientId: 'seed-patient-priya',
+    createdAt: ago(1),
+    updatedAt: ago(1),
+  },
+  // A prospective (not-yet-registered) patient, upcoming.
+  {
+    id: 'seed-appt-rakesh',
+    date: agoDateOnly(-3),
+    time: '11:15',
+    name: 'Rakesh Kumar',
+    dob: '1982-08-14',
+    mobile: '9876543210',
+    address: '18 Sanjay Place, Agra',
+    createdAt: ago(1),
+    updatedAt: ago(1),
+  },
+  // Dated 5 days in the past — older than the default 2-day auto-delete
+  // window (§5.2, §8.11), so this one is swept the first time the app
+  // loads. Demonstrates the sweep actually running rather than sitting
+  // around unverified.
+  {
+    id: 'seed-appt-stale',
+    date: agoDateOnly(5),
+    time: '09:00',
+    name: 'Sunil Yadav',
+    createdAt: ago(5),
+    updatedAt: ago(5),
+  },
 ]

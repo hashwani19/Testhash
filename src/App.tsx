@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { AuthProvider } from './auth/AuthContext'
 import { PreferencesProvider } from './preferences/PreferencesProvider'
+import { GlobalSettingsProvider } from './settings/GlobalSettingsProvider'
 import { useAuth } from './hooks/useAuth'
 import { usePatients } from './hooks/usePatients'
 import { useEyeVisits } from './hooks/useEyeVisits'
 import { usePatientGroups } from './hooks/usePatientGroups'
+import { useAppointments } from './hooks/useAppointments'
 import { usePreferences } from './hooks/usePreferences'
 import { useThemeEffect } from './hooks/useThemeEffect'
 import { PatientList } from './components/PatientList'
@@ -14,6 +16,8 @@ import { EyeRecordForm } from './components/EyeRecordForm'
 import { ManageGroupsScreen } from './components/ManageGroupsScreen'
 import { ComingSoonScreen } from './components/ComingSoonScreen'
 import { PreferencesScreen } from './components/PreferencesScreen'
+import { AppointmentsScreen } from './components/AppointmentsScreen'
+import { AppointmentForm } from './components/AppointmentForm'
 import { AppHeader } from './components/AppHeader'
 import type { NavTarget } from './components/NavMenu'
 import { ConfirmModal } from './components/ConfirmModal'
@@ -21,7 +25,7 @@ import { LoginScreen } from './components/LoginScreen'
 import { OfflineBanner } from './components/OfflineBanner'
 import { InstallBanner } from './components/InstallBanner'
 import { Button } from './components/common/Button'
-import type { EyeVisit } from './types'
+import type { EyeVisit, Patient } from './types'
 
 type View =
   | 'list'
@@ -33,12 +37,14 @@ type View =
   | 'manageGroups'
   | 'activity'
   | 'appointments'
+  | 'newAppointment'
   | 'preferences'
 
 const VIEW_TO_NAV_TARGET: Partial<Record<View, NavTarget>> = {
   manageGroups: 'groups',
   activity: 'activity',
   appointments: 'appointments',
+  newAppointment: 'appointments',
 }
 
 function AppShell() {
@@ -47,6 +53,7 @@ function AppShell() {
   const { addVisit, updateVisit, deleteVisit, deleteVisitsForPatient, getVisitsForPatient } =
     useEyeVisits()
   const { groups, addGroup, renameGroup, deleteGroup } = usePatientGroups()
+  const { appointments, addAppointment, linkAppointmentToPatient } = useAppointments()
   const { preferences } = usePreferences()
   useThemeEffect(preferences.theme)
 
@@ -54,6 +61,11 @@ function AppShell() {
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
   const [editingVisit, setEditingVisit] = useState<EyeVisit | null>(null)
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
+  // Set when "Add as patient" is used on a new-patient appointment — prefills
+  // the patient form with the details captured at booking time, and once
+  // submitted, links the appointment to the newly created patient.
+  const [newPatientPrefill, setNewPatientPrefill] = useState<Partial<Patient> | null>(null)
+  const [linkAppointmentId, setLinkAppointmentId] = useState<string | null>(null)
 
   if (!user) return <LoginScreen />
 
@@ -69,6 +81,8 @@ function AppShell() {
   const navigateTo = (target: NavTarget) => {
     setSelectedPatientId(null)
     setEditingVisit(null)
+    setNewPatientPrefill(null)
+    setLinkAppointmentId(null)
     if (target === 'patients') setView('list')
     else if (target === 'groups') setView('manageGroups')
     else if (target === 'activity') setView('activity')
@@ -108,7 +122,15 @@ function AppShell() {
       <main className="flex flex-1 flex-col gap-4 px-5 pb-10 pt-3">
         {view === 'list' && (
           <>
-            <Button variant="primary" fullWidth onClick={() => setView('newPatient')}>
+            <Button
+              variant="primary"
+              fullWidth
+              onClick={() => {
+                setNewPatientPrefill(null)
+                setLinkAppointmentId(null)
+                setView('newPatient')
+              }}
+            >
               Add patient
             </Button>
             <PatientList
@@ -124,13 +146,21 @@ function AppShell() {
 
         {view === 'newPatient' && (
           <PatientForm
+            initial={newPatientPrefill ?? undefined}
             groups={groups}
             onSubmit={(input) => {
               const id = addPatient(input)
+              if (linkAppointmentId) linkAppointmentToPatient(linkAppointmentId, id)
+              setNewPatientPrefill(null)
+              setLinkAppointmentId(null)
               setSelectedPatientId(id)
               setView('patientDetail')
             }}
-            onCancel={goToList}
+            onCancel={() => {
+              setNewPatientPrefill(null)
+              setLinkAppointmentId(null)
+              goToList()
+            }}
           />
         )}
 
@@ -214,10 +244,41 @@ function AppShell() {
         )}
 
         {view === 'appointments' && (
-          <ComingSoonScreen
-            title="Appointments"
-            description="Requirements not designed yet — coming soon."
-            onBack={goToList}
+          <>
+            <Button variant="primary" fullWidth onClick={() => setView('newAppointment')}>
+              Add appointment
+            </Button>
+            <AppointmentsScreen
+              appointments={appointments}
+              patients={patients}
+              onAddAsPatient={(appointment) => {
+                setNewPatientPrefill({
+                  name: appointment.name,
+                  dob: appointment.dob,
+                  manualAge: appointment.manualAge,
+                  mobile: appointment.mobile,
+                  address: appointment.address,
+                })
+                setLinkAppointmentId(appointment.id)
+                setView('newPatient')
+              }}
+              onAddVisit={(appointment) => {
+                if (!appointment.patientId) return
+                setSelectedPatientId(appointment.patientId)
+                setView('newRecord')
+              }}
+            />
+          </>
+        )}
+
+        {view === 'newAppointment' && (
+          <AppointmentForm
+            patients={patients}
+            onSubmit={(input) => {
+              addAppointment(input)
+              setView('appointments')
+            }}
+            onCancel={() => setView('appointments')}
           />
         )}
 
@@ -230,9 +291,11 @@ function AppShell() {
 function App() {
   return (
     <AuthProvider>
-      <PreferencesProvider>
-        <AppShell />
-      </PreferencesProvider>
+      <GlobalSettingsProvider>
+        <PreferencesProvider>
+          <AppShell />
+        </PreferencesProvider>
+      </GlobalSettingsProvider>
     </AuthProvider>
   )
 }

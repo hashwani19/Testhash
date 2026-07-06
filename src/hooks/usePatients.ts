@@ -21,6 +21,7 @@ export interface PatientInput {
   dob?: string
   manualAge?: number
   address?: string
+  mobile?: string
   gender: Gender
   groupId?: string
 }
@@ -41,6 +42,7 @@ export function usePatients() {
       dob: input.dob || undefined,
       manualAge: input.dob ? undefined : input.manualAge,
       address: input.address?.trim() || undefined,
+      mobile: input.mobile?.trim() || undefined,
       gender: input.gender,
       groupId: input.groupId || undefined,
       createdAt: now,
@@ -60,6 +62,7 @@ export function usePatients() {
               dob: input.dob || undefined,
               manualAge: input.dob ? undefined : input.manualAge,
               address: input.address?.trim() || undefined,
+              mobile: input.mobile?.trim() || undefined,
               gender: input.gender,
               groupId: input.groupId || undefined,
               updatedAt: Date.now(),

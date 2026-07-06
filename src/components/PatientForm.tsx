@@ -10,7 +10,10 @@ import { Textarea } from './common/Textarea'
 import { card, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
-  initial?: Patient
+  /** A full Patient (editing) or a partial prefill (e.g. from an
+   *  appointment's new-patient details) — only a full Patient has `id`,
+   *  which is what distinguishes "editing" from "creating" below. */
+  initial?: Partial<Patient>
   groups: PatientGroup[]
   onSubmit: (input: PatientInput) => void
   onCancel: () => void
@@ -30,9 +33,11 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
     initial?.manualAge != null ? String(initial.manualAge) : '',
   )
   const [address, setAddress] = useState(initial?.address ?? '')
+  const [mobile, setMobile] = useState(initial?.mobile ?? '')
   const [gender, setGender] = useState<Gender>(initial?.gender ?? 'unspecified')
   const [groupId, setGroupId] = useState(initial?.groupId ?? '')
 
+  const isEditingExisting = Boolean(initial?.id)
   const computedAge = dob ? computeAgeFromDob(dob) : undefined
 
   const submit = (e: FormEvent) => {
@@ -44,6 +49,7 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
       dob: dob || undefined,
       manualAge: manualAge ? Number(manualAge) : undefined,
       address,
+      mobile: mobile || undefined,
       gender,
       groupId: groupId || undefined,
     })
@@ -113,6 +119,19 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
       </label>
 
       <label className={fieldLabel}>
+        <span className={fieldLabelText}>Mobile number</span>
+        <TextInput
+          type="tel"
+          inputMode="numeric"
+          value={mobile}
+          onChange={(e) => setMobile(e.target.value)}
+          placeholder="10-digit mobile number"
+          pattern="[6-9][0-9]{9}"
+          title="10-digit Indian mobile number"
+        />
+      </label>
+
+      <label className={fieldLabel}>
         <span className={fieldLabelText}>Address</span>
         <Textarea
           value={address}
@@ -127,7 +146,7 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
           Cancel
         </Button>
         <Button type="submit" variant="primary" disabled={!name.trim()}>
-          {initial ? 'Save changes' : 'Add patient'}
+          {isEditingExisting ? 'Save changes' : 'Add patient'}
         </Button>
       </div>
     </form>

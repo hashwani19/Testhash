@@ -37,10 +37,37 @@ export interface Patient {
   /** Used only when dob is not provided. */
   manualAge?: number
   address?: string
+  /** India mobile number, 10 digits (no country code stored). */
+  mobile?: string
   gender: Gender
   groupId?: string
   createdAt: number
   updatedAt: number
+}
+
+export interface Appointment {
+  id: string
+  /** ISO date string (YYYY-MM-DD) — the day of the appointment. */
+  date: string
+  /** 24h "HH:mm" time of day. */
+  time: string
+  /** Set once booked against (or converted to) an existing patient. */
+  patientId?: string
+  /** Prospective-patient booking details — meaningful only while `patientId` is unset. */
+  name?: string
+  dob?: string
+  manualAge?: number
+  mobile?: string
+  address?: string
+  createdAt: number
+  updatedAt: number
+}
+
+/** App-wide (not per-user) settings, admin-configurable. */
+export interface GlobalSettings {
+  /** Whether appointments past `autoDeleteAfterDays` old are swept on load. */
+  autoDeleteOldAppointments: boolean
+  autoDeleteAfterDays: number
 }
 
 export type Eye = 'left' | 'right'

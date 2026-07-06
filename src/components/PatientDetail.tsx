@@ -85,6 +85,10 @@ export function PatientDetail({
             <dd className="mt-0.5 capitalize text-text-h">{groupName || 'No group'}</dd>
           </div>
           <div>
+            <dt className="text-xs uppercase tracking-wide text-text">Mobile</dt>
+            <dd className="mt-0.5 text-text-h">{patient.mobile || 'Not provided'}</dd>
+          </div>
+          <div>
             <dt className="text-xs uppercase tracking-wide text-text">Address</dt>
             <dd className="mt-0.5 capitalize text-text-h">{patient.address || 'Not provided'}</dd>
           </div>

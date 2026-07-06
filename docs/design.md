@@ -82,11 +82,11 @@ changes (see column-type notes in §5.3).
 
 ## 4. User roles & permissions
 
-| Role | Can view demographics | Can create/edit demographics | Can view/create/edit clinical records (visits, refraction, diagnosis) | Can delete clinical records | Can manage attachments (upload/view) | Can manage patient groups (create/rename/delete) | Can manage staff accounts | Can view audit log |
-|---|---|---|---|---|---|---|---|---|
-| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `doctor` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| `front_desk` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Role | Can view demographics | Can create/edit demographics | Can view/create/edit clinical records (visits, refraction, diagnosis) | Can delete clinical records | Can manage attachments (upload/view) | Can manage patient groups (create/rename/delete) | Can book/view appointments | Can manage global app settings | Can manage staff accounts | Can view audit log |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `doctor` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| `front_desk` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
 
 Front desk can register a new patient and edit name/DOB/address/gender —
 e.g. at check-in, before a clinician ever opens the chart. Front desk can
@@ -110,6 +110,15 @@ else: `POST/PATCH/DELETE /patient-groups` are `admin`-only; `GET
 /patient-groups` and the `group_id` field on `POST/PATCH /patients` are
 open to any authenticated role (§6).
 
+**Appointments** (§8.11) reuse the exact same create-patient/create-visit
+permissions every role already has — there's no separate "can book
+appointments" grant to reason about. Booking, viewing, "add as patient," and
+"add visit" are open to all three roles, same as demographics/clinical
+records above. The one appointments-related thing that *is* admin-only is
+the **global auto-delete setting** (§5.2, §8.10, §8.11) — a `doctor` or
+`front_desk` session gets `403` from `GET`/`PATCH /settings` (§6), same
+enforcement pattern as everything else in this table.
+
 Permissions are enforced **server-side** on every API call — the role in the
 session determines what the API returns/accepts, never trust the client.
 Modeled as a `role` enum on the user for now (§5); if permission needs get
@@ -131,6 +140,7 @@ erDiagram
     PATIENT_GROUPS ||--o{ PATIENTS : groups
     PATIENTS ||--o{ EYE_VISITS : has
     PATIENTS ||--o{ CONSENTS : has
+    PATIENTS ||--o{ APPOINTMENTS : "may reference"
     EYE_VISITS ||--o{ EYE_REFRACTIONS : has
     EYE_VISITS ||--o{ ATTACHMENTS : has
 
@@ -158,6 +168,7 @@ erDiagram
         text dob
         int manual_age
         text address
+        text mobile
         text gender
         text group_id FK
         text created_by FK
@@ -226,6 +237,25 @@ erDiagram
         text user_id PK "FK -> users.id"
         text theme
         int list_page_size
+        text updated_at
+    }
+    APPOINTMENTS {
+        text id PK
+        text date
+        text time
+        text patient_id FK "nullable — set once linked to a real patient"
+        text name "prospective-patient name; only used while patient_id is null"
+        text dob
+        int manual_age
+        text mobile
+        text address
+        text created_at
+        text updated_at
+    }
+    APP_SETTINGS {
+        int id PK "singleton row, always 1"
+        int auto_delete_old_appointments
+        int auto_delete_after_days
         text updated_at
     }
 ```
@@ -333,6 +363,12 @@ erDiagram
   "single vision, anti-glare") — matches the "Lenses …" line on the
   prescription pad; one per visit, not per eye.
 - **`manual_age`**: nullable integer, only meaningful when `dob` is null.
+- **`patients.mobile`**: nullable, 10-digit India mobile number (no country
+  code stored — always `+91` in this clinic's context). Validated client-side
+  (`[6-9][0-9]{9}` — Indian mobile numbers never start with 0–5) but stored
+  as plain text, not normalized/formatted, since a clinic may still want to
+  paste in a number with spaces or a leading `0`/`+91` from a handwritten
+  form; the API doesn't reject on format, only the client nudges towards it.
 - **Soft delete**: `patients.deleted_at` — patient rows are never hard-deleted
   by normal staff action (needed for audit trail integrity); hard delete is a
   separate admin-triggered erasure workflow (§10).
@@ -355,6 +391,43 @@ erDiagram
     client's own built-in default (20)" rather than the API/DB asserting an
     opinion about what that default should be; the client is the single
     source of truth for the fallback value (§7).
+- **`appointments`**: a booked day/time slot, for either an existing patient
+  (`patient_id` set) or a not-yet-registered one (`patient_id` null, and
+  `name`/`dob`/`manual_age`/`mobile`/`address` capture what front desk took
+  down over the phone/at the counter, §8.11).
+  - **Existing vs. prospective is a discriminant on `patient_id`**, not a
+    separate `status`/`type` column — `patient_id IS NULL` *is* "this is a
+    prospective patient," and the moment `PATCH /appointments/:id` sets it
+    (because "Add as patient" ran, §8.11), the row behaves as an
+    existing-patient appointment from then on; `name`/`dob`/etc. are left in
+    place as a historical record but no longer read for display (the linked
+    patient's own name/DOB take over).
+  - **No `status` column at all in this phase** — there's no
+    booked/completed/cancelled workflow, and converting an appointment (to a
+    patient, or to a visit) doesn't remove or alter it beyond linking
+    `patient_id`. The only thing that ever removes a row is the auto-delete
+    sweep below. A cancel/complete workflow is a plausible future addition
+    (§13) that would add a `status` column without touching anything else
+    here.
+  - **`date`/`time` are separate columns** (`YYYY-MM-DD` / `HH:MM`), not one
+    combined datetime — matches how the booking form collects them (§8.11)
+    and how filtering by date/date-range (`?from=&to=`, §6) reads most
+    naturally as a plain string-range comparison on `date` alone.
+  - **Auto-delete sweep**: whenever `app_settings.auto_delete_old_appointments`
+    is true, any appointment whose `date` is more than
+    `app_settings.auto_delete_after_days` in the past is deleted. In this
+    client-only build the sweep runs whenever the app loads or an admin
+    changes either setting (no background scheduler); the real backend
+    equivalent (§9) is a periodic job (e.g. a daily cron) running the same
+    `DELETE FROM appointments WHERE date < :cutoff` rather than a per-request
+    check, since staleness only matters at day granularity.
+- **`app_settings`**: a **singleton row** (`id` always `1`, enforced by
+  `CHECK (id = 1)`, §5.3) holding app-wide, admin-configurable settings —
+  today just the two auto-delete fields above. Deliberately *not* rows in
+  `user_preferences`: these apply to the whole clinic/instance regardless of
+  which admin changes them, not to one person's own account (§8.10, §8.11).
+  `GET`/`PATCH /settings` (§6) are `admin`-only; every other role never sees
+  this resource at all.
 - **Timestamps & default sort order**: every record-bearing table carries a
   proper datetime, and every list view has a defined default sort — never
   incidental insertion order:
@@ -421,6 +494,7 @@ CREATE TABLE patients (
     dob            TEXT,                         -- ISO date (YYYY-MM-DD); null if unknown
     manual_age     INTEGER,                      -- only used when dob is null
     address        TEXT,
+    mobile         TEXT,                         -- 10-digit India mobile number, validated client-side (§5.2)
     gender         TEXT NOT NULL CHECK (gender IN ('female', 'male', 'other', 'unspecified')),
     group_id       TEXT REFERENCES patient_groups(id),  -- nullable; ungrouped by default
     created_by     TEXT REFERENCES users(id),
@@ -507,6 +581,29 @@ CREATE TABLE user_preferences (
     list_page_size INTEGER,                     -- null = use the client's own default (20, §7)
     updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE appointments (
+    id          TEXT PRIMARY KEY,
+    date        TEXT NOT NULL,                  -- ISO date (YYYY-MM-DD)
+    time        TEXT NOT NULL,                  -- HH:MM, 24h
+    patient_id  TEXT REFERENCES patients(id) ON DELETE SET NULL,  -- null = prospective patient (§5.2)
+    name        TEXT,                           -- prospective-patient name; only meaningful while patient_id is null
+    dob         TEXT,
+    manual_age  INTEGER,
+    mobile      TEXT,
+    address     TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_appointments_date ON appointments(date, time);  -- supports default sort + date-range filter (§6)
+
+-- Singleton row (§5.2) — app-wide settings, not per-user.
+CREATE TABLE app_settings (
+    id                            INTEGER PRIMARY KEY CHECK (id = 1),
+    auto_delete_old_appointments  INTEGER NOT NULL DEFAULT 1,
+    auto_delete_after_days        INTEGER NOT NULL DEFAULT 2,
+    updated_at                    TEXT NOT NULL DEFAULT (datetime('now'))
+);
 ```
 
 **Porting to Postgres later**: `TEXT` timestamp/date columns → `TIMESTAMPTZ`/`DATE`;
@@ -586,6 +683,11 @@ UI at all — only the data-fetching layer.
 | `DELETE /attachments/:id` | admin | Remove attachment | — |
 | `GET /patients/:id/export` | admin | Full patient data export (JSON/PDF) — data portability | — |
 | `GET /audit-log?entity_type=&entity_id=&page=&limit=` | admin | Audit trail lookup | `created_at` **desc** (most recent activity first) |
+| `GET /appointments?search=&from=&to=&sort=&page=&limit=` | any | List/search appointments (§8.11). `search` matches the resolved patient name (linked patient's name, or the prospective `name` — ≥3 chars, same rule as `/patients`, §5.2). `from`/`to` filter to a date range (either or both, inclusive). `sort` overrides the default: `name_asc`/`name_desc` | `date`, `time` asc (soonest first) |
+| `POST /appointments` | any | Book an appointment — either `patient_id` (existing patient) or `name`/`dob`/`manual_age`/`mobile`/`address` (prospective patient), plus `date`/`time`. `date` must be today or later — rejects a past date with `400` (§8.11) | — |
+| `PATCH /appointments/:id` | any | Set `patient_id` once a prospective patient is actually registered (§5.2) — the only update this endpoint supports in this phase; no other field is ever edited after booking | — |
+| `GET /settings` | admin | App-wide settings (auto-delete toggle + day threshold, §5.2) | — |
+| `PATCH /settings` | admin | Update either/both fields | — |
 
 ## 7. Client changes (high level)
 
@@ -650,6 +752,29 @@ UI at all — only the data-fetching layer.
   `preferences.listPageSize` through when set, so the effective page size
   is "the user's saved choice, else 20", never something `ListView` decides
   on its own.
+- The patient form (create/edit) gains a **Mobile number** field alongside
+  DOB/address — optional, validated client-side with an India-format
+  `pattern` (§5.2), not required (matches the existing DOB/address fields'
+  optionality).
+- A new **Appointments** screen (§8.11) replaces the placeholder reserved by
+  the nav (§8.2): booking (`AppointmentForm`), the list (`AppointmentsScreen`,
+  built on the same `ListView`/`SearchBox` used everywhere else), and its
+  own search/date-range/sort state isolated behind `useAppointmentQuery`
+  (mirrors `usePatientQuery` — same seam, same reasoning). Appointment data
+  itself lives behind `useAppointments`, which also runs the auto-delete
+  sweep (§5.2) whenever it (re)mounts or the admin setting changes; once the
+  backend exists, both the query and the sweep move server-side (`GET
+  /appointments?...`, a scheduled job) without the screen's markup changing.
+- A new **global app settings** store (today: just the appointment
+  auto-delete toggle + day threshold) is held in a `GlobalSettingsProvider`
+  context — **not** folded into `usePreferences`, since it's one
+  instance-wide value every admin shares, not a personal per-user setting.
+  It's context-based for the same reason `PreferencesProvider` is: every
+  consumer (the admin-only section of `PreferencesScreen`, the appointments
+  sweep) must see the same live value, not its own disconnected copy — this
+  is exactly the bug an earlier, plain-hook version of `usePreferences` hit
+  during this feature's own testing, so `GlobalSettingsProvider` was built
+  as a context from the start.
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 
@@ -686,10 +811,9 @@ data.
   screen right after login for every role.
 - **Groups** → Manage Groups (§8.8), admin-only.
 - **Activity** → the new Activity (Audit Log) screen (§8.9), admin-only.
-- **Appointments** → reserved nav destination for all three roles. The
-  route exists in the shell so adding the feature later doesn't require
-  another nav rework, but the screen itself, its schema, and its API are
-  deferred to a follow-up design pass (§13) — not specified here.
+- **Appointments** → Appointments (§8.11), open to all three roles — booking,
+  viewing, and converting an appointment to a patient/visit use the same
+  permissions those actions already have elsewhere (§4).
 - Selecting an item highlights it as active, closes the drawer, and
   navigates. No breadcrumbs or nested nav in this phase — every
   destination is a flat, single-level screen.
@@ -761,7 +885,8 @@ data.
 | Manage patient groups (create/rename/delete) | ✅ | ❌ | ❌ |
 | View Activity (audit log) | ✅ | ❌ | ❌ |
 | Manage staff accounts | ✅ | ❌ | ❌ |
-| Appointments nav item (screen deferred, §13) | ✅ | ✅ | ✅ |
+| Appointments — book/view/convert (§8.11) | ✅ | ✅ | ✅ |
+| Global app settings — appointment auto-delete (§8.10) | ✅ | ❌ | ❌ |
 | Preferences (own theme + list page size, §8.10) | ✅ | ✅ | ✅ |
 
 ### 8.7 Carried over unchanged
@@ -830,6 +955,70 @@ this is additive on top of that shell, not a rewrite of it.
 - No admin override of another user's preferences in this phase — everyone
   manages only their own (`PATCH /me/preferences` always targets the
   caller, there's no `:user_id` in the path).
+- **Admin-only "App settings" section**, shown on this same screen only when
+  the logged-in user's role is `admin` (§4, §8.6) — not a separate nav
+  destination just for one setting. Two controls, both reading/writing
+  `GET`/`PATCH /settings` (§6), not `/me/preferences`, since they're
+  app-wide rather than personal (§5.2):
+  - A checkbox: **"Automatically delete old appointments"**
+    (`auto_delete_old_appointments`).
+  - A number field: **"Delete appointments older than (days)"**
+    (`auto_delete_after_days`), disabled while the checkbox above is off.
+  - Changing either applies immediately (same no-separate-save-step pattern
+    as the personal preferences above) and is visible to every admin, since
+    it's one shared setting, not a per-admin one.
+
+### 8.11 Appointments (every role)
+
+- **Booking** (`AppointmentForm`): a **date** (today or later — the form
+  rejects a past date client-side and the API would reject one server-side
+  too, §5.2, §6) and a **time**, plus either:
+  - **Existing patient** — a lookup by name or patient number (same ≥3
+    character minimum as the patient list's search, §5.2), picking one
+    patient from the matches; or
+  - **New patient** — just a name at minimum, plus optional date of birth
+    (age computed from it, same as the patient form, §8.3) or a manually
+    entered age, **mobile number** (India format, §5.2), and address. None
+    of these fields touch the `patients` table yet — they live on the
+    appointment row itself until "Add as patient" (below) runs.
+- **List** (`AppointmentsScreen`): built on the same `ListView`/`SearchBox`
+  components as the patient list (§8.3) — a count line, search box with a
+  filter/sort popover, and pagination once there are enough rows. Each row
+  shows the resolved name (linked patient's name, or the prospective name),
+  a **"New patient"** badge when there's no linked patient yet, the date +
+  time, and either the linked patient's `patient_number` or (for a
+  prospective patient) age + mobile number as quick identifying context.
+  - **Search**: by name (linked or prospective), same ≥3 character rule as
+    patients.
+  - **Sort**: soonest-appointment-first (default), or name ascending/
+    descending (§5.2's `sort=name_asc`/`name_desc`).
+  - **Filter**: an optional date range (`from`/`to`, either or both) — not
+    just a single-day filter, so front desk can see "this week's
+    appointments" as easily as "today's."
+  - **Reset filters** control, same convention as the patient list (§8.3).
+- **Per-row action** — exactly one of the two, depending on whether the
+  appointment already has a linked patient:
+  - **"Add as patient"** (prospective patient) — opens the patient form
+    (§8.3) prefilled with the name/DOB/age/mobile/address captured at
+    booking time. Submitting it creates the patient **and** links this
+    appointment to the new `patient_id` (`PATCH /appointments/:id`, §6) —
+    the appointment isn't deleted or hidden afterward, it simply behaves as
+    an existing-patient appointment (with an "Add visit" action) from then
+    on if the same person is looked up again.
+  - **"Add visit"** (existing patient) — jumps straight to the visit record
+    form (§8.5) for that patient, the same form reached from Patient Detail.
+    If the linked patient was since deleted, this action is hidden (nothing
+    left to add a visit against).
+- **No manual cancel/delete** of an appointment in this phase — the only
+  thing that ever removes one is the auto-delete sweep (below) or an admin
+  disabling that setting and someone else's stale data aging out later. A
+  cancel/complete workflow is a plausible future addition (§13).
+- **Auto-delete**: whenever the admin-only "Automatically delete old
+  appointments" setting (§8.10) is on, any appointment dated more than the
+  configured number of days in the past (default 2, §5.2) is swept away —
+  this runs whenever the app loads or an admin changes either setting. It's
+  a **global** setting, not per-user: one admin turning it off turns it off
+  for everyone, matching the "global app settings" framing in §8.10.
 
 ## 9. Offline sync strategy (phased)
 
@@ -927,10 +1116,16 @@ build them if multi-device offline editing turns out to be a real need.
 - Multi-clinic / multi-location support is not modeled (no `clinic_id`
   anywhere) — add a `clinics` table and scope everything to it if/when a
   second location is added.
-- Appointment scheduling and billing are intentionally out of scope; if
-  needed later, they're additive tables (`appointments`, `invoices`) that
-  reference `patients`/`eye_visits` without changing what's here. The
-  hamburger nav (§8.2) already reserves an **Appointments** destination for
-  all three roles so the shell won't need another nav rework when this
-  lands, but the screen, schema, and API are a follow-up design pass, not
-  specified here.
+- ~~Appointment scheduling~~ — **resolved: specified in §5 (`appointments`,
+  `app_settings`), §6 (`/appointments`, `/settings`), and §8.11.** Billing
+  remains out of scope; an `invoices` table would be additive the same way,
+  referencing `patients`/`eye_visits` without changing what's here.
+- **No appointment status/cancel workflow in this phase** (§5.2, §8.11) —
+  an appointment is either booked or gone (via the auto-delete sweep); there
+  is no booked/completed/cancelled state machine. If front desk needs to
+  mark a booking cancelled without waiting for it to age out, that's a
+  `status` column addition, not a schema rework.
+- **Appointment auto-delete threshold is admin-configurable** (`app_settings.
+  auto_delete_after_days`, default 2), not hardcoded — chosen over a fixed
+  constant so a clinic that wants a longer/shorter retention window doesn't
+  need a code change (§8.10, §8.11).
