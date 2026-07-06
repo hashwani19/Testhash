@@ -1045,7 +1045,10 @@ this is additive on top of that shell, not a rewrite of it.
     appointment's current date/time and patient (existing or prospective),
     saving via `PATCH /appointments/:id` (§6). Anyone can edit any
     appointment; there's no "only the person who booked it" restriction.
-    Shown for every role.
+    Shown for every role. "Save changes" starts **disabled** and only
+    enables once something in the form actually differs from what was
+    loaded — reopening Edit and immediately tapping Save without changing
+    anything shouldn't fire a no-op update.
   - **Delete (× icon), `doctor`/`front_desk` only** — a confirm-before-delete
     dialog (the same `ConfirmModal` used for every other destructive
     action in the app), then `DELETE /appointments/:id` (§6). `admin` does

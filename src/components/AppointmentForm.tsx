@@ -60,22 +60,46 @@ export function AppointmentForm({ patients, initial, onSubmit, onCancel }: Props
     setAddress('')
   }
 
-  const canSubmit = date >= todayDateOnly() && (selectedPatientId !== '' || showNewPatientFields)
+  // Effective values — what would actually be submitted, e.g. dob overrides
+  // manualAge regardless of what's left sitting in the manualAge field.
+  const effectiveTime = time || undefined
+  const effectiveDob = dob || undefined
+  const effectiveManualAge = dob ? undefined : manualAge ? Number(manualAge) : undefined
+  const effectiveMobile = mobile || undefined
+  const effectiveAddress = address || undefined
+
+  // Editing an existing appointment: "Save changes" stays disabled until
+  // something actually differs from what was loaded, rather than being
+  // active the instant the form opens with nothing touched yet.
+  const isDirty =
+    !initial ||
+    date !== initial.date ||
+    effectiveTime !== initial.time ||
+    (selectedPatientId || undefined) !== initial.patientId ||
+    (!selectedPatientId &&
+      (trimmedName !== (initial.name ?? '') ||
+        effectiveDob !== initial.dob ||
+        effectiveManualAge !== initial.manualAge ||
+        effectiveMobile !== initial.mobile ||
+        effectiveAddress !== initial.address))
+
+  const canSubmit =
+    date >= todayDateOnly() && (selectedPatientId !== '' || showNewPatientFields) && isDirty
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!canSubmit) return
     onSubmit({
       date,
-      time: time || undefined,
+      time: effectiveTime,
       patientId: selectedPatientId || undefined,
       newPatient: !selectedPatientId
         ? {
             name: trimmedName,
-            dob: dob || undefined,
-            manualAge: dob ? undefined : manualAge ? Number(manualAge) : undefined,
-            mobile: mobile || undefined,
-            address: address || undefined,
+            dob: effectiveDob,
+            manualAge: effectiveManualAge,
+            mobile: effectiveMobile,
+            address: effectiveAddress,
           }
         : undefined,
     })
