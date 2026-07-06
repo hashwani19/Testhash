@@ -9,6 +9,9 @@ import { PatientForm } from './components/PatientForm'
 import { PatientDetail } from './components/PatientDetail'
 import { EyeRecordForm } from './components/EyeRecordForm'
 import { ManageGroupsScreen } from './components/ManageGroupsScreen'
+import { ComingSoonScreen } from './components/ComingSoonScreen'
+import { NavMenu } from './components/NavMenu'
+import type { NavTarget } from './components/NavMenu'
 import { LoginScreen } from './components/LoginScreen'
 import { OfflineBanner } from './components/OfflineBanner'
 import { InstallBanner } from './components/InstallBanner'
@@ -23,6 +26,14 @@ type View =
   | 'newRecord'
   | 'editRecord'
   | 'manageGroups'
+  | 'activity'
+  | 'appointments'
+
+const VIEW_TO_NAV_TARGET: Partial<Record<View, NavTarget>> = {
+  manageGroups: 'groups',
+  activity: 'activity',
+  appointments: 'appointments',
+}
 
 function AppShell() {
   const { user, logout } = useAuth()
@@ -34,6 +45,7 @@ function AppShell() {
   const [view, setView] = useState<View>('list')
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
   const [editingVisit, setEditingVisit] = useState<EyeVisit | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   if (!user) return <LoginScreen />
 
@@ -46,6 +58,15 @@ function AppShell() {
     setView('list')
   }
 
+  const navigateTo = (target: NavTarget) => {
+    setSelectedPatientId(null)
+    setEditingVisit(null)
+    if (target === 'patients') setView('list')
+    else if (target === 'groups') setView('manageGroups')
+    else if (target === 'activity') setView('activity')
+    else if (target === 'appointments') setView('appointments')
+  }
+
   return (
     <div className="mx-auto flex min-h-svh max-w-[560px] flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
       <OfflineBanner />
@@ -53,7 +74,16 @@ function AppShell() {
 
       <header className="px-5 pt-7 pb-2">
         <div className="flex items-baseline justify-between gap-3">
-          <h1 className="text-[28px] font-bold tracking-[-0.4px] text-text-h">Ortho and Vision Care</h1>
+          <div className="flex items-center gap-2.5">
+            <button
+              className="cursor-pointer rounded-lg border-none bg-transparent px-1 text-2xl leading-none text-text-h"
+              aria-label="Open menu"
+              onClick={() => setMenuOpen(true)}
+            >
+              ☰
+            </button>
+            <h1 className="text-[28px] font-bold tracking-[-0.4px] text-text-h">Ortho and Vision Care</h1>
+          </div>
           <div className="flex items-center gap-2.5 text-[13px] text-text">
             <span>
               {user.fullName}{' '}
@@ -70,16 +100,16 @@ function AppShell() {
           {patients.length === 0
             ? 'No patients yet'
             : `${patients.length} patient${patients.length === 1 ? '' : 's'}`}
-          {isAdmin && (
-            <>
-              {' · '}
-              <button className={btnLink} onClick={() => setView('manageGroups')}>
-                Manage groups
-              </button>
-            </>
-          )}
         </p>
       </header>
+
+      <NavMenu
+        open={menuOpen}
+        role={user.role}
+        active={VIEW_TO_NAV_TARGET[view] ?? 'patients'}
+        onNavigate={navigateTo}
+        onClose={() => setMenuOpen(false)}
+      />
 
       <main className="flex flex-1 flex-col gap-4 px-5 pb-10 pt-3">
         {view === 'list' && (
@@ -180,6 +210,22 @@ function AppShell() {
             onAdd={addGroup}
             onRename={renameGroup}
             onDelete={deleteGroup}
+            onBack={goToList}
+          />
+        )}
+
+        {view === 'activity' && isAdmin && (
+          <ComingSoonScreen
+            title="Activity"
+            description="Requirements not designed yet — coming soon."
+            onBack={goToList}
+          />
+        )}
+
+        {view === 'appointments' && (
+          <ComingSoonScreen
+            title="Appointments"
+            description="Requirements not designed yet — coming soon."
             onBack={goToList}
           />
         )}
