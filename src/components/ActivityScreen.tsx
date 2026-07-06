@@ -28,6 +28,7 @@ const ENTITY_TYPE_LABELS: Record<AuditEntityType, string> = {
   patient_group: 'patient group',
   eye_visit: 'eye record',
   appointment: 'appointment',
+  attachment: 'attachment',
 }
 
 function formatTimestamp(ms: number): string {
@@ -128,6 +129,7 @@ export function ActivityScreen({ entries, users, onBack }: Props) {
                   <option value="patient_group">Patient group</option>
                   <option value="eye_visit">Eye record</option>
                   <option value="appointment">Appointment</option>
+                  <option value="attachment">Attachment</option>
                 </Select>
               </label>
               <label className={fieldLabel}>

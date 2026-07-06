@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Eye, EyeRefraction, EyeVisit, VisionType } from '../types'
+import type { Attachment, Eye, EyeRefraction, EyeVisit, VisionType } from '../types'
 import { Button } from './common/Button'
 import { Card, CardHeader } from './common/Card'
 import { ListView } from './common/ListView'
@@ -11,6 +11,9 @@ import { hasRefractionData } from '../utils/eyeVisit'
 interface Props {
   visits: EyeVisit[]
   canDelete: boolean
+  /** Hidden entirely for front_desk (§8.4 of docs/design.md) — not just read-only. */
+  canViewAttachments: boolean
+  attachments: Attachment[]
   onEdit: (visit: EyeVisit) => void
   onDelete: (id: string) => void
 }
@@ -74,7 +77,27 @@ function EyeSection({ eye, refractions }: { eye: Eye; refractions: EyeVisit['ref
   )
 }
 
-export function EyeRecordHistory({ visits, canDelete, onEdit, onDelete }: Props) {
+function VisitAttachments({ attachments }: { attachments: Attachment[] }) {
+  if (attachments.length === 0) return null
+  return (
+    <div className="mt-1 flex flex-wrap gap-2">
+      {attachments.map((a) => (
+        <a key={a.id} href={a.dataUrl} target="_blank" rel="noreferrer">
+          <img src={a.dataUrl} alt={a.fileName} className="h-16 w-16 rounded-lg border border-border object-cover" />
+        </a>
+      ))}
+    </div>
+  )
+}
+
+export function EyeRecordHistory({
+  visits,
+  canDelete,
+  canViewAttachments,
+  attachments,
+  onEdit,
+  onDelete,
+}: Props) {
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const confirmingVisit = visits.find((v) => v.id === confirmingDeleteId) ?? null
   const { preferences } = usePreferences()
@@ -131,6 +154,9 @@ export function EyeRecordHistory({ visits, canDelete, onEdit, onDelete }: Props)
               </p>
             )}
             {visit.notes && <p className="mt-1 text-[13px] text-text">{visit.notes}</p>}
+            {canViewAttachments && (
+              <VisitAttachments attachments={attachments.filter((a) => a.visitId === visit.id)} />
+            )}
           </Card>
         )}
       />

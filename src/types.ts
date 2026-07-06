@@ -71,7 +71,7 @@ export interface GlobalSettings {
 }
 
 export type AuditAction = 'create' | 'update' | 'delete'
-export type AuditEntityType = 'patient' | 'patient_group' | 'eye_visit' | 'appointment'
+export type AuditEntityType = 'patient' | 'patient_group' | 'eye_visit' | 'appointment' | 'attachment'
 
 export interface AuditLogEntry {
   id: string
@@ -117,4 +117,18 @@ export interface EyeVisit {
   notes?: string
   createdAt: number
   updatedAt: number
+}
+
+export interface Attachment {
+  id: string
+  visitId: string
+  fileName: string
+  contentType: string
+  /** Compressed image as a data URL. The real backend stores a `storage_key`
+   *  pointing at an R2 object instead (§5.2/§5.3 of docs/design.md) — this
+   *  local-only build has no object storage, so the compressed bytes are
+   *  kept directly. */
+  dataUrl: string
+  sizeBytes: number
+  createdAt: number
 }

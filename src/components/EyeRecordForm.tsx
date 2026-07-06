@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 import type { EyeVisitInput } from '../hooks/useEyeVisits'
-import type { Eye, EyeRefraction, EyeVisit, RefractionGrid, VisionType } from '../types'
+import type { NewAttachmentInput } from '../hooks/useAttachments'
+import type { Attachment, Eye, EyeRefraction, EyeVisit, RefractionGrid, VisionType } from '../types'
 import { isEmptyVisit } from '../utils/eyeVisit'
+import { compressImageFile } from '../utils/imageCompression'
 import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
 import { Textarea } from './common/Textarea'
@@ -10,7 +12,18 @@ import { card, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   initial?: EyeVisit
-  onSubmit: (input: EyeVisitInput) => void
+  /** Hidden entirely for front_desk — attachments aren't rendered at all
+   *  for that role (§8.4/§8.5 of docs/design.md), not just read-only. */
+  canManageAttachments: boolean
+  /** Deleting an already-saved attachment is admin-only, same restriction as
+   *  deleting a visit (§4/§8.6) — doctor can view/upload but not remove one
+   *  once saved. Removing a not-yet-saved pending photo isn't gated by this,
+   *  since nothing has been persisted yet. */
+  canDeleteAttachments: boolean
+  /** Already-saved photos for this visit (empty when creating a new one). */
+  attachments: Attachment[]
+  onDeleteAttachment: (id: string) => void
+  onSubmit: (input: EyeVisitInput, newAttachments: NewAttachmentInput[]) => void
   onCancel: () => void
 }
 
@@ -136,7 +149,15 @@ function RefractionCell({
   )
 }
 
-export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
+export function EyeRecordForm({
+  initial,
+  canManageAttachments,
+  canDeleteAttachments,
+  attachments,
+  onDeleteAttachment,
+  onSubmit,
+  onCancel,
+}: Props) {
   const [visitAt, setVisitAt] = useState(
     initial ? toLocalInputValue(new Date(initial.visitAt)) : nowLocal(),
   )
@@ -148,6 +169,9 @@ export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
   const [treatmentPlan, setTreatmentPlan] = useState(initial?.treatmentPlan ?? '')
   const [followUpDate, setFollowUpDate] = useState(initial?.followUpDate ?? '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
+
+  const [pendingAttachments, setPendingAttachments] = useState<NewAttachmentInput[]>([])
+  const [compressing, setCompressing] = useState(false)
 
   const setCell = (eye: Eye, visionType: VisionType, next: CellState) => {
     setGrid((prev) => ({ ...prev, [eye]: { ...prev[eye], [visionType]: next } }))
@@ -169,18 +193,38 @@ export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
 
   const isEmpty = isEmptyVisit(refractions, [lenses, diagnosis, treatmentPlan, followUpDate, notes])
 
+  const handleFilesSelected = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : []
+    e.target.value = ''
+    if (files.length === 0) return
+    setCompressing(true)
+    try {
+      const compressed = await Promise.all(files.map(compressImageFile))
+      setPendingAttachments((prev) => [...prev, ...compressed])
+    } finally {
+      setCompressing(false)
+    }
+  }
+
+  const removePending = (index: number) => {
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== index))
+  }
+
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (isEmpty) return
-    onSubmit({
-      visitAt: new Date(visitAt).toISOString(),
-      refractions,
-      lenses,
-      diagnosis,
-      treatmentPlan,
-      followUpDate,
-      notes,
-    })
+    onSubmit(
+      {
+        visitAt: new Date(visitAt).toISOString(),
+        refractions,
+        lenses,
+        diagnosis,
+        treatmentPlan,
+        followUpDate,
+        notes,
+      },
+      pendingAttachments,
+    )
   }
 
   return (
@@ -255,6 +299,61 @@ export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
           placeholder="Other observations…"
         />
       </label>
+
+      {canManageAttachments && (
+        <div className="flex flex-col gap-2">
+          <span className={fieldLabelText}>Prescription photos (optional)</span>
+
+          {(attachments.length > 0 || pendingAttachments.length > 0) && (
+            <div className="flex flex-wrap gap-2">
+              {attachments.map((a) => (
+                <div key={a.id} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-border">
+                  <img src={a.dataUrl} alt={a.fileName} className="h-full w-full object-cover" />
+                  {canDeleteAttachments && (
+                    <Button
+                      variant="icon"
+                      aria-label={`Remove ${a.fileName}`}
+                      className="absolute right-0.5 top-0.5 h-6 w-6 rounded-full bg-surface/90 text-base leading-none"
+                      onClick={() => onDeleteAttachment(a.id)}
+                    >
+                      ×
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {pendingAttachments.map((a, i) => (
+                <div key={i} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-border">
+                  <img src={a.dataUrl} alt={a.fileName} className="h-full w-full object-cover" />
+                  <Button
+                    variant="icon"
+                    aria-label={`Remove ${a.fileName}`}
+                    className="absolute right-0.5 top-0.5 h-6 w-6 rounded-full bg-surface/90 text-base leading-none"
+                    onClick={() => removePending(i)}
+                  >
+                    ×
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="relative w-fit">
+            <Button variant="secondary" disabled={compressing}>
+              {compressing ? 'Processing…' : 'Add photo'}
+            </Button>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              multiple
+              disabled={compressing}
+              onChange={handleFilesSelected}
+              className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-default"
+              aria-label="Add prescription photo"
+            />
+          </div>
+        </div>
+      )}
 
       {isEmpty && (
         <p className="text-right text-[13px] text-text">

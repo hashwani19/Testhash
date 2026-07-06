@@ -731,6 +731,36 @@ UI at all — only the data-fetching layer.
   Left/Right grid (§5.2) instead of the current single sphere/cylinder/
   distance-per-eye fields — plus diagnosis/treatment plan, lenses, and
   attachment upload/preview.
+- **Attachment upload is implemented** in this local-storage build, not just
+  reserved schema/API — a new `useAttachments` hook (same shape as every
+  other data hook here: load-or-seed then persist on change, called once in
+  `App` and threaded down as props) backs multi-photo upload directly in
+  `EyeRecordForm` and thumbnail display in `EyeRecordHistory`.
+  - **Client-side compression before storage**: `browser-image-compression`
+    downscales (longest side capped ~1800px) and re-encodes as JPEG at a
+    moderate quality *before* anything is persisted — a raw phone photo
+    goes from several MB down to a few hundred KB, which matters a lot
+    given the storage constraint below. Runs in a Web Worker so it doesn't
+    block the UI on a large photo.
+  - **Stored as a data URL, not an R2 `storage_key`**: this local-only build
+    has no object storage, so the compressed image is kept directly on the
+    `Attachment` record. This is a genuine limitation, not just a
+    placeholder — `localStorage`'s ~5–10MB origin quota means this doesn't
+    scale past a modest number of compressed photos; the real backend's R2
+    upload (§6) is what actually removes that ceiling, not a client change.
+  - **Delete is admin-only**; upload and view are open to `admin`/`doctor`
+    and hidden entirely for `front_desk` (§8.4/§8.5) — same split as every
+    other clinical-record permission (§4). Removing a *not-yet-saved*
+    pending photo (before the visit is even submitted) isn't gated by this,
+    since nothing has been persisted yet to delete.
+  - **Cascade delete**: removing a visit or a patient also removes that
+    visit's (or all of the patient's visits') attachments, logging one
+    audit entry per removed attachment — mirrors how visit deletion already
+    cascades from patient deletion.
+  - Every create/delete is written to the audit log (§8.9) the same way
+    every other mutation hook already does, with a metadata-only snapshot
+    (file name, content type, size, visit id) — never the data URL itself,
+    which would otherwise bloat every log entry with the full image.
 - The visit form captures `visit_at` as a date **and** time (not just a
   date picker) — default it to "now" on create, but let staff adjust it
   (e.g. entering a visit that happened earlier and is only now being typed
@@ -925,7 +955,12 @@ data.
 - Lenses (free text), Diagnosis, Treatment Plan fields.
 - Follow-up date (optional date picker, `follow_up_date`, §5.2) — cannot
   predate `visit_at`.
-- Attachment upload control — rendered only for `admin`/`doctor`.
+- Attachment upload control — rendered only for `admin`/`doctor`. Multiple
+  photos per visit are supported (e.g. front and back of a prescription
+  pad, or more than one page) — each is compressed and thumbnailed
+  independently as soon as it's selected/captured, before the visit is even
+  saved. Removing an already-saved photo is admin-only, same as deleting
+  the visit itself; removing one not yet saved isn't restricted.
 - Save / Cancel.
 
 ### 8.6 Role-based UI differences, summarized

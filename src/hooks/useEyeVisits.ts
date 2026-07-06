@@ -84,7 +84,9 @@ export function useEyeVisits(patients: Patient[]) {
         entityLabel: visitLabel(visit, patients),
         after: visit,
       })
-      return true
+      // Returns the new id (rather than just true) so a caller can attach
+      // photos to it right after creation, once it actually exists.
+      return visit.id
     },
     [logEntry, patients],
   )

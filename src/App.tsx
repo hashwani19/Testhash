@@ -9,6 +9,7 @@ import { useEyeVisits } from './hooks/useEyeVisits'
 import { usePatientGroups } from './hooks/usePatientGroups'
 import { useAppointments } from './hooks/useAppointments'
 import { useAuditLog } from './hooks/useAuditLog'
+import { useAttachments } from './hooks/useAttachments'
 import { usePreferences } from './hooks/usePreferences'
 import { useThemeEffect } from './hooks/useThemeEffect'
 import { PatientList } from './components/PatientList'
@@ -66,6 +67,8 @@ function AppShell() {
     deleteAppointments,
   } = useAppointments(patients)
   const { entries } = useAuditLog()
+  const { attachments, addAttachments, deleteAttachment, deleteAttachmentsForVisits, getAttachmentsForVisit } =
+    useAttachments()
   const { preferences } = usePreferences()
   useThemeEffect(preferences.theme)
 
@@ -83,6 +86,8 @@ function AppShell() {
   if (!user) return <LoginScreen />
 
   const isAdmin = user.role === 'admin'
+  // Attachments aren't rendered at all for front_desk (§8.4/§8.5 of docs/design.md).
+  const canManageAttachments = user.role !== 'front_desk'
   const selectedPatient = patients.find((p) => p.id === selectedPatientId) ?? null
 
   const goToList = () => {
@@ -197,8 +202,12 @@ function AppShell() {
             visits={getVisitsForPatient(selectedPatient.id)}
             canDeleteRecords={isAdmin}
             canDeletePatient={isAdmin}
+            canViewAttachments={canManageAttachments}
+            attachments={attachments}
             onEdit={() => setView('editPatient')}
             onDelete={() => {
+              const patientVisitIds = getVisitsForPatient(selectedPatient.id).map((v) => v.id)
+              deleteAttachmentsForVisits(patientVisitIds)
               deleteVisitsForPatient(selectedPatient.id)
               deletePatient(selectedPatient.id)
               goToList()
@@ -208,15 +217,26 @@ function AppShell() {
               setEditingVisit(visit)
               setView('editRecord')
             }}
-            onDeleteRecord={deleteVisit}
+            onDeleteRecord={(id) => {
+              deleteAttachmentsForVisits([id])
+              deleteVisit(id)
+            }}
             onBack={goToList}
           />
         )}
 
         {view === 'newRecord' && selectedPatient && (
           <EyeRecordForm
-            onSubmit={(input) => {
-              if (addVisit(selectedPatient.id, input)) setView('patientDetail')
+            canManageAttachments={canManageAttachments}
+            canDeleteAttachments={isAdmin}
+            attachments={[]}
+            onDeleteAttachment={deleteAttachment}
+            onSubmit={(input, newAttachments) => {
+              const id = addVisit(selectedPatient.id, input)
+              if (id) {
+                if (newAttachments.length > 0) addAttachments(id, newAttachments)
+                setView('patientDetail')
+              }
             }}
             onCancel={() => setView('patientDetail')}
           />
@@ -225,8 +245,13 @@ function AppShell() {
         {view === 'editRecord' && selectedPatient && editingVisit && (
           <EyeRecordForm
             initial={editingVisit}
-            onSubmit={(input) => {
+            canManageAttachments={canManageAttachments}
+            canDeleteAttachments={isAdmin}
+            attachments={getAttachmentsForVisit(editingVisit.id)}
+            onDeleteAttachment={deleteAttachment}
+            onSubmit={(input, newAttachments) => {
               if (updateVisit(editingVisit.id, input)) {
+                if (newAttachments.length > 0) addAttachments(editingVisit.id, newAttachments)
                 setEditingVisit(null)
                 setView('patientDetail')
               }
