@@ -4,7 +4,24 @@ import { getPatientAge } from '../utils/age'
 import { EyeRecordHistory } from './EyeRecordHistory'
 import { ConfirmModal } from './ConfirmModal'
 import { Button } from './common/Button'
-import { card } from '../styles'
+import { Card, CardHeader } from './common/Card'
+
+function EditIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+    </svg>
+  )
+}
 
 interface Props {
   patient: Patient
@@ -43,8 +60,24 @@ export function PatientDetail({
         ‹ All patients
       </Button>
 
-      <div className={`${card} flex flex-col gap-3.5`}>
-        <h2 className="text-[22px] font-bold text-text-h">{patient.name}</h2>
+      <Card className="flex flex-col gap-3.5">
+        <CardHeader
+          title={patient.name}
+          titleClassName="text-[22px] font-bold text-text-h"
+          titleAs="h2"
+          actions={
+            <>
+              <Button variant="icon" aria-label="Edit patient" onClick={onEdit}>
+                <EditIcon />
+              </Button>
+              {canDeletePatient && (
+                <Button variant="icon" aria-label="Delete patient" onClick={() => setConfirmingDelete(true)}>
+                  ×
+                </Button>
+              )}
+            </>
+          }
+        />
         <p className="text-sm text-text">{patient.patientNumber}</p>
         <dl className="grid grid-cols-2 gap-3">
           <div>
@@ -72,17 +105,7 @@ export function PatientDetail({
             <dd className="mt-0.5 capitalize text-text-h">{patient.address || 'Not provided'}</dd>
           </div>
         </dl>
-        <div className="flex justify-end gap-2.5">
-          <Button variant="secondary" onClick={onEdit}>
-            Edit patient
-          </Button>
-          {canDeletePatient && (
-            <Button variant="danger" onClick={() => setConfirmingDelete(true)}>
-              Delete patient
-            </Button>
-          )}
-        </div>
-      </div>
+      </Card>
 
       <div className="flex items-center justify-between">
         <h3 className="text-base font-bold text-text-h">Eye treatment history</h3>

@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from 'react'
+import type { ElementType, HTMLAttributes, ReactNode } from 'react'
 import { cx } from '../../styles'
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {}
@@ -12,6 +12,13 @@ export function Card({ className, ...rest }: CardProps) {
 
 interface CardHeaderProps {
   title: ReactNode
+  /** Defaults to the visit-record look (text-sm font-semibold) — pass a
+   *  larger size for cards where the title is the primary heading (e.g. a
+   *  patient's name). */
+  titleClassName?: string
+  /** Host element for the title. Defaults to 'span'; pass 'h2' etc. where
+   *  the title should be a real document heading. */
+  titleAs?: ElementType
   actions?: ReactNode
 }
 
@@ -22,10 +29,15 @@ interface CardHeaderProps {
  * every card hand-rolling its own flex row and drifting out of alignment
  * whenever an icon and a text button end up with different font metrics.
  */
-export function CardHeader({ title, actions }: CardHeaderProps) {
+export function CardHeader({
+  title,
+  titleClassName = 'text-sm font-semibold text-text-h',
+  titleAs: TitleTag = 'span',
+  actions,
+}: CardHeaderProps) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-sm font-semibold text-text-h">{title}</span>
+      <TitleTag className={titleClassName}>{title}</TitleTag>
       {actions && <div className="flex items-center gap-1">{actions}</div>}
     </div>
   )
