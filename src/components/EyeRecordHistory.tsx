@@ -3,7 +3,7 @@ import type { Attachment, Eye, EyeRefraction, EyeVisit, VisionType } from '../ty
 import { Button } from './common/Button'
 import { Card, CardHeader } from './common/Card'
 import { ListView } from './common/ListView'
-import { ImageViewer } from './common/ImageViewer'
+import { ImageViewer, type ViewerImage } from './common/ImageViewer'
 import { EditIcon } from './common/icons'
 import { ConfirmModal } from './ConfirmModal'
 import { usePreferences } from '../hooks/usePreferences'
@@ -83,13 +83,13 @@ function VisitAttachments({
   onView,
 }: {
   attachments: Attachment[]
-  onView: (attachment: Attachment) => void
+  onView: (index: number) => void
 }) {
   if (attachments.length === 0) return null
   return (
     <div className="mt-1 flex flex-wrap gap-2">
-      {attachments.map((a) => (
-        <Button key={a.id} variant="unstyled" className="cursor-pointer" onClick={() => onView(a)}>
+      {attachments.map((a, i) => (
+        <Button key={a.id} variant="unstyled" className="cursor-pointer" onClick={() => onView(i)}>
           <img src={a.dataUrl} alt={a.fileName} className="h-16 w-16 rounded-lg border border-border object-cover" />
         </Button>
       ))}
@@ -107,7 +107,7 @@ export function EyeRecordHistory({
 }: Props) {
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const confirmingVisit = visits.find((v) => v.id === confirmingDeleteId) ?? null
-  const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null)
+  const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null)
   const { preferences } = usePreferences()
 
   return (
@@ -118,58 +118,66 @@ export function EyeRecordHistory({
         pageSize={preferences.listPageSize}
         itemLabel="record"
         emptyMessage="No history yet. Add the first eye record."
-        renderItem={(visit) => (
-          <Card className="flex flex-col gap-1.5">
-            <CardHeader
-              title={formatVisitDateTime(visit.visitAt)}
-              actions={
-                <>
-                  <Button variant="icon" aria-label="Edit record" onClick={() => onEdit(visit)}>
-                    <EditIcon />
-                  </Button>
-                  {canDelete && (
-                    <Button
-                      variant="icon"
-                      aria-label="Delete record"
-                      onClick={() => setConfirmingDeleteId(visit.id)}
-                    >
-                      ×
+        renderItem={(visit) => {
+          const visitAttachments = attachments.filter((a) => a.visitId === visit.id)
+          return (
+            <Card className="flex flex-col gap-1.5">
+              <CardHeader
+                title={formatVisitDateTime(visit.visitAt)}
+                actions={
+                  <>
+                    <Button variant="icon" aria-label="Edit record" onClick={() => onEdit(visit)}>
+                      <EditIcon />
                     </Button>
-                  )}
-                </>
-              }
-            />
-            <EyeSection eye="left" refractions={visit.refractions.left} />
-            <EyeSection eye="right" refractions={visit.refractions.right} />
-            {visit.lenses && (
-              <p className="mt-1 text-[13px] text-text">
-                <strong>Lenses:</strong> {visit.lenses}
-              </p>
-            )}
-            {visit.diagnosis && (
-              <p className="mt-1 text-[13px] text-text">
-                <strong>Diagnosis:</strong> {visit.diagnosis}
-              </p>
-            )}
-            {visit.treatmentPlan && (
-              <p className="mt-1 text-[13px] text-text">
-                <strong>Treatment plan:</strong> {visit.treatmentPlan}
-              </p>
-            )}
-            {visit.followUpDate && (
-              <p className="mt-1 text-[13px] text-text">
-                <strong>Follow-up:</strong> {formatDateOnly(visit.followUpDate)}
-              </p>
-            )}
-            {visit.notes && <p className="mt-1 text-[13px] text-text">{visit.notes}</p>}
-            {canViewAttachments && (
-              <VisitAttachments
-                attachments={attachments.filter((a) => a.visitId === visit.id)}
-                onView={setViewingAttachment}
+                    {canDelete && (
+                      <Button
+                        variant="icon"
+                        aria-label="Delete record"
+                        onClick={() => setConfirmingDeleteId(visit.id)}
+                      >
+                        ×
+                      </Button>
+                    )}
+                  </>
+                }
               />
-            )}
-          </Card>
-        )}
+              <EyeSection eye="left" refractions={visit.refractions.left} />
+              <EyeSection eye="right" refractions={visit.refractions.right} />
+              {visit.lenses && (
+                <p className="mt-1 text-[13px] text-text">
+                  <strong>Lenses:</strong> {visit.lenses}
+                </p>
+              )}
+              {visit.diagnosis && (
+                <p className="mt-1 text-[13px] text-text">
+                  <strong>Diagnosis:</strong> {visit.diagnosis}
+                </p>
+              )}
+              {visit.treatmentPlan && (
+                <p className="mt-1 text-[13px] text-text">
+                  <strong>Treatment plan:</strong> {visit.treatmentPlan}
+                </p>
+              )}
+              {visit.followUpDate && (
+                <p className="mt-1 text-[13px] text-text">
+                  <strong>Follow-up:</strong> {formatDateOnly(visit.followUpDate)}
+                </p>
+              )}
+              {visit.notes && <p className="mt-1 text-[13px] text-text">{visit.notes}</p>}
+              {canViewAttachments && (
+                <VisitAttachments
+                  attachments={visitAttachments}
+                  onView={(index) =>
+                    setViewer({
+                      images: visitAttachments.map((a) => ({ src: a.dataUrl, alt: a.fileName })),
+                      index,
+                    })
+                  }
+                />
+              )}
+            </Card>
+          )
+        }}
       />
 
       {confirmingVisit && (
@@ -189,12 +197,8 @@ export function EyeRecordHistory({
         />
       )}
 
-      {viewingAttachment && (
-        <ImageViewer
-          src={viewingAttachment.dataUrl}
-          alt={viewingAttachment.fileName}
-          onClose={() => setViewingAttachment(null)}
-        />
+      {viewer && (
+        <ImageViewer images={viewer.images} initialIndex={viewer.index} onClose={() => setViewer(null)} />
       )}
     </>
   )

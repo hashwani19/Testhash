@@ -232,7 +232,7 @@ function AppShell() {
             attachments={[]}
             onDeleteAttachment={deleteAttachment}
             onSubmit={(input, newAttachments) => {
-              const id = addVisit(selectedPatient.id, input)
+              const id = addVisit(selectedPatient.id, input, newAttachments.length > 0)
               if (id) {
                 if (newAttachments.length > 0) addAttachments(id, newAttachments)
                 setView('patientDetail')
@@ -250,7 +250,9 @@ function AppShell() {
             attachments={getAttachmentsForVisit(editingVisit.id)}
             onDeleteAttachment={deleteAttachment}
             onSubmit={(input, newAttachments) => {
-              if (updateVisit(editingVisit.id, input)) {
+              const hasAttachments =
+                newAttachments.length > 0 || getAttachmentsForVisit(editingVisit.id).length > 0
+              if (updateVisit(editingVisit.id, input, hasAttachments)) {
                 if (newAttachments.length > 0) addAttachments(editingVisit.id, newAttachments)
                 setEditingVisit(null)
                 setView('patientDetail')

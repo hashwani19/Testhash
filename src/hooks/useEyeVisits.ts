@@ -49,9 +49,11 @@ export function useEyeVisits(patients: Patient[]) {
   }, [visits])
 
   const addVisit = useCallback(
-    (patientId: string, input: EyeVisitInput) => {
-      // A visit date alone isn't a record — require at least one real value.
+    (patientId: string, input: EyeVisitInput, hasAttachments = false) => {
+      // A visit date alone isn't a record — require at least one real value,
+      // unless a prescription photo is being attached (that counts as content too).
       if (
+        !hasAttachments &&
         isEmptyVisit(input.refractions, [
           input.lenses,
           input.diagnosis,
@@ -92,9 +94,11 @@ export function useEyeVisits(patients: Patient[]) {
   )
 
   const updateVisit = useCallback(
-    (id: string, input: EyeVisitInput) => {
-      // Same rule as create — editing everything away shouldn't leave an empty record behind.
+    (id: string, input: EyeVisitInput, hasAttachments = false) => {
+      // Same rule as create — editing everything away shouldn't leave an empty record behind,
+      // unless it still has (or is gaining) a prescription photo.
       if (
+        !hasAttachments &&
         isEmptyVisit(input.refractions, [
           input.lenses,
           input.diagnosis,

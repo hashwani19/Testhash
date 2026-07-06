@@ -8,7 +8,7 @@ import { compressImageFile } from '../utils/imageCompression'
 import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
 import { Textarea } from './common/Textarea'
-import { ImageViewer } from './common/ImageViewer'
+import { ImageViewer, type ViewerImage } from './common/ImageViewer'
 import { card, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
@@ -173,7 +173,15 @@ export function EyeRecordForm({
 
   const [pendingAttachments, setPendingAttachments] = useState<NewAttachmentInput[]>([])
   const [compressing, setCompressing] = useState(false)
-  const [viewingImage, setViewingImage] = useState<{ dataUrl: string; fileName: string } | null>(null)
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null)
+
+  const allImages: ViewerImage[] = useMemo(
+    () => [
+      ...attachments.map((a) => ({ src: a.dataUrl, alt: a.fileName })),
+      ...pendingAttachments.map((a) => ({ src: a.dataUrl, alt: a.fileName })),
+    ],
+    [attachments, pendingAttachments],
+  )
 
   const setCell = (eye: Eye, visionType: VisionType, next: CellState) => {
     setGrid((prev) => ({ ...prev, [eye]: { ...prev[eye], [visionType]: next } }))
@@ -193,7 +201,13 @@ export function EyeRecordForm({
     [grid],
   )
 
-  const isEmpty = isEmptyVisit(refractions, [lenses, diagnosis, treatmentPlan, followUpDate, notes])
+  // A visit with only a photo attached (no clinical fields) is still a real
+  // record worth saving — attachments count as content alongside refractions
+  // and text fields.
+  const isEmpty =
+    isEmptyVisit(refractions, [lenses, diagnosis, treatmentPlan, followUpDate, notes]) &&
+    attachments.length === 0 &&
+    pendingAttachments.length === 0
 
   const handleFilesSelected = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : []
@@ -309,11 +323,11 @@ export function EyeRecordForm({
 
             {(attachments.length > 0 || pendingAttachments.length > 0) && (
               <div className="flex flex-wrap gap-2">
-                {attachments.map((a) => (
+                {attachments.map((a, i) => (
                   <div
                     key={a.id}
                     className="relative h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border"
-                    onClick={() => setViewingImage({ dataUrl: a.dataUrl, fileName: a.fileName })}
+                    onClick={() => setViewerIndex(i)}
                   >
                     <img src={a.dataUrl} alt={a.fileName} className="h-full w-full object-cover" />
                     {canDeleteAttachments && (
@@ -335,7 +349,7 @@ export function EyeRecordForm({
                   <div
                     key={i}
                     className="relative h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border"
-                    onClick={() => setViewingImage({ dataUrl: a.dataUrl, fileName: a.fileName })}
+                    onClick={() => setViewerIndex(attachments.length + i)}
                   >
                     <img src={a.dataUrl} alt={a.fileName} className="h-full w-full object-cover" />
                     <Button
@@ -388,12 +402,8 @@ export function EyeRecordForm({
         </div>
       </form>
 
-      {viewingImage && (
-        <ImageViewer
-          src={viewingImage.dataUrl}
-          alt={viewingImage.fileName}
-          onClose={() => setViewingImage(null)}
-        />
+      {viewerIndex != null && (
+        <ImageViewer images={allImages} initialIndex={viewerIndex} onClose={() => setViewerIndex(null)} />
       )}
     </>
   )

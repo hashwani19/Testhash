@@ -768,6 +768,19 @@ UI at all — only the data-fetching layer.
     every other mutation hook already does, with a metadata-only snapshot
     (file name, content type, size, visit id) — never the data URL itself,
     which would otherwise bloat every log entry with the full image.
+  - **A photo counts as content**: a visit with a prescription photo but no
+    clinical fields filled in is still a real record worth saving, so both
+    `EyeRecordForm`'s own disable check and `useEyeVisits`'s
+    `addVisit`/`updateVisit` guard (which independently re-checks
+    `isEmptyVisit`, since it's the source of truth even if a caller's UI
+    check were ever bypassed) now treat existing or pending attachments as
+    non-empty content, not just refractions/text fields.
+  - **`ImageViewer` supports multiple images**: it takes an image list and a
+    starting index rather than a single image, so a visit with several
+    photos (or the form's existing-plus-pending set while still editing)
+    can be scrolled through — a scroll-snap strip for native touch/wheel
+    scrolling, prev/next buttons and arrow-key navigation that stay in sync
+    with whatever was scrolled to, and an "n / total" counter.
 - The visit form captures `visit_at` as a date **and** time (not just a
   date picker) — default it to "now" on create, but let staff adjust it
   (e.g. entering a visit that happened earlier and is only now being typed
