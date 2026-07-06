@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Eye, EyeRefraction, EyeVisit, VisionType } from '../types'
 import { Button } from './common/Button'
 import { Card, CardHeader } from './common/Card'
+import { EditIcon } from './common/icons'
 import { ConfirmModal } from './ConfirmModal'
 import { hasRefractionData } from '../utils/eyeVisit'
 
@@ -89,13 +90,8 @@ export function EyeRecordHistory({ visits, canDelete, onEdit, onDelete }: Props)
                 title={formatVisitDateTime(visit.visitAt)}
                 actions={
                   <>
-                    <Button
-                      variant="unstyled"
-                      className="inline-flex h-7 items-center cursor-pointer rounded-lg border-none bg-transparent px-2 text-[13px] font-medium text-accent"
-                      aria-label="Edit record"
-                      onClick={() => onEdit(visit)}
-                    >
-                      Edit
+                    <Button variant="icon" aria-label="Edit record" onClick={() => onEdit(visit)}>
+                      <EditIcon />
                     </Button>
                     {canDelete && (
                       <Button
