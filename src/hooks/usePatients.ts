@@ -43,7 +43,10 @@ export function usePatients() {
         patientNumber: generatePatientNumber(),
         name: input.name.trim(),
         dob: input.dob || undefined,
-        manualAge: input.dob ? undefined : input.manualAge,
+        // The form itself decides whether this is a genuine override (only
+        // sending a value when it diverges from the dob-computed age) — the
+        // hook just persists whatever it's given (§ getPatientAge).
+        manualAge: input.manualAge,
         address: input.address?.trim() || undefined,
         mobile: input.mobile?.trim() || undefined,
         gender: input.gender,
@@ -66,7 +69,10 @@ export function usePatients() {
         ...before,
         name: input.name.trim(),
         dob: input.dob || undefined,
-        manualAge: input.dob ? undefined : input.manualAge,
+        // The form itself decides whether this is a genuine override (only
+        // sending a value when it diverges from the dob-computed age) — the
+        // hook just persists whatever it's given (§ getPatientAge).
+        manualAge: input.manualAge,
         address: input.address?.trim() || undefined,
         mobile: input.mobile?.trim() || undefined,
         gender: input.gender,

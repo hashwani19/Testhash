@@ -29,9 +29,13 @@ const GENDER_OPTIONS: { value: Gender; label: string }[] = [
 export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
   const [name, setName] = useState(initial?.name ?? '')
   const [dob, setDob] = useState(initial?.dob ?? '')
-  const [manualAge, setManualAge] = useState(
-    initial?.manualAge != null ? String(initial.manualAge) : '',
-  )
+  // Displayed/editable age — prefilled from dob (or a prior override), but
+  // free to type over even while a dob is set.
+  const [ageInput, setAgeInput] = useState(() => {
+    if (initial?.manualAge != null) return String(initial.manualAge)
+    if (initial?.dob) return String(computeAgeFromDob(initial.dob))
+    return ''
+  })
   const [address, setAddress] = useState(initial?.address ?? '')
   const [mobile, setMobile] = useState(initial?.mobile ?? '')
   const [gender, setGender] = useState<Gender>(initial?.gender ?? 'unspecified')
@@ -39,15 +43,27 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
 
   const isEditingExisting = Boolean(initial?.id)
   const computedAge = dob ? computeAgeFromDob(dob) : undefined
+  const isOverridden = computedAge != null && ageInput !== '' && Number(ageInput) !== computedAge
+
+  const handleDobChange = (newDob: string) => {
+    setDob(newDob)
+    // A newly-picked dob recomputes the age, discarding any earlier override.
+    if (newDob) setAgeInput(String(computeAgeFromDob(newDob)))
+  }
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
     const trimmedName = name.trim()
     if (!trimmedName) return
+    const numericAge = ageInput ? Number(ageInput) : undefined
+    // Only persist this as manualAge if it's a genuine override of the
+    // dob-computed value — otherwise leave it unset so the age keeps
+    // recomputing (and staying correct) as time passes (§ getPatientAge).
+    const isRealOverride = numericAge != null && (computedAge == null || numericAge !== computedAge)
     onSubmit({
       name: trimmedName,
       dob: dob || undefined,
-      manualAge: manualAge ? Number(manualAge) : undefined,
+      manualAge: isRealOverride ? numericAge : undefined,
       address,
       mobile: mobile || undefined,
       gender,
@@ -88,21 +104,20 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
             type="date"
             value={dob}
             max={new Date().toISOString().slice(0, 10)}
-            onChange={(e) => setDob(e.target.value)}
+            onChange={(e) => handleDobChange(e.target.value)}
           />
         </label>
 
         <label className={`${fieldLabel} min-w-[90px]`}>
-          <span className={fieldLabelText}>Age {dob ? '(from DOB)' : ''}</span>
+          <span className={fieldLabelText}>Age {dob ? (isOverridden ? '(overridden)' : '(from DOB)') : ''}</span>
           <TextInput
             type="number"
             inputMode="numeric"
             min={0}
             max={130}
             step={1}
-            value={dob ? (computedAge ?? '') : manualAge}
-            onChange={(e) => setManualAge(e.target.value)}
-            disabled={Boolean(dob)}
+            value={ageInput}
+            onChange={(e) => setAgeInput(e.target.value)}
             placeholder="Age"
           />
         </label>

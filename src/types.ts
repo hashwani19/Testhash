@@ -32,9 +32,11 @@ export interface Patient {
   /** Human-facing ID, e.g. "P-20260705-0007". Immutable once assigned. */
   patientNumber: string
   name: string
-  /** ISO date string (YYYY-MM-DD). When present, age is derived from this instead of manualAge. */
+  /** ISO date string (YYYY-MM-DD). Drives the default computed age; changing it
+   *  recomputes the age and clears any override. */
   dob?: string
-  /** Used only when dob is not provided. */
+  /** Absent unless the computed-from-dob age was explicitly overridden (or
+   *  there's no dob at all, in which case this is the only age there is). */
   manualAge?: number
   address?: string
   /** India mobile number, 10 digits (no country code stored). */

@@ -326,11 +326,20 @@ erDiagram
     `search` values shorter than 3 characters with `400 Bad Request`; the
     client never sends one in the first place (§7).
 - **Age**: never stored as a derived value. If `patients.dob` is set, age is
-  computed at read time (same logic as today's `computeAgeFromDob`). If
-  `dob` is null, `manual_age` is authoritative. Exactly one of the two
-  should be considered "current" at a time — enforced in application logic,
-  not a DB constraint (SQLite has no partial-exclusion constraints worth the
-  complexity here).
+  computed at read time (same logic as today's `computeAgeFromDob`) —
+  *unless* `manual_age` is also set, in which case it takes precedence: the
+  patient form lets staff type over the dob-computed age (correcting an
+  imprecise dob, say), and that override should stick rather than being
+  silently discarded just because a dob exists. `manual_age` is only ever
+  persisted alongside a `dob` when it's a genuine override (the value the
+  staff member actually typed differs from what the dob computes to); if it
+  matches, the form clears it so the age keeps recomputing — and so stays
+  correct as birthdays pass — instead of freezing at whatever it was when
+  last saved. Picking a new `dob` always recomputes the age and discards any
+  earlier override. If `dob` is null, `manual_age` is the only age there is.
+  This precedence (`manual_age` wins when present, else `dob`) is enforced
+  in application logic, not a DB constraint (SQLite has no
+  partial-exclusion constraints worth the complexity here).
 - **Refraction shape — modeled directly on a real prescription pad**: a
   physical prescription (see below) has two *rows* per eye, not one —
   **Distance** vision and **Reading** (near) vision — each with its own
@@ -371,7 +380,9 @@ erDiagram
 - **`eye_visits.lenses`**: free-text line (e.g. "progressive", "bifocal",
   "single vision, anti-glare") — matches the "Lenses …" line on the
   prescription pad; one per visit, not per eye.
-- **`manual_age`**: nullable integer, only meaningful when `dob` is null.
+- **`manual_age`**: nullable integer. Meaningful whenever it's set — either
+  because there's no `dob` at all, or because it's a deliberate override of
+  the `dob`-computed age (§ Age above).
 - **`patients.mobile`**: nullable, 10-digit India mobile number (no country
   code stored — always `+91` in this clinic's context). Validated client-side
   (`[6-9][0-9]{9}` — Indian mobile numbers never start with 0–5) but stored
@@ -517,7 +528,7 @@ CREATE TABLE patients (
     patient_number TEXT NOT NULL UNIQUE,         -- e.g. "P-20260705-0007"; human-facing ID (§5.2)
     name           TEXT NOT NULL,
     dob            TEXT,                         -- ISO date (YYYY-MM-DD); null if unknown
-    manual_age     INTEGER,                      -- only used when dob is null
+    manual_age     INTEGER,                      -- null unless there's no dob, or it's a deliberate override of the dob-computed age
     address        TEXT,
     mobile         TEXT,                         -- 10-digit India mobile number, validated client-side (§5.2)
     gender         TEXT NOT NULL CHECK (gender IN ('female', 'male', 'other', 'unspecified')),
@@ -792,6 +803,17 @@ UI at all — only the data-fetching layer.
       whatever's scrollable behind the viewer (the patient list/history
       underneath). The viewer locks `document.body`'s scroll for as long as
       it's mounted and restores it on close.
+- **`PatientForm`'s Age field is never disabled**, even when a DOB is set —
+  it's prefilled with the DOB-computed age but staff can type over it. The
+  field only recomputes (discarding whatever was typed) when the DOB itself
+  changes to a new value; picking the same DOB again wouldn't touch it,
+  since `onChange` only fires on an actual change. On submit, the typed
+  value is only sent as `manualAge` if it actually diverges from the
+  DOB-computed one at that moment — an untouched or since-reset field is
+  sent as `undefined` instead, so the age keeps recomputing (and staying
+  correct as birthdays pass) rather than freezing at whatever it was when
+  last saved (§5.3). The label reflects which state it's in: "(from DOB)"
+  or "(overridden)".
 - The visit form captures `visit_at` as a date **and** time (not just a
   date picker) — default it to "now" on create, but let staff adjust it
   (e.g. entering a visit that happened earlier and is only now being typed
@@ -954,7 +976,8 @@ data.
 ### 8.4 Patient Detail
 
 - Header: name, `patient_number`, age (computed from DOB, or the manual
-  value when DOB is absent), DOB, gender, address, group.
+  value when DOB is absent or the computed age was overridden — §5.3), DOB,
+  gender, address, group.
 - Edit / Delete patient buttons — delete is **admin-only**, hidden entirely
   (not disabled) for the other two roles (§4). Edit opens the same patient
   form as creation (§8.3), including the group selector.
