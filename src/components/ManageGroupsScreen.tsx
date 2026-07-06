@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Patient, PatientGroup } from '../types'
-import { btnIcon, btnLink, btnPrimary, card, fieldInput, screenHeading } from '../styles'
+import { Button } from './Button'
+import { card, fieldInput, screenHeading } from '../styles'
 
 interface Props {
   groups: PatientGroup[]
@@ -40,9 +41,9 @@ export function ManageGroupsScreen({ groups, patients, onAdd, onRename, onDelete
 
   return (
     <div className="flex flex-col gap-3.5">
-      <button className={btnLink} onClick={onBack}>
+      <Button variant="link" onClick={onBack}>
         ‹ All patients
-      </button>
+      </Button>
 
       <h2 className={screenHeading}>Manage Patient Groups</h2>
       <p className="text-sm text-text">
@@ -60,9 +61,9 @@ export function ManageGroupsScreen({ groups, patients, onAdd, onRename, onDelete
             onChange={(e) => setNewName(e.target.value)}
             aria-label="New group name"
           />
-          <button type="submit" className={btnPrimary} disabled={!newName.trim()}>
+          <Button type="submit" variant="primary" disabled={!newName.trim()}>
             Add
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -87,18 +88,19 @@ export function ManageGroupsScreen({ groups, patients, onAdd, onRename, onDelete
                   aria-label="Rename group"
                 />
               ) : (
-                <button
+                <Button
+                  variant="unstyled"
                   className="flex-1 cursor-pointer border-none bg-transparent p-0 text-left font-semibold text-text-h"
                   onClick={() => startEdit(group)}
                 >
                   {group.name}
-                </button>
+                </Button>
               )}
               <span className="whitespace-nowrap text-xs text-text">
                 {patientCount(group.id)} patient(s)
               </span>
-              <button
-                className={btnIcon}
+              <Button
+                variant="icon"
                 aria-label={`Delete ${group.name}`}
                 onClick={() => {
                   if (
@@ -111,7 +113,7 @@ export function ManageGroupsScreen({ groups, patients, onAdd, onRename, onDelete
                 }}
               >
                 ×
-              </button>
+              </Button>
             </li>
           ))}
         </ul>

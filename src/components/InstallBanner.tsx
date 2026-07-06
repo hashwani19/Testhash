@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
-import { btnGhost } from '../styles'
+import { Button } from './Button'
 
 export function InstallBanner() {
   const { installed, canPromptInstall, promptInstall, showIosInstructions } =
@@ -18,9 +18,9 @@ export function InstallBanner() {
       {canPromptInstall && (
         <>
           <span className="flex-1">Install this app for offline access and a full-screen feel.</span>
-          <button className={btnGhost} onClick={promptInstall}>
+          <Button variant="ghost" onClick={promptInstall}>
             Install
-          </button>
+          </Button>
         </>
       )}
       {showIosInstructions && (
@@ -28,13 +28,9 @@ export function InstallBanner() {
           Install this app: tap the Share icon, then "Add to Home Screen".
         </span>
       )}
-      <button
-        className="cursor-pointer border-none bg-transparent p-1 text-lg leading-none text-text"
-        aria-label="Dismiss"
-        onClick={() => setDismissed(true)}
-      >
+      <Button variant="icon" aria-label="Dismiss" onClick={() => setDismissed(true)}>
         ×
-      </button>
+      </Button>
     </div>
   )
 }

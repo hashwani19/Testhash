@@ -3,7 +3,8 @@ import type { EyeVisit, Patient, PatientGroup } from '../types'
 import { getPatientAge } from '../utils/age'
 import { EyeRecordHistory } from './EyeRecordHistory'
 import { ConfirmModal } from './ConfirmModal'
-import { btnDanger, btnLink, btnPrimary, btnSecondary, card } from '../styles'
+import { Button } from './Button'
+import { card } from '../styles'
 
 interface Props {
   patient: Patient
@@ -38,9 +39,9 @@ export function PatientDetail({
 
   return (
     <div className="flex flex-col gap-4">
-      <button className={btnLink} onClick={onBack}>
+      <Button variant="link" onClick={onBack}>
         ‹ All patients
-      </button>
+      </Button>
 
       <div className={`${card} flex flex-col gap-3.5`}>
         <h2 className="text-[22px] font-bold text-text-h">{patient.name}</h2>
@@ -72,22 +73,22 @@ export function PatientDetail({
           </div>
         </dl>
         <div className="flex justify-end gap-2.5">
-          <button className={btnSecondary} onClick={onEdit}>
+          <Button variant="secondary" onClick={onEdit}>
             Edit patient
-          </button>
+          </Button>
           {canDeletePatient && (
-            <button className={btnDanger} onClick={() => setConfirmingDelete(true)}>
+            <Button variant="danger" onClick={() => setConfirmingDelete(true)}>
               Delete patient
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
       <div className="flex items-center justify-between">
         <h3 className="text-base font-bold text-text-h">Eye treatment history</h3>
-        <button className={btnPrimary} onClick={onAddRecord}>
+        <Button variant="primary" onClick={onAddRecord}>
           Add record
-        </button>
+        </Button>
       </div>
 
       <EyeRecordHistory

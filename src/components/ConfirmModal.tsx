@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { btnDanger, btnPrimary, btnSecondary, card, fieldInput } from '../styles'
+import { Button } from './Button'
+import { card, fieldInput } from '../styles'
 
 const CONFIRM_WORD = 'confirm'
 
@@ -59,16 +60,12 @@ export function ConfirmModal({
           </label>
         )}
         <div className="flex justify-end gap-2.5">
-          <button className={btnSecondary} onClick={onCancel}>
+          <Button variant="secondary" onClick={onCancel}>
             {cancelLabel}
-          </button>
-          <button
-            className={tone === 'danger' ? btnDanger : btnPrimary}
-            disabled={!canConfirm}
-            onClick={onConfirm}
-          >
+          </Button>
+          <Button variant={tone === 'danger' ? 'danger' : 'primary'} disabled={!canConfirm} onClick={onConfirm}>
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

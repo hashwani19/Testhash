@@ -16,7 +16,7 @@ import { ConfirmModal } from './components/ConfirmModal'
 import { LoginScreen } from './components/LoginScreen'
 import { OfflineBanner } from './components/OfflineBanner'
 import { InstallBanner } from './components/InstallBanner'
-import { btnPrimary } from './styles'
+import { Button } from './components/Button'
 import type { EyeVisit } from './types'
 
 type View =
@@ -105,9 +105,9 @@ function AppShell() {
       <main className="flex flex-1 flex-col gap-4 px-5 pb-10 pt-3">
         {view === 'list' && (
           <>
-            <button className={`${btnPrimary} w-full`} onClick={() => setView('newPatient')}>
+            <Button variant="primary" fullWidth onClick={() => setView('newPatient')}>
               Add patient
-            </button>
+            </Button>
             <PatientList
               patients={patients}
               groups={groups}

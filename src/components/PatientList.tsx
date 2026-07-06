@@ -3,6 +3,7 @@ import type { Patient, PatientGroup } from '../types'
 import { getPatientAge } from '../utils/age'
 import { MIN_SEARCH_LENGTH, queryPatients } from '../utils/patientQuery'
 import type { PatientSort } from '../utils/patientQuery'
+import { Button } from './Button'
 import { fieldInput, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
@@ -73,7 +74,8 @@ export function PatientList({ patients, groups, onSelect }: Props) {
             const group = groupName(patient.groupId)
             return (
               <li key={patient.id}>
-                <button
+                <Button
+                  variant="unstyled"
                   className="flex w-full flex-col gap-1 rounded-xl border border-border bg-surface px-4 py-3.5 text-left cursor-pointer"
                   onClick={() => onSelect(patient.id)}
                 >
@@ -89,7 +91,7 @@ export function PatientList({ patients, groups, onSelect }: Props) {
                     {patient.patientNumber} · {age != null ? `${age} yrs` : 'Age unknown'} ·{' '}
                     {patient.gender === 'unspecified' ? 'Gender unspecified' : patient.gender}
                   </span>
-                </button>
+                </Button>
               </li>
             )
           })}

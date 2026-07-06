@@ -3,7 +3,8 @@ import type { FormEvent } from 'react'
 import type { EyeVisitInput } from '../hooks/useEyeVisits'
 import type { Eye, EyeRefraction, EyeVisit, RefractionGrid, VisionType } from '../types'
 import { isEmptyVisit } from '../utils/eyeVisit'
-import { btnPrimary, btnSecondary, card, fieldInput, fieldLabel, fieldLabelText } from '../styles'
+import { Button } from './Button'
+import { card, fieldInput, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   initial?: EyeVisit
@@ -278,12 +279,12 @@ export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
       )}
 
       <div className="flex justify-end gap-2.5">
-        <button type="button" className={btnSecondary} onClick={onCancel}>
+        <Button variant="secondary" onClick={onCancel}>
           Cancel
-        </button>
-        <button type="submit" className={btnPrimary} disabled={isEmpty}>
+        </Button>
+        <Button type="submit" variant="primary" disabled={isEmpty}>
           {initial ? 'Save changes' : 'Save record'}
-        </button>
+        </Button>
       </div>
     </form>
   )

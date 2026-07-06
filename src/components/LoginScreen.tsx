@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { btnPrimary, card, fieldInput, fieldLabel, fieldLabelText, pageTitle } from '../styles'
+import { Button } from './Button'
+import { card, fieldInput, fieldLabel, fieldLabelText, pageTitle } from '../styles'
 
 export function LoginScreen() {
   const { login } = useAuth()
@@ -50,9 +51,9 @@ export function LoginScreen() {
 
         {error && <p className="text-[13px] text-high">Incorrect email or password.</p>}
 
-        <button type="submit" className={`${btnPrimary} w-full`}>
+        <Button type="submit" variant="primary" fullWidth>
           Sign in
-        </button>
+        </Button>
 
         <div className="border-t border-border pt-3 text-xs text-text">
           <p>Test accounts (local-storage only, not secure):</p>

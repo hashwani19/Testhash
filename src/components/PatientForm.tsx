@@ -3,7 +3,8 @@ import type { FormEvent } from 'react'
 import type { Gender, Patient, PatientGroup } from '../types'
 import type { PatientInput } from '../hooks/usePatients'
 import { computeAgeFromDob } from '../utils/age'
-import { btnPrimary, btnSecondary, card, fieldInput, fieldLabel, fieldLabelText } from '../styles'
+import { Button } from './Button'
+import { card, fieldInput, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   initial?: Patient
@@ -127,12 +128,12 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
       </label>
 
       <div className="flex justify-end gap-2.5">
-        <button type="button" className={btnSecondary} onClick={onCancel}>
+        <Button variant="secondary" onClick={onCancel}>
           Cancel
-        </button>
-        <button type="submit" className={btnPrimary} disabled={!name.trim()}>
+        </Button>
+        <Button type="submit" variant="primary" disabled={!name.trim()}>
           {initial ? 'Save changes' : 'Add patient'}
-        </button>
+        </Button>
       </div>
     </form>
   )

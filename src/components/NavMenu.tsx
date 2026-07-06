@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { Role } from '../types'
+import { Button } from './Button'
 import { cx } from '../styles'
 
 export type NavTarget = 'patients' | 'groups' | 'activity' | 'appointments'
@@ -39,15 +40,17 @@ export function NavMenu({ open, role, active, onNavigate, onSignOut, onClose }: 
 
   return (
     <>
-      <button
+      <Button
+        variant="unstyled"
         className="fixed inset-0 z-40 cursor-default border-none bg-black/15 backdrop-blur-[2px]"
         aria-label="Close menu"
         onClick={onClose}
       />
       <nav className="absolute left-0 top-full z-50 mt-2 flex max-h-[70vh] w-56 flex-col gap-1 overflow-y-auto rounded-xl border border-border bg-surface p-3 shadow-card">
         {items.map((item) => (
-          <button
+          <Button
             key={item.target}
+            variant="unstyled"
             className={cx(
               'cursor-pointer rounded-lg border-none px-3 py-2.5 text-left text-[15px] font-medium',
               item.target === active ? 'bg-accent text-accent-contrast' : 'bg-transparent text-text-h',
@@ -58,9 +61,10 @@ export function NavMenu({ open, role, active, onNavigate, onSignOut, onClose }: 
             }}
           >
             {item.label}
-          </button>
+          </Button>
         ))}
-        <button
+        <Button
+          variant="unstyled"
           className="mt-1 cursor-pointer rounded-lg border-t border-border bg-transparent px-3 pb-2.5 pt-3 text-left text-[15px] font-medium text-text-h"
           onClick={() => {
             onClose()
@@ -68,7 +72,7 @@ export function NavMenu({ open, role, active, onNavigate, onSignOut, onClose }: 
           }}
         >
           Sign out
-        </button>
+        </Button>
       </nav>
     </>
   )

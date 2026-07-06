@@ -1,5 +1,5 @@
 import type { Eye, EyeRefraction, EyeVisit, VisionType } from '../types'
-import { btnIcon } from '../styles'
+import { Button } from './Button'
 import { hasRefractionData } from '../utils/eyeVisit'
 
 interface Props {
@@ -78,17 +78,18 @@ export function EyeRecordHistory({ visits, canDelete, onEdit, onDelete }: Props)
               })}
             </span>
             <div className="flex items-center gap-1">
-              <button
+              <Button
+                variant="unstyled"
                 className="cursor-pointer rounded-lg border-none bg-transparent px-2 py-1 text-[13px] font-medium text-accent"
                 aria-label="Edit record"
                 onClick={() => onEdit(visit)}
               >
                 Edit
-              </button>
+              </Button>
               {canDelete && (
-                <button className={btnIcon} aria-label="Delete record" onClick={() => onDelete(visit.id)}>
+                <Button variant="icon" aria-label="Delete record" onClick={() => onDelete(visit.id)}>
                   ×
-                </button>
+                </Button>
               )}
             </div>
           </div>
