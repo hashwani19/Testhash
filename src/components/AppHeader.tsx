@@ -1,9 +1,7 @@
-import { useState } from 'react'
 import type { Role } from '../types'
 import { NavMenu } from './NavMenu'
 import type { NavTarget } from './NavMenu'
 import { ProfileMenu } from './ProfileMenu'
-import { Button } from './common/Button'
 import { pageTitle } from '../styles'
 
 interface Props {
@@ -16,31 +14,11 @@ interface Props {
 }
 
 export function AppHeader({ subtitle, fullName, role, activeNavTarget, onNavigate, onSignOut }: Props) {
-  const [menuOpen, setMenuOpen] = useState(false)
-
   return (
     <header className="px-5 pt-7 pb-2">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="relative shrink-0">
-            <Button
-              variant="iconCircle"
-              className="border-none bg-transparent text-xl leading-none text-text-h"
-              aria-label="Open menu"
-              onClick={() => setMenuOpen((o) => !o)}
-            >
-              ☰
-            </Button>
-
-            <NavMenu
-              open={menuOpen}
-              role={role}
-              active={activeNavTarget}
-              onNavigate={onNavigate}
-              onSignOut={onSignOut}
-              onClose={() => setMenuOpen(false)}
-            />
-          </div>
+          <NavMenu role={role} active={activeNavTarget} onNavigate={onNavigate} onSignOut={onSignOut} />
 
           <h1 className={`min-w-0 flex-1 ${pageTitle}`}>Ortho and Vision Care</h1>
         </div>

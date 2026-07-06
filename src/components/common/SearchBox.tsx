@@ -1,7 +1,7 @@
-import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button } from './Button'
 import { TextInput } from './TextInput'
+import { Dropdown } from './Dropdown'
 import { fieldLabel, fieldLabelText } from '../../styles'
 
 function FilterIcon() {
@@ -45,15 +45,14 @@ interface Props {
 /**
  * The one place every search box in the app renders through. Filtering is
  * opt-in via the `filter` prop: when present, a "sliders" icon appears next
- * to the input, opening a popover with arbitrary filter/sort controls.
- * Omit `filter` for a plain search box.
+ * to the input, opening a Dropdown popover with arbitrary filter/sort
+ * controls. Omit `filter` for a plain search box.
  *
  * The icon is sized off the input itself (flex stretch + aspect-square)
  * rather than a second hard-coded height, so it can't drift out of
  * alignment with the input the way two independently-set heights can.
  */
 export function SearchBox({ value, onChange, placeholder, label = 'Search', filter }: Props) {
-  const [filterOpen, setFilterOpen] = useState(false)
   const filterLabel = filter?.label ?? 'Filter and sort'
 
   return (
@@ -69,33 +68,29 @@ export function SearchBox({ value, onChange, placeholder, label = 'Search', filt
           placeholder={placeholder}
         />
         {filter && (
-          <div className="relative shrink-0">
-            <Button
-              variant="unstyled"
-              className="flex aspect-square h-full items-center justify-center rounded-[10px] border border-border bg-bg text-text-h cursor-pointer"
-              aria-label={filterLabel}
-              onClick={() => setFilterOpen((o) => !o)}
-            >
-              <FilterIcon />
-            </Button>
-            {filter.active && (
-              <span className="pointer-events-none absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-accent" />
-            )}
-
-            {filterOpen && (
+          <Dropdown
+            align="right"
+            widthClassName="w-60"
+            panelClassName="gap-3 p-3.5"
+            closeLabel={`Close ${filterLabel.toLowerCase()}`}
+            trigger={({ onClick }) => (
               <>
                 <Button
                   variant="unstyled"
-                  className="fixed inset-0 z-40 cursor-default border-none bg-transparent"
-                  aria-label={`Close ${filterLabel.toLowerCase()}`}
-                  onClick={() => setFilterOpen(false)}
-                />
-                <div className="absolute right-0 top-full z-50 mt-2 flex w-60 flex-col gap-3 rounded-xl border border-border bg-surface p-3.5 shadow-card">
-                  {filter.content}
-                </div>
+                  className="flex aspect-square h-full items-center justify-center rounded-[10px] border border-border bg-bg text-text-h cursor-pointer"
+                  aria-label={filterLabel}
+                  onClick={onClick}
+                >
+                  <FilterIcon />
+                </Button>
+                {filter.active && (
+                  <span className="pointer-events-none absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-accent" />
+                )}
               </>
             )}
-          </div>
+          >
+            {() => filter.content}
+          </Dropdown>
         )}
       </div>
     </div>
