@@ -1,4 +1,4 @@
-import { btnLink } from '../styles'
+import { btnLink, screenHeading } from '../styles'
 
 interface Props {
   title: string
@@ -12,7 +12,7 @@ export function ComingSoonScreen({ title, description, onBack }: Props) {
       <button className={btnLink} onClick={onBack}>
         ‹ All patients
       </button>
-      <h2 className="text-xl font-bold text-text-h">{title}</h2>
+      <h2 className={screenHeading}>{title}</h2>
       <p className="py-8 text-center text-sm text-text">{description}</p>
     </div>
   )

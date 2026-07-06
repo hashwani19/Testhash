@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Role } from '../types'
+import { iconButtonBase } from '../styles'
 
 interface Props {
   fullName: string
@@ -20,9 +21,9 @@ export function ProfileMenu({ fullName, role, onSignOut }: Props) {
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="relative">
+    <div className="relative shrink-0">
       <button
-        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-border bg-bg text-sm font-semibold text-text-h"
+        className={`${iconButtonBase} border border-border bg-bg text-sm font-semibold text-text-h`}
         aria-label="Profile menu"
         onClick={() => setOpen((o) => !o)}
       >

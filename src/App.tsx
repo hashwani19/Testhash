@@ -10,9 +10,8 @@ import { PatientDetail } from './components/PatientDetail'
 import { EyeRecordForm } from './components/EyeRecordForm'
 import { ManageGroupsScreen } from './components/ManageGroupsScreen'
 import { ComingSoonScreen } from './components/ComingSoonScreen'
-import { NavMenu } from './components/NavMenu'
+import { AppHeader } from './components/AppHeader'
 import type { NavTarget } from './components/NavMenu'
-import { ProfileMenu } from './components/ProfileMenu'
 import { ConfirmModal } from './components/ConfirmModal'
 import { LoginScreen } from './components/LoginScreen'
 import { OfflineBanner } from './components/OfflineBanner'
@@ -47,7 +46,6 @@ function AppShell() {
   const [view, setView] = useState<View>('list')
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
   const [editingVisit, setEditingVisit] = useState<EyeVisit | null>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
 
   if (!user) return <LoginScreen />
@@ -77,36 +75,18 @@ function AppShell() {
       <OfflineBanner />
       <InstallBanner />
 
-      <header className="px-5 pt-7 pb-2">
-        <div className="flex items-center justify-between gap-3">
-          <div className="relative flex items-center gap-2.5">
-            <button
-              className="cursor-pointer rounded-lg border-none bg-transparent px-1 text-2xl leading-none text-text-h"
-              aria-label="Open menu"
-              onClick={() => setMenuOpen((o) => !o)}
-            >
-              ☰
-            </button>
-            <h1 className="text-[28px] font-bold tracking-[-0.4px] text-text-h">Ortho and Vision Care</h1>
-
-            <NavMenu
-              open={menuOpen}
-              role={user.role}
-              active={VIEW_TO_NAV_TARGET[view] ?? 'patients'}
-              onNavigate={navigateTo}
-              onSignOut={requestSignOut}
-              onClose={() => setMenuOpen(false)}
-            />
-          </div>
-
-          <ProfileMenu fullName={user.fullName} role={user.role} onSignOut={requestSignOut} />
-        </div>
-        <p className="mt-1 text-sm text-text">
-          {patients.length === 0
+      <AppHeader
+        subtitle={
+          patients.length === 0
             ? 'No patients yet'
-            : `${patients.length} patient${patients.length === 1 ? '' : 's'}`}
-        </p>
-      </header>
+            : `${patients.length} patient${patients.length === 1 ? '' : 's'}`
+        }
+        fullName={user.fullName}
+        role={user.role}
+        activeNavTarget={VIEW_TO_NAV_TARGET[view] ?? 'patients'}
+        onNavigate={navigateTo}
+        onSignOut={requestSignOut}
+      />
 
       {confirmingSignOut && (
         <ConfirmModal

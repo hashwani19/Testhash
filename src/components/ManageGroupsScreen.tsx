@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Patient, PatientGroup } from '../types'
-import { btnIcon, btnLink, btnPrimary, card, fieldInput } from '../styles'
+import { btnIcon, btnLink, btnPrimary, card, fieldInput, screenHeading } from '../styles'
 
 interface Props {
   groups: PatientGroup[]
@@ -44,7 +44,7 @@ export function ManageGroupsScreen({ groups, patients, onAdd, onRename, onDelete
         ‹ All patients
       </button>
 
-      <h2 className="text-xl font-bold text-text-h">Manage Patient Groups</h2>
+      <h2 className={screenHeading}>Manage Patient Groups</h2>
       <p className="text-sm text-text">
         Admin-only. Doctors and front desk can assign patients to these groups but can't create or
         remove them.

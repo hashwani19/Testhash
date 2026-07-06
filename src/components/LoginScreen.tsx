@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { btnPrimary, card, fieldInput, fieldLabel, fieldLabelText } from '../styles'
+import { btnPrimary, card, fieldInput, fieldLabel, fieldLabelText, pageTitle } from '../styles'
 
 export function LoginScreen() {
   const { login } = useAuth()
@@ -21,7 +21,7 @@ export function LoginScreen() {
   return (
     <div className="flex min-h-svh items-center justify-center p-5">
       <form className={`${card} flex w-full max-w-[360px] flex-col gap-3.5`} onSubmit={submit}>
-        <h1 className="text-[22px] font-bold text-text-h">Ortho and Vision Care</h1>
+        <h1 className={pageTitle}>Ortho and Vision Care</h1>
         <p className="text-sm text-text">Sign in to continue</p>
 
         <label className={fieldLabel}>
