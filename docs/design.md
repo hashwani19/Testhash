@@ -533,7 +533,7 @@ UI at all — only the data-fetching layer.
 | `GET /users?page=&limit=` | admin | List staff accounts | `full_name` asc |
 | `POST /users` | admin | Create staff account | — |
 | `PATCH /users/:id` | admin | Update role/active status | — |
-| `GET /patients?search=&group_id=&sort=&page=&limit=` | any | List/search patients. `search` matches **name** (substring, case-insensitive) **or** `patient_number` (substring, so a partial number or date prefix like `P-20260705` also works) — ≥3 characters or omitted, shorter values → `400` (§5.2). Optional `group_id` filters to one group. Optional `sort=group` overrides the default (group name asc, then `created_at` desc within a group) — omit for the plain default below. Summary rows only (`patient_number`/name/age/gender/group); full clinical detail lives on the visit endpoints below | `created_at` **desc** (newest-registered first) |
+| `GET /patients?search=&group_id=&sort=&page=&limit=` | any | List/search patients. `search` matches **name** (substring, case-insensitive) **or** `patient_number` (substring, so a partial number or date prefix like `P-20260705` also works) — ≥3 characters or omitted, shorter values → `400` (§5.2). Optional `group_id` filters to one group. Optional `sort` overrides the default: `group` (group name asc, then `created_at` desc within a group), `name_asc`/`name_desc` (patient name, case-insensitive) — omit for the plain default below. Summary rows only (`patient_number`/name/age/gender/group); full clinical detail lives on the visit endpoints below | `created_at` **desc** (newest-registered first) |
 | `POST /patients` | admin, doctor, front_desk | Create patient (demographics only, optionally including `group_id` — request body may not include clinical fields). Response includes the generated `patient_number` | — |
 | `GET /patients/:id` | any | Patient detail (demographics, including group; visit history fetched separately via `/patients/:id/visits`) | — |
 | `GET /patients/by-number/:patient_number` | any | **Exact-match** convenience alias for the common case of already having the full ID (e.g. a barcode/QR scan) — skips the substring search. Resolves to the same detail response as `GET /patients/:id` | — |
@@ -595,6 +595,15 @@ UI at all — only the data-fetching layer.
   `page`/`limit`/`totalCount` contract exists specifically so this swap
   doesn't require changing `ListView` or any screen's markup — only the
   data-fetching hook underneath it).
+- The patient list's search/group-filter/sort state (plus a "reset filters"
+  action) is likewise isolated behind one hook (`usePatientQuery`) rather
+  than lived directly in the screen component. Today its body is an
+  in-memory filter/sort over the full `patients` array; once the backend
+  exists it becomes a debounced call to `GET /patients?search=&group_id=&
+  sort=&page=&limit=` (§6) instead — the hook's returned shape (search/
+  setSearch/groupId/setGroupId/sort/setSort/resetFilters/isFilterActive/
+  results) stays the same either way, so `PatientList` and `SearchBox`
+  don't change when that swap happens.
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 

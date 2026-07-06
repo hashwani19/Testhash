@@ -12,6 +12,11 @@ interface FilterConfig {
   content: ReactNode
   /** aria-label for the icon button and its close backdrop. Defaults to "Filter and sort". */
   label?: string
+  /** Resets whatever filter/sort state this screen owns back to its
+   *  defaults. When provided, a "Reset filters" control appears at the
+   *  bottom of the popover — disabled while `active` is already false,
+   *  since there's nothing to reset. */
+  onReset?: () => void
 }
 
 interface Props {
@@ -77,7 +82,24 @@ export function SearchBox({ value, onChange, placeholder, label = 'Search', filt
               </>
             )}
           >
-            {() => filter.content}
+            {({ close }) => (
+              <>
+                {filter.content}
+                {filter.onReset && (
+                  <Button
+                    variant="unstyled"
+                    className="mt-1 w-full cursor-pointer rounded-lg border-t border-border bg-transparent pt-3 text-left text-[13px] font-medium text-text-h disabled:cursor-default disabled:opacity-50"
+                    disabled={!filter.active}
+                    onClick={() => {
+                      filter.onReset?.()
+                      close()
+                    }}
+                  >
+                    Reset filters
+                  </Button>
+                )}
+              </>
+            )}
           </Dropdown>
         )}
       </div>

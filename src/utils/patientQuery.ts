@@ -2,7 +2,7 @@ import type { Patient, PatientGroup } from '../types'
 
 export const MIN_SEARCH_LENGTH = 3
 
-export type PatientSort = 'default' | 'group'
+export type PatientSort = 'default' | 'group' | 'name-asc' | 'name-desc'
 
 export interface PatientQuery {
   search?: string
@@ -34,6 +34,10 @@ export function queryPatients(
       if (byGroup !== 0) return byGroup
       return b.createdAt - a.createdAt
     })
+  } else if (sort === 'name-asc') {
+    result = [...result].sort((a, b) => a.name.localeCompare(b.name))
+  } else if (sort === 'name-desc') {
+    result = [...result].sort((a, b) => b.name.localeCompare(a.name))
   } else {
     result = [...result].sort((a, b) => b.createdAt - a.createdAt)
   }

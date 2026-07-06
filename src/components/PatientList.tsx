@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
 import type { Patient, PatientGroup } from '../types'
 import { getPatientAge } from '../utils/age'
-import { MIN_SEARCH_LENGTH, queryPatients } from '../utils/patientQuery'
+import { MIN_SEARCH_LENGTH } from '../utils/patientQuery'
 import type { PatientSort } from '../utils/patientQuery'
+import { usePatientQuery } from '../hooks/usePatientQuery'
 import { Button } from './common/Button'
 import { SearchBox } from './common/SearchBox'
 import { Select } from './common/Select'
@@ -17,17 +17,10 @@ interface Props {
 }
 
 export function PatientList({ patients, groups, onSelect }: Props) {
-  const [search, setSearch] = useState('')
-  const [groupId, setGroupId] = useState('')
-  const [sort, setSort] = useState<PatientSort>('default')
-
-  const visible = useMemo(
-    () => queryPatients(patients, groups, { search, groupId, sort }),
-    [patients, groups, search, groupId, sort],
-  )
+  const { search, setSearch, groupId, setGroupId, sort, setSort, resetFilters, isFilterActive, results } =
+    usePatientQuery(patients, groups)
 
   const groupName = (id?: string) => groups.find((g) => g.id === id)?.name
-  const isFilterActive = groupId !== '' || sort !== 'default'
 
   return (
     <div className="flex flex-col gap-3">
@@ -37,6 +30,7 @@ export function PatientList({ patients, groups, onSelect }: Props) {
         placeholder={`Name or number (${MIN_SEARCH_LENGTH}+ chars)`}
         filter={{
           active: isFilterActive,
+          onReset: resetFilters,
           content: (
             <>
               <label className={fieldLabel}>
@@ -55,6 +49,8 @@ export function PatientList({ patients, groups, onSelect }: Props) {
                 <Select value={sort} onChange={(e) => setSort(e.target.value as PatientSort)}>
                   <option value="default">Newest first</option>
                   <option value="group">By group</option>
+                  <option value="name-asc">Name (A-Z)</option>
+                  <option value="name-desc">Name (Z-A)</option>
                 </Select>
               </label>
             </>
@@ -63,7 +59,7 @@ export function PatientList({ patients, groups, onSelect }: Props) {
       />
 
       <ListView
-        items={visible}
+        items={results}
         getKey={(patient) => patient.id}
         itemLabel="patient"
         emptyMessage={patients.length === 0 ? 'No patients yet. Add the first one.' : 'No patients match.'}
