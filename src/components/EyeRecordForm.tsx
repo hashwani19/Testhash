@@ -4,7 +4,9 @@ import type { EyeVisitInput } from '../hooks/useEyeVisits'
 import type { Eye, EyeRefraction, EyeVisit, RefractionGrid, VisionType } from '../types'
 import { isEmptyVisit } from '../utils/eyeVisit'
 import { Button } from './Button'
-import { card, fieldInput, fieldLabel, fieldLabelText } from '../styles'
+import { TextInput } from './TextInput'
+import { Textarea } from './Textarea'
+import { card, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   initial?: EyeVisit
@@ -87,9 +89,8 @@ function RefractionCell({
       <div className="flex flex-wrap gap-2.5">
         <label className={`${fieldLabel} min-w-[90px]`}>
           <span className={fieldLabelText}>Sphere</span>
-          <input
+          <TextInput
             type="number"
-            className={fieldInput}
             step="any"
             inputMode="decimal"
             value={cell.sphere}
@@ -99,9 +100,8 @@ function RefractionCell({
         </label>
         <label className={`${fieldLabel} min-w-[90px]`}>
           <span className={fieldLabelText}>Cylinder</span>
-          <input
+          <TextInput
             type="number"
-            className={fieldInput}
             step="any"
             inputMode="decimal"
             value={cell.cylinder}
@@ -111,9 +111,8 @@ function RefractionCell({
         </label>
         <label className={`${fieldLabel} min-w-[90px]`}>
           <span className={fieldLabelText}>Axis</span>
-          <input
+          <TextInput
             type="number"
-            className={fieldInput}
             min={0}
             max={180}
             step={1}
@@ -125,9 +124,8 @@ function RefractionCell({
         </label>
         <label className={`${fieldLabel} min-w-[90px]`}>
           <span className={fieldLabelText}>Visual acuity</span>
-          <input
+          <TextInput
             type="text"
-            className={fieldInput}
             value={cell.visualAcuity}
             onChange={(e) => onChange({ ...cell, visualAcuity: e.target.value })}
             placeholder={visionType === 'distance' ? '6/6' : 'N/6'}
@@ -189,9 +187,8 @@ export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
     <form className={`${card} flex flex-col gap-3.5`} onSubmit={submit}>
       <label className={fieldLabel}>
         <span className={fieldLabelText}>Visit date &amp; time</span>
-        <input
+        <TextInput
           type="datetime-local"
-          className={fieldInput}
           value={visitAt}
           max={nowLocal()}
           onChange={(e) => setVisitAt(e.target.value)}
@@ -221,9 +218,8 @@ export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
 
       <label className={fieldLabel}>
         <span className={fieldLabelText}>Lenses (optional)</span>
-        <input
+        <TextInput
           type="text"
-          className={fieldInput}
           value={lenses}
           onChange={(e) => setLenses(e.target.value)}
           placeholder="Progressive, bifocal, single vision…"
@@ -232,29 +228,18 @@ export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
 
       <label className={fieldLabel}>
         <span className={fieldLabelText}>Diagnosis (optional)</span>
-        <textarea
-          className={fieldInput}
-          value={diagnosis}
-          onChange={(e) => setDiagnosis(e.target.value)}
-          rows={2}
-        />
+        <Textarea value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} rows={2} />
       </label>
 
       <label className={fieldLabel}>
         <span className={fieldLabelText}>Treatment plan (optional)</span>
-        <textarea
-          className={fieldInput}
-          value={treatmentPlan}
-          onChange={(e) => setTreatmentPlan(e.target.value)}
-          rows={2}
-        />
+        <Textarea value={treatmentPlan} onChange={(e) => setTreatmentPlan(e.target.value)} rows={2} />
       </label>
 
       <label className={fieldLabel}>
         <span className={fieldLabelText}>Follow-up date (optional)</span>
-        <input
+        <TextInput
           type="date"
-          className={fieldInput}
           value={followUpDate}
           min={visitAt.slice(0, 10)}
           onChange={(e) => setFollowUpDate(e.target.value)}
@@ -263,8 +248,7 @@ export function EyeRecordForm({ initial, onSubmit, onCancel }: Props) {
 
       <label className={fieldLabel}>
         <span className={fieldLabelText}>Notes (optional)</span>
-        <textarea
-          className={fieldInput}
+        <Textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}

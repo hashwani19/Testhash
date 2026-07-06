@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Button } from './Button'
-import { card, fieldInput } from '../styles'
+import { TextInput } from './TextInput'
+import { card } from '../styles'
 
 const CONFIRM_WORD = 'confirm'
 
@@ -49,9 +50,8 @@ export function ConfirmModal({
             <span className="text-[13px] text-text">
               Type <strong className="text-text-h">confirm</strong> to proceed
             </span>
-            <input
+            <TextInput
               type="text"
-              className={fieldInput}
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               autoFocus

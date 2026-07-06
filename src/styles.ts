@@ -1,8 +1,9 @@
 // Shared Tailwind utility strings — a single source of truth for the handful
 // of UI patterns (fields, cards, headings) that repeat across every screen,
 // so tweaking one doesn't mean hunting down every place it's duplicated.
-// Button styling lives in components/Button.tsx, not here — every button in
-// the app renders through that component.
+// Button styling lives in components/Button.tsx and text-entry field styling
+// lives in components/fieldBase.ts, not here — every button and form field
+// in the app renders through one of those shared components.
 
 export const card = 'bg-surface border border-border rounded-2xl p-4 shadow-card'
 
@@ -16,10 +17,6 @@ export const screenHeading = 'text-xl font-bold text-text-h'
 
 export const fieldLabel = 'flex flex-1 min-w-0 flex-col gap-1.5'
 export const fieldLabelText = 'text-[13px] text-text'
-export const fieldInput =
-  'min-w-0 rounded-[10px] border border-border bg-bg px-3 py-2.5 text-text-h text-base font-[inherit] resize-y ' +
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-1 ' +
-  'disabled:opacity-60'
 
 export function cx(...parts: Array<string | false | undefined>): string {
   return parts.filter(Boolean).join(' ')

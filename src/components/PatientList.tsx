@@ -4,7 +4,9 @@ import { getPatientAge } from '../utils/age'
 import { MIN_SEARCH_LENGTH, queryPatients } from '../utils/patientQuery'
 import type { PatientSort } from '../utils/patientQuery'
 import { Button } from './Button'
-import { fieldInput, fieldLabel, fieldLabelText } from '../styles'
+import { TextInput } from './TextInput'
+import { Select } from './Select'
+import { fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   patients: Patient[]
@@ -29,9 +31,8 @@ export function PatientList({ patients, groups, onSelect }: Props) {
       <div className="flex flex-wrap gap-2.5">
         <label className={fieldLabel}>
           <span className={fieldLabelText}>Search</span>
-          <input
+          <TextInput
             type="search"
-            className={fieldInput}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={`Name or patient number (${MIN_SEARCH_LENGTH}+ chars)`}
@@ -41,25 +42,21 @@ export function PatientList({ patients, groups, onSelect }: Props) {
       <div className="flex flex-wrap gap-2.5">
         <label className={`${fieldLabel} min-w-[90px]`}>
           <span className={fieldLabelText}>Group</span>
-          <select className={fieldInput} value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+          <Select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
             <option value="">All groups</option>
             {groups.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className={`${fieldLabel} min-w-[90px]`}>
           <span className={fieldLabelText}>Sort</span>
-          <select
-            className={fieldInput}
-            value={sort}
-            onChange={(e) => setSort(e.target.value as PatientSort)}
-          >
+          <Select value={sort} onChange={(e) => setSort(e.target.value as PatientSort)}>
             <option value="default">Newest first</option>
             <option value="group">By group</option>
-          </select>
+          </Select>
         </label>
       </div>
 

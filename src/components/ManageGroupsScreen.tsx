@@ -2,7 +2,8 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Patient, PatientGroup } from '../types'
 import { Button } from './Button'
-import { card, fieldInput, screenHeading } from '../styles'
+import { TextInput } from './TextInput'
+import { card, screenHeading } from '../styles'
 
 interface Props {
   groups: PatientGroup[]
@@ -53,9 +54,9 @@ export function ManageGroupsScreen({ groups, patients, onAdd, onRename, onDelete
 
       <form className={`${card} flex flex-col gap-3.5`} onSubmit={submitNew}>
         <div className="flex flex-wrap gap-2.5">
-          <input
+          <TextInput
             type="text"
-            className={`${fieldInput} min-w-[90px] flex-1`}
+            className="min-w-[90px] flex-1"
             placeholder="New group name…"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
@@ -77,9 +78,9 @@ export function ManageGroupsScreen({ groups, patients, onAdd, onRename, onDelete
               className="flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-2.5"
             >
               {editingId === group.id ? (
-                <input
+                <TextInput
                   type="text"
-                  className={`${fieldInput} flex-1`}
+                  className="flex-1"
                   value={editingName}
                   onChange={(e) => setEditingName(e.target.value)}
                   onBlur={() => saveEdit(group.id)}

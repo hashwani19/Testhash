@@ -2,7 +2,8 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { Button } from './Button'
-import { card, fieldInput, fieldLabel, fieldLabelText, pageTitle } from '../styles'
+import { TextInput } from './TextInput'
+import { card, fieldLabel, fieldLabelText, pageTitle } from '../styles'
 
 export function LoginScreen() {
   const { login } = useAuth()
@@ -27,9 +28,8 @@ export function LoginScreen() {
 
         <label className={fieldLabel}>
           <span className={fieldLabelText}>Email</span>
-          <input
+          <TextInput
             type="email"
-            className={fieldInput}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="username"
@@ -39,9 +39,8 @@ export function LoginScreen() {
 
         <label className={fieldLabel}>
           <span className={fieldLabelText}>Password</span>
-          <input
+          <TextInput
             type="password"
-            className={fieldInput}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
