@@ -141,36 +141,35 @@ export function AppointmentsScreen({
             ? getPatientAge({ dob: appointment.dob, manualAge: appointment.manualAge })
             : undefined
 
+          // One combined line rather than a separate "date/time" line plus a
+          // separate "age/mobile" line — and an unset age is simply omitted,
+          // not printed as "Age unknown".
+          const details = [formatDateOnly(appointment.date)]
+          if (appointment.time) details.push(formatTime(appointment.time))
+          if (isNewPatient) {
+            if (age != null) details.push(`${age} yrs`)
+            if (appointment.mobile) details.push(appointment.mobile)
+          } else if (linkedPatient) {
+            details.push(linkedPatient.patientNumber)
+          }
+
           return (
-            <Card className="flex flex-col gap-2">
-              <div className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  className="mt-1 accent-accent"
-                  checked={selectedIds.has(appointment.id)}
-                  onChange={() => toggleSelected(appointment.id)}
-                  aria-label={`Select ${name}'s appointment`}
-                />
+            <Card className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-1 accent-accent"
+                checked={selectedIds.has(appointment.id)}
+                onChange={() => toggleSelected(appointment.id)}
+                aria-label={`Select ${name}'s appointment`}
+              />
 
-                <div className="flex flex-1 flex-col gap-0.5">
-                  <span className="font-semibold text-text-h">{name}</span>
-                  {isNewPatient && <Badge>New patient</Badge>}
-                  <span className="text-[13px] text-text">
-                    {formatDateOnly(appointment.date)}
-                    {appointment.time ? ` · ${formatTime(appointment.time)}` : ''}
-                  </span>
-                  {isNewPatient ? (
-                    <span className="text-[13px] text-text">
-                      {age != null ? `${age} yrs` : 'Age unknown'}
-                      {appointment.mobile ? ` · ${appointment.mobile}` : ''}
-                    </span>
-                  ) : (
-                    linkedPatient && (
-                      <span className="text-[13px] text-text">{linkedPatient.patientNumber}</span>
-                    )
-                  )}
-                </div>
+              <div className="flex flex-1 flex-col gap-0.5">
+                <span className="font-semibold text-text-h">{name}</span>
+                {isNewPatient && <Badge>New patient</Badge>}
+                <span className="text-[13px] text-text">{details.join(' · ')}</span>
+              </div>
 
+              <div className="flex flex-col items-end gap-1.5">
                 <div className="flex items-center gap-1">
                   <Button variant="icon" aria-label={`Edit ${name}'s appointment`} onClick={() => onEdit(appointment)}>
                     <EditIcon />
@@ -183,9 +182,7 @@ export function AppointmentsScreen({
                     ×
                   </Button>
                 </div>
-              </div>
 
-              <div className="flex justify-end">
                 {isNewPatient ? (
                   <Button variant="secondary" onClick={() => onAddAsPatient(appointment)}>
                     Add as patient
