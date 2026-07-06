@@ -10,6 +10,10 @@ interface Props {
   children: (props: { close: () => void }) => ReactNode
   /** Which side of the trigger the panel hangs from. Defaults to 'left'. */
   align?: 'left' | 'right'
+  /** Extra classes for the trigger's positioned wrapper (e.g. 'aspect-square'
+   *  when the trigger needs to size itself off the wrapper rather than
+   *  itself — see SearchBox for why). */
+  wrapperClassName?: string
   /** Tailwind width class for the panel. Defaults to 'w-56'. */
   widthClassName?: string
   /** Extra classes for the panel (padding/gap are left to the caller since they vary). */
@@ -35,6 +39,7 @@ export function Dropdown({
   trigger,
   children,
   align = 'left',
+  wrapperClassName,
   widthClassName = 'w-56',
   panelClassName = 'gap-1 p-3',
   as: Panel = 'div',
@@ -59,7 +64,7 @@ export function Dropdown({
   const close = () => setOpen(false)
 
   return (
-    <div className="relative shrink-0">
+    <div className={cx('relative shrink-0', wrapperClassName)}>
       {trigger({ onClick: () => setOpen((o) => !o), open })}
 
       {open && (

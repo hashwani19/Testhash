@@ -30,9 +30,14 @@ interface Props {
  * to the input, opening a Dropdown popover with arbitrary filter/sort
  * controls. Omit `filter` for a plain search box.
  *
- * The icon is sized off the input itself (flex stretch + aspect-square)
- * rather than a second hard-coded height, so it can't drift out of
- * alignment with the input the way two independently-set heights can.
+ * The icon button is a fixed 44px (h-11 w-11) square, matched by giving the
+ * input an explicit h-11 too — both come from the same literal Tailwind
+ * class rather than trying to derive one from the other. (An earlier
+ * version used flex-stretch + aspect-square to size the button off the
+ * input dynamically; that combination has real Chromium layout bugs — it
+ * either overflowed the row or collapsed the button to a couple of pixels
+ * wide depending on exactly how it was wired up. A fixed size everyone
+ * calls the same class for is simpler and actually reliable.)
  */
 export function SearchBox({ value, onChange, placeholder, label = 'Search', filter }: Props) {
   const filterLabel = filter?.label ?? 'Filter and sort'
@@ -43,7 +48,7 @@ export function SearchBox({ value, onChange, placeholder, label = 'Search', filt
       <div className="flex gap-2">
         <TextInput
           type="search"
-          className="flex-1"
+          className="h-11 flex-1"
           aria-label={label}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -52,6 +57,7 @@ export function SearchBox({ value, onChange, placeholder, label = 'Search', filt
         {filter && (
           <Dropdown
             align="right"
+            wrapperClassName="h-11 w-11"
             widthClassName="w-60"
             panelClassName="gap-3 p-3.5"
             closeLabel={`Close ${filterLabel.toLowerCase()}`}
@@ -59,7 +65,7 @@ export function SearchBox({ value, onChange, placeholder, label = 'Search', filt
               <>
                 <Button
                   variant="unstyled"
-                  className="flex aspect-square h-full items-center justify-center rounded-[10px] border border-border bg-bg text-text-h cursor-pointer"
+                  className="absolute inset-0 flex items-center justify-center rounded-[10px] border border-border bg-bg text-text-h cursor-pointer"
                   aria-label={filterLabel}
                   onClick={onClick}
                 >
