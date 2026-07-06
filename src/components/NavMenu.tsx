@@ -40,7 +40,7 @@ export function NavMenu({ open, role, active, onNavigate, onSignOut, onClose }: 
   return (
     <>
       <button
-        className="fixed inset-0 z-40 cursor-default border-none bg-transparent"
+        className="fixed inset-0 z-40 cursor-default border-none bg-black/15 backdrop-blur-[2px]"
         aria-label="Close menu"
         onClick={onClose}
       />
