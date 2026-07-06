@@ -29,13 +29,18 @@ export function AppointmentForm({ patients, initial, onSubmit, onCancel }: Props
   const [nameInput, setNameInput] = useState(initial?.patientId ? '' : (initial?.name ?? ''))
 
   const [dob, setDob] = useState(initial?.dob ?? '')
-  const [manualAge, setManualAge] = useState(
-    initial?.manualAge != null ? String(initial.manualAge) : '',
-  )
+  // Displayed/editable age — prefilled from dob (or a prior override), but
+  // free to type over even while a dob is set (§ PatientForm, same pattern).
+  const [ageInput, setAgeInput] = useState(() => {
+    if (initial?.manualAge != null) return String(initial.manualAge)
+    if (initial?.dob) return String(computeAgeFromDob(initial.dob))
+    return ''
+  })
   const [mobile, setMobile] = useState(initial?.mobile ?? '')
   const [address, setAddress] = useState(initial?.address ?? '')
 
   const computedAge = dob ? computeAgeFromDob(dob) : undefined
+  const isAgeOverridden = computedAge != null && ageInput !== '' && Number(ageInput) !== computedAge
   const selectedPatient = patients.find((p) => p.id === selectedPatientId) ?? null
   const trimmedName = nameInput.trim()
 
@@ -55,16 +60,28 @@ export function AppointmentForm({ patients, initial, onSubmit, onCancel }: Props
     setSelectedPatientId('')
     setNameInput('')
     setDob('')
-    setManualAge('')
+    setAgeInput('')
     setMobile('')
     setAddress('')
   }
 
-  // Effective values — what would actually be submitted, e.g. dob overrides
-  // manualAge regardless of what's left sitting in the manualAge field.
+  const handleDobChange = (newDob: string) => {
+    setDob(newDob)
+    // A newly-picked dob recomputes the age, discarding any earlier override.
+    if (newDob) setAgeInput(String(computeAgeFromDob(newDob)))
+  }
+
+  // Effective values — what would actually be submitted.
   const effectiveTime = time || undefined
   const effectiveDob = dob || undefined
-  const effectiveManualAge = dob ? undefined : manualAge ? Number(manualAge) : undefined
+  const effectiveNumericAge = ageInput ? Number(ageInput) : undefined
+  // Only a genuine override of the dob-computed value is persisted as
+  // manualAge — otherwise leave it unset so the age keeps recomputing (and
+  // staying correct as time passes) instead of freezing (§ PatientForm).
+  const effectiveManualAge =
+    effectiveNumericAge != null && (computedAge == null || effectiveNumericAge !== computedAge)
+      ? effectiveNumericAge
+      : undefined
   const effectiveMobile = mobile || undefined
   const effectiveAddress = address || undefined
 
@@ -175,21 +192,22 @@ export function AppointmentForm({ patients, initial, onSubmit, onCancel }: Props
                     type="date"
                     value={dob}
                     max={todayDateOnly()}
-                    onChange={(e) => setDob(e.target.value)}
+                    onChange={(e) => handleDobChange(e.target.value)}
                   />
                 </label>
 
                 <label className={`${fieldLabel} min-w-[90px]`}>
-                  <span className={fieldLabelText}>Age {dob ? '(from DOB)' : ''}</span>
+                  <span className={fieldLabelText}>
+                    Age {dob ? (isAgeOverridden ? '(overridden)' : '(from DOB)') : ''}
+                  </span>
                   <TextInput
                     type="number"
                     inputMode="numeric"
                     min={0}
                     max={130}
                     step={1}
-                    value={dob ? (computedAge ?? '') : manualAge}
-                    onChange={(e) => setManualAge(e.target.value)}
-                    disabled={Boolean(dob)}
+                    value={ageInput}
+                    onChange={(e) => setAgeInput(e.target.value)}
                     placeholder="Age"
                   />
                 </label>

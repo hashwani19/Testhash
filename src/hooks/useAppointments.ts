@@ -72,7 +72,10 @@ export function useAppointments(patients: Patient[]) {
         patientId: input.patientId,
         name: input.newPatient?.name.trim(),
         dob: input.newPatient?.dob || undefined,
-        manualAge: input.newPatient?.dob ? undefined : input.newPatient?.manualAge,
+        // The form itself decides whether this is a genuine override (only
+        // sending a value when it diverges from the dob-computed age) — the
+        // hook just persists whatever it's given (§ getPatientAge).
+        manualAge: input.newPatient?.manualAge,
         mobile: input.newPatient?.mobile?.trim() || undefined,
         address: input.newPatient?.address?.trim() || undefined,
         createdAt: now,
@@ -121,7 +124,10 @@ export function useAppointments(patients: Patient[]) {
         patientId: input.patientId,
         name: input.newPatient?.name.trim(),
         dob: input.newPatient?.dob || undefined,
-        manualAge: input.newPatient?.dob ? undefined : input.newPatient?.manualAge,
+        // The form itself decides whether this is a genuine override (only
+        // sending a value when it diverges from the dob-computed age) — the
+        // hook just persists whatever it's given (§ getPatientAge).
+        manualAge: input.newPatient?.manualAge,
         mobile: input.newPatient?.mobile?.trim() || undefined,
         address: input.newPatient?.address?.trim() || undefined,
         updatedAt: Date.now(),

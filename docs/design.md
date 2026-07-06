@@ -803,17 +803,19 @@ UI at all — only the data-fetching layer.
       whatever's scrollable behind the viewer (the patient list/history
       underneath). The viewer locks `document.body`'s scroll for as long as
       it's mounted and restores it on close.
-- **`PatientForm`'s Age field is never disabled**, even when a DOB is set —
-  it's prefilled with the DOB-computed age but staff can type over it. The
-  field only recomputes (discarding whatever was typed) when the DOB itself
-  changes to a new value; picking the same DOB again wouldn't touch it,
-  since `onChange` only fires on an actual change. On submit, the typed
-  value is only sent as `manualAge` if it actually diverges from the
-  DOB-computed one at that moment — an untouched or since-reset field is
-  sent as `undefined` instead, so the age keeps recomputing (and staying
-  correct as birthdays pass) rather than freezing at whatever it was when
-  last saved (§5.3). The label reflects which state it's in: "(from DOB)"
-  or "(overridden)".
+- **`PatientForm`'s (and `AppointmentForm`'s new-patient) Age field is never
+  disabled**, even when a DOB is set — it's prefilled with the DOB-computed
+  age but staff can type over it. The field only recomputes (discarding
+  whatever was typed) when the DOB itself changes to a new value; picking
+  the same DOB again wouldn't touch it, since `onChange` only fires on an
+  actual change. On submit, the typed value is only sent as `manualAge` if
+  it actually diverges from the DOB-computed one at that moment — an
+  untouched or since-reset field is sent as `undefined` instead, so the age
+  keeps recomputing (and staying correct as birthdays pass) rather than
+  freezing at whatever it was when last saved (§5.3). The label reflects
+  which state it's in: "(from DOB)" or "(overridden)". Both forms implement
+  this identically but independently — there's no shared field component
+  for it (yet).
 - The visit form captures `visit_at` as a date **and** time (not just a
   date picker) — default it to "now" on create, but let staff adjust it
   (e.g. entering a visit that happened earlier and is only now being typed
@@ -1139,9 +1141,10 @@ this is additive on top of that shell, not a rewrite of it.
   - If nothing matches (checked live, on every keystroke past the 3-character
     minimum — not gated behind a button), the **new-patient** fields appear
     automatically in the same spot: a "New patient" `Badge` (§7), date of
-    birth (age computed from it, same as the patient form, §8.3) or a
-    manually entered age, **mobile number** (India format, §5.2), and
-    address. The typed text becomes the name as-is — no confirmation step.
+    birth (age computed from it but overridable, same as the patient form,
+    §8.3/§7) or a manually entered age, **mobile number** (India format,
+    §5.2), and address. The typed text becomes the name as-is — no
+    confirmation step.
     None of these fields touch the `patients` table yet — they live on the
     appointment row itself until "Add patient" (§8.11 below) runs.
   - If the user keeps typing and the text starts matching someone after

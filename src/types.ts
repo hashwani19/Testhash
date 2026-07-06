@@ -57,7 +57,11 @@ export interface Appointment {
   patientId?: string
   /** Prospective-patient booking details — meaningful only while `patientId` is unset. */
   name?: string
+  /** Drives the default computed age; changing it recomputes the age and
+   *  clears any override (§ Patient.dob). */
   dob?: string
+  /** Absent unless the computed-from-dob age was explicitly overridden (or
+   *  there's no dob at all, in which case this is the only age there is). */
   manualAge?: number
   mobile?: string
   address?: string
