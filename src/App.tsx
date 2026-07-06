@@ -76,11 +76,6 @@ function AppShell() {
       <InstallBanner />
 
       <AppHeader
-        subtitle={
-          patients.length === 0
-            ? 'No patients yet'
-            : `${patients.length} patient${patients.length === 1 ? '' : 's'}`
-        }
         fullName={user.fullName}
         role={user.role}
         activeNavTarget={VIEW_TO_NAV_TARGET[view] ?? 'patients'}

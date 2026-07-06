@@ -5,7 +5,6 @@ import { ProfileMenu } from './ProfileMenu'
 import { pageTitle } from '../styles'
 
 interface Props {
-  subtitle: string
   fullName: string
   role: Role
   activeNavTarget: NavTarget
@@ -13,7 +12,7 @@ interface Props {
   onSignOut: () => void
 }
 
-export function AppHeader({ subtitle, fullName, role, activeNavTarget, onNavigate, onSignOut }: Props) {
+export function AppHeader({ fullName, role, activeNavTarget, onNavigate, onSignOut }: Props) {
   return (
     <header className="px-5 pt-7 pb-2">
       <div className="flex items-center justify-between gap-3">
@@ -25,7 +24,6 @@ export function AppHeader({ subtitle, fullName, role, activeNavTarget, onNavigat
 
         <ProfileMenu fullName={fullName} role={role} onSignOut={onSignOut} />
       </div>
-      <p className="mt-1 text-sm text-text">{subtitle}</p>
     </header>
   )
 }

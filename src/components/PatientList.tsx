@@ -6,7 +6,9 @@ import type { PatientSort } from '../utils/patientQuery'
 import { Button } from './common/Button'
 import { SearchBox } from './common/SearchBox'
 import { Select } from './common/Select'
-import { fieldLabel, fieldLabelText } from '../styles'
+import { ListView } from './common/ListView'
+import { cardBase } from './common/Card'
+import { cx, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   patients: Patient[]
@@ -60,40 +62,36 @@ export function PatientList({ patients, groups, onSelect }: Props) {
         }}
       />
 
-      {visible.length === 0 ? (
-        <p className="py-8 text-center text-sm text-text">
-          {patients.length === 0 ? 'No patients yet. Add the first one.' : 'No patients match.'}
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {visible.map((patient) => {
-            const age = getPatientAge(patient)
-            const group = groupName(patient.groupId)
-            return (
-              <li key={patient.id}>
-                <Button
-                  variant="unstyled"
-                  className="flex w-full flex-col gap-1 rounded-xl border border-border bg-surface px-4 py-3.5 text-left cursor-pointer"
-                  onClick={() => onSelect(patient.id)}
-                >
-                  <span className="font-semibold text-text-h">
-                    {patient.name}
-                    {group && (
-                      <span className="ml-2 rounded-full border border-border bg-bg px-2 py-0.5 text-[11px] font-medium text-text">
-                        {group}
-                      </span>
-                    )}
+      <ListView
+        items={visible}
+        getKey={(patient) => patient.id}
+        itemLabel="patient"
+        emptyMessage={patients.length === 0 ? 'No patients yet. Add the first one.' : 'No patients match.'}
+        renderItem={(patient) => {
+          const age = getPatientAge(patient)
+          const group = groupName(patient.groupId)
+          return (
+            <Button
+              variant="unstyled"
+              className={cx(cardBase, 'flex w-full flex-col gap-1 text-left cursor-pointer')}
+              onClick={() => onSelect(patient.id)}
+            >
+              <span className="font-semibold text-text-h">
+                {patient.name}
+                {group && (
+                  <span className="ml-2 rounded-full border border-border bg-bg px-2 py-0.5 text-[11px] font-medium text-text">
+                    {group}
                   </span>
-                  <span className="text-[13px] capitalize text-text">
-                    {patient.patientNumber} · {age != null ? `${age} yrs` : 'Age unknown'} ·{' '}
-                    {patient.gender === 'unspecified' ? 'Gender unspecified' : patient.gender}
-                  </span>
-                </Button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+                )}
+              </span>
+              <span className="text-[13px] capitalize text-text">
+                {patient.patientNumber} · {age != null ? `${age} yrs` : 'Age unknown'} ·{' '}
+                {patient.gender === 'unspecified' ? 'Gender unspecified' : patient.gender}
+              </span>
+            </Button>
+          )
+        }}
+      />
     </div>
   )
 }

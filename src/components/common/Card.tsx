@@ -1,13 +1,16 @@
 import type { ElementType, HTMLAttributes, ReactNode } from 'react'
 import { cx } from '../../styles'
 
+/** The visual look every card-style surface shares — exported so a
+ *  clickable row (e.g. a patient list item, rendered as a Button rather
+ *  than a div) can look like a Card without nesting one inside a button. */
+export const cardBase = 'rounded-xl border border-border bg-surface p-3.5 shadow-card'
+
 interface CardProps extends HTMLAttributes<HTMLDivElement> {}
 
 /** The one place every card-style surface in the app renders through. */
 export function Card({ className, ...rest }: CardProps) {
-  return (
-    <div className={cx('rounded-xl border border-border bg-surface p-3.5 shadow-card', className)} {...rest} />
-  )
+  return <div className={cx(cardBase, className)} {...rest} />
 }
 
 interface CardHeaderProps {
