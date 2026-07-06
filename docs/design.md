@@ -781,6 +781,17 @@ UI at all — only the data-fetching layer.
     can be scrolled through — a scroll-snap strip for native touch/wheel
     scrolling, prev/next buttons and arrow-key navigation that stay in sync
     with whatever was scrolled to, and an "n / total" counter.
+    - The scroll-snap track fills almost the entire dialog, so tapping it
+      (image or backdrop within it) closes the viewer the same as tapping
+      the padded edge does — it doesn't swallow the click, since doing so
+      would leave next to no "outside" area left to tap. The prev/next/close
+      buttons stop their own click's propagation so they don't also trigger
+      this.
+    - The track only scrolls horizontally, so a vertical swipe over it has
+      nowhere to go and — without an explicit lock — chains through to
+      whatever's scrollable behind the viewer (the patient list/history
+      underneath). The viewer locks `document.body`'s scroll for as long as
+      it's mounted and restores it on close.
 - The visit form captures `visit_at` as a date **and** time (not just a
   date picker) — default it to "now" on create, but let staff adjust it
   (e.g. entering a visit that happened earlier and is only now being typed

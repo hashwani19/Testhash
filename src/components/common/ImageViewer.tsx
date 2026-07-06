@@ -42,6 +42,18 @@ export function ImageViewer({ images, initialIndex, onClose }: Props) {
   }, [])
 
   useEffect(() => {
+    // The track only scrolls horizontally (one image per "page"), so without
+    // this a vertical swipe over the viewer has nowhere to go and chains
+    // through to whatever's scrollable behind it — the patient list/history
+    // underneath. Lock the page in place for as long as the viewer is open.
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
+
+  useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
       else if (e.key === 'ArrowLeft') goTo(index - 1)
@@ -72,8 +84,13 @@ export function ImageViewer({ images, initialIndex, onClose }: Props) {
       <div
         ref={trackRef}
         onScroll={handleScroll}
-        onClick={(e) => e.stopPropagation()}
-        className="flex h-full w-full snap-x snap-mandatory overflow-x-auto"
+        // No stopPropagation here: the track fills almost the entire dialog,
+        // so swallowing its clicks would leave next to no "outside" area to
+        // tap to close — tapping the track (image or backdrop within it)
+        // closes the viewer same as tapping the padded edge. The prev/next/
+        // close controls below stop their own click's propagation so they
+        // don't also trigger this.
+        className="flex h-full w-full touch-pan-x snap-x snap-mandatory overflow-x-auto"
       >
         {images.map((img, i) => (
           <div key={i} className="flex h-full w-full shrink-0 snap-center items-center justify-center">
