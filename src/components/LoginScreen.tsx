@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { Button } from './Button'
-import { TextInput } from './TextInput'
+import { Button } from './common/Button'
+import { TextInput } from './common/TextInput'
 import { card, fieldLabel, fieldLabelText, pageTitle } from '../styles'
 
 export function LoginScreen() {

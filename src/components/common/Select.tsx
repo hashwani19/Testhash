@@ -1,6 +1,6 @@
 import type { SelectHTMLAttributes } from 'react'
 import { fieldBase } from './fieldBase'
-import { cx } from '../styles'
+import { cx } from '../../styles'
 
 interface Props extends SelectHTMLAttributes<HTMLSelectElement> {}
 

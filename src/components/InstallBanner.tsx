@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
-import { Button } from './Button'
+import { Button } from './common/Button'
 
 export function InstallBanner() {
   const { installed, canPromptInstall, promptInstall, showIosInstructions } =

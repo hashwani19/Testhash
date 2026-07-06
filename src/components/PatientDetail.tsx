@@ -3,7 +3,7 @@ import type { EyeVisit, Patient, PatientGroup } from '../types'
 import { getPatientAge } from '../utils/age'
 import { EyeRecordHistory } from './EyeRecordHistory'
 import { ConfirmModal } from './ConfirmModal'
-import { Button } from './Button'
+import { Button } from './common/Button'
 import { card } from '../styles'
 
 interface Props {

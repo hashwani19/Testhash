@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Button } from './Button'
-import { TextInput } from './TextInput'
+import { Button } from './common/Button'
+import { TextInput } from './common/TextInput'
 import { card } from '../styles'
 
 const CONFIRM_WORD = 'confirm'

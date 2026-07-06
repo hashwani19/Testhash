@@ -3,9 +3,9 @@ import type { Patient, PatientGroup } from '../types'
 import { getPatientAge } from '../utils/age'
 import { MIN_SEARCH_LENGTH, queryPatients } from '../utils/patientQuery'
 import type { PatientSort } from '../utils/patientQuery'
-import { Button } from './Button'
-import { TextInput } from './TextInput'
-import { Select } from './Select'
+import { Button } from './common/Button'
+import { TextInput } from './common/TextInput'
+import { Select } from './common/Select'
 import { fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {

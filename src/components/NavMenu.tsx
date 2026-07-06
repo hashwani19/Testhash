@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { Role } from '../types'
-import { Button } from './Button'
+import { Button } from './common/Button'
 import { cx } from '../styles'
 
 export type NavTarget = 'patients' | 'groups' | 'activity' | 'appointments'

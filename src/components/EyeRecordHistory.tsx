@@ -1,5 +1,5 @@
 import type { Eye, EyeRefraction, EyeVisit, VisionType } from '../types'
-import { Button } from './Button'
+import { Button } from './common/Button'
 import { hasRefractionData } from '../utils/eyeVisit'
 
 interface Props {

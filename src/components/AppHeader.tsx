@@ -3,7 +3,7 @@ import type { Role } from '../types'
 import { NavMenu } from './NavMenu'
 import type { NavTarget } from './NavMenu'
 import { ProfileMenu } from './ProfileMenu'
-import { Button } from './Button'
+import { Button } from './common/Button'
 import { pageTitle } from '../styles'
 
 interface Props {

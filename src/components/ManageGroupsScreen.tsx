@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Patient, PatientGroup } from '../types'
-import { Button } from './Button'
-import { TextInput } from './TextInput'
+import { Button } from './common/Button'
+import { TextInput } from './common/TextInput'
 import { card, screenHeading } from '../styles'
 
 interface Props {

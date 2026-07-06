@@ -3,9 +3,9 @@ import type { FormEvent } from 'react'
 import type { EyeVisitInput } from '../hooks/useEyeVisits'
 import type { Eye, EyeRefraction, EyeVisit, RefractionGrid, VisionType } from '../types'
 import { isEmptyVisit } from '../utils/eyeVisit'
-import { Button } from './Button'
-import { TextInput } from './TextInput'
-import { Textarea } from './Textarea'
+import { Button } from './common/Button'
+import { TextInput } from './common/TextInput'
+import { Textarea } from './common/Textarea'
 import { card, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {

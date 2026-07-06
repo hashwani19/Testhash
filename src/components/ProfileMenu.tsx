@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Role } from '../types'
-import { Button } from './Button'
+import { Button } from './common/Button'
 
 interface Props {
   fullName: string

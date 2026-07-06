@@ -16,7 +16,7 @@ import { ConfirmModal } from './components/ConfirmModal'
 import { LoginScreen } from './components/LoginScreen'
 import { OfflineBanner } from './components/OfflineBanner'
 import { InstallBanner } from './components/InstallBanner'
-import { Button } from './components/Button'
+import { Button } from './components/common/Button'
 import type { EyeVisit } from './types'
 
 type View =

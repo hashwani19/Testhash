@@ -1,6 +1,6 @@
 import type { TextareaHTMLAttributes } from 'react'
 import { fieldBase } from './fieldBase'
-import { cx } from '../styles'
+import { cx } from '../../styles'
 
 interface Props extends TextareaHTMLAttributes<HTMLTextAreaElement> {}
 
