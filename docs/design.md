@@ -972,15 +972,23 @@ this is additive on top of that shell, not a rewrite of it.
 
 - **Booking** (`AppointmentForm`): a **date** (today or later — the form
   rejects a past date client-side and the API would reject one server-side
-  too, §5.2, §6) and a **time**, plus either:
-  - **Existing patient** — a lookup by name or patient number (same ≥3
-    character minimum as the patient list's search, §5.2), picking one
-    patient from the matches; or
-  - **New patient** — just a name at minimum, plus optional date of birth
-    (age computed from it, same as the patient form, §8.3) or a manually
-    entered age, **mobile number** (India format, §5.2), and address. None
-    of these fields touch the `patients` table yet — they live on the
-    appointment row itself until "Add as patient" (below) runs.
+  too, §5.2, §6) and a **time**, plus a patient — resolved by lookup, not
+  chosen from an explicit "existing vs. new" toggle:
+  - The form starts on a single **name-or-number search** (same ≥3 character
+    minimum as the patient list's search, §5.2). Picking a match from the
+    results books against that **existing** patient.
+  - If no match is the right person (or there are no matches at all), an
+    **"Add '&lt;typed text&gt;' as a new patient"** button appears as soon as
+    something is typed — clicking it carries the typed text over as the
+    name and reveals the **new-patient** fields: date of birth (age computed
+    from it, same as the patient form, §8.3) or a manually entered age,
+    **mobile number** (India format, §5.2), and address. None of these
+    fields touch the `patients` table yet — they live on the appointment row
+    itself until "Add as patient" (below) runs.
+  - Whichever path was taken, a "Change" control clears it and returns to
+    the search box — there's no separate mode switch to reason about,
+    booking is always "search first," and "new patient" is what happens
+    when that search comes up empty for the person in front of you.
 - **List** (`AppointmentsScreen`): built on the same `ListView`/`SearchBox`
   components as the patient list (§8.3) — a count line, search box with a
   filter/sort popover, and pagination once there are enough rows. Each row

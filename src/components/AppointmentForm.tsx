@@ -15,12 +15,14 @@ interface Props {
   onCancel: () => void
 }
 
-type PatientMode = 'existing' | 'new'
+/** 'search' — looking a patient up; 'existing'/'new' — resolved by that
+ *  lookup, not chosen directly (there's no existing/new toggle, §see below). */
+type PatientMode = 'search' | 'existing' | 'new'
 
 export function AppointmentForm({ patients, onSubmit, onCancel }: Props) {
   const [date, setDate] = useState(todayDateOnly())
   const [time, setTime] = useState('')
-  const [mode, setMode] = useState<PatientMode>('existing')
+  const [mode, setMode] = useState<PatientMode>('search')
 
   const [patientSearch, setPatientSearch] = useState('')
   const [selectedPatientId, setSelectedPatientId] = useState('')
@@ -42,10 +44,20 @@ export function AppointmentForm({ patients, onSubmit, onCancel }: Props) {
       .slice(0, 8)
   }, [patients, patientSearch])
 
+  const backToSearch = () => {
+    setMode('search')
+    setSelectedPatientId('')
+    setName('')
+    setDob('')
+    setManualAge('')
+    setMobile('')
+    setAddress('')
+  }
+
   const canSubmit =
     date >= todayDateOnly() &&
     time !== '' &&
-    (mode === 'existing' ? selectedPatientId !== '' : name.trim() !== '')
+    (mode === 'existing' ? selectedPatientId !== '' : mode === 'new' ? name.trim() !== '' : false)
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -86,61 +98,27 @@ export function AppointmentForm({ patients, onSubmit, onCancel }: Props) {
         </label>
       </div>
 
-      <div className="flex gap-2">
-        <Button
-          variant={mode === 'existing' ? 'primary' : 'secondary'}
-          onClick={() => setMode('existing')}
-        >
-          Existing patient
-        </Button>
-        <Button variant={mode === 'new' ? 'primary' : 'secondary'} onClick={() => setMode('new')}>
-          New patient
-        </Button>
-      </div>
+      {mode === 'existing' && selectedPatient && (
+        <div className="flex items-center justify-between rounded-xl border border-border bg-bg px-3 py-2.5">
+          <div>
+            <p className="font-semibold text-text-h">{selectedPatient.name}</p>
+            <p className="text-[13px] text-text">{selectedPatient.patientNumber}</p>
+          </div>
+          <Button variant="link" onClick={backToSearch}>
+            Change
+          </Button>
+        </div>
+      )}
 
-      {mode === 'existing' ? (
-        selectedPatient ? (
-          <div className="flex items-center justify-between rounded-xl border border-border bg-bg px-3 py-2.5">
-            <div>
-              <p className="font-semibold text-text-h">{selectedPatient.name}</p>
-              <p className="text-[13px] text-text">{selectedPatient.patientNumber}</p>
-            </div>
-            <Button variant="link" onClick={() => setSelectedPatientId('')}>
+      {mode === 'new' && (
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] font-medium text-text-h">New patient</span>
+            <Button variant="link" onClick={backToSearch}>
               Change
             </Button>
           </div>
-        ) : (
-          <label className={fieldLabel}>
-            <span className={fieldLabelText}>Find patient (name or number)</span>
-            <TextInput
-              type="search"
-              value={patientSearch}
-              onChange={(e) => setPatientSearch(e.target.value)}
-              placeholder={`Name or number (${MIN_SEARCH_LENGTH}+ chars)`}
-            />
-            {matches.length > 0 && (
-              <ul className="flex flex-col gap-1.5 pt-1">
-                {matches.map((p) => (
-                  <li key={p.id}>
-                    <Button
-                      variant="unstyled"
-                      className="flex w-full flex-col rounded-lg border border-border bg-bg px-3 py-2 text-left cursor-pointer"
-                      onClick={() => {
-                        setSelectedPatientId(p.id)
-                        setPatientSearch('')
-                      }}
-                    >
-                      <span className="font-semibold text-text-h">{p.name}</span>
-                      <span className="text-[13px] text-text">{p.patientNumber}</span>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </label>
-        )
-      ) : (
-        <>
+
           <label className={fieldLabel}>
             <span className={fieldLabelText}>Name</span>
             <TextInput
@@ -202,6 +180,53 @@ export function AppointmentForm({ patients, onSubmit, onCancel }: Props) {
             />
           </label>
         </>
+      )}
+
+      {mode === 'search' && (
+        <label className={fieldLabel}>
+          <span className={fieldLabelText}>Patient (name or number)</span>
+          <TextInput
+            type="search"
+            value={patientSearch}
+            onChange={(e) => setPatientSearch(e.target.value)}
+            placeholder={`Name or number (${MIN_SEARCH_LENGTH}+ chars)`}
+          />
+
+          {matches.length > 0 && (
+            <ul className="flex flex-col gap-1.5 pt-1">
+              {matches.map((p) => (
+                <li key={p.id}>
+                  <Button
+                    variant="unstyled"
+                    className="flex w-full flex-col rounded-lg border border-border bg-bg px-3 py-2 text-left cursor-pointer"
+                    onClick={() => {
+                      setMode('existing')
+                      setSelectedPatientId(p.id)
+                      setPatientSearch('')
+                    }}
+                  >
+                    <span className="font-semibold text-text-h">{p.name}</span>
+                    <span className="text-[13px] text-text">{p.patientNumber}</span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {patientSearch.trim() !== '' && (
+            <Button
+              variant="secondary"
+              className="mt-1 self-start"
+              onClick={() => {
+                setMode('new')
+                setName(patientSearch.trim())
+                setPatientSearch('')
+              }}
+            >
+              Add &quot;{patientSearch.trim()}&quot; as a new patient
+            </Button>
+          )}
+        </label>
       )}
 
       <div className="flex justify-end gap-2.5">
