@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { EyeVisit, Patient, PatientGroup } from '../types'
 import { getPatientAge } from '../utils/age'
 import { EyeRecordHistory } from './EyeRecordHistory'
-import { ConfirmDeleteModal } from './ConfirmDeleteModal'
+import { ConfirmModal } from './ConfirmModal'
 import { btnDanger, btnLink, btnPrimary, btnSecondary, card } from '../styles'
 
 interface Props {
@@ -98,7 +98,7 @@ export function PatientDetail({
       />
 
       {confirmingDelete && (
-        <ConfirmDeleteModal
+        <ConfirmModal
           title="Delete this patient?"
           warning={
             visits.length === 0
@@ -107,6 +107,9 @@ export function PatientDetail({
                   visits.length
                 } eye treatment history record${visits.length === 1 ? '' : 's'}. This cannot be undone.`
           }
+          mode="typeConfirm"
+          confirmLabel="Delete"
+          tone="danger"
           onConfirm={() => {
             setConfirmingDelete(false)
             onDelete()

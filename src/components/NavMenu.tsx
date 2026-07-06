@@ -15,18 +15,23 @@ interface Props {
   role: Role
   active: NavTarget
   onNavigate: (target: NavTarget) => void
+  onSignOut: () => void
   onClose: () => void
 }
 
-export function NavMenu({ open, role, active, onNavigate, onClose }: Props) {
+export function NavMenu({ open, role, active, onNavigate, onSignOut, onClose }: Props) {
   if (!open) return null
 
   const items = NAV_ITEMS.filter((item) => !item.adminOnly || role === 'admin')
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <nav className="flex w-64 max-w-[80%] flex-col gap-1 overflow-y-auto bg-surface p-4 shadow-card">
-        <h2 className="mb-2 px-2 text-lg font-bold text-text-h">Menu</h2>
+    <>
+      <button
+        className="fixed inset-0 z-40 cursor-default border-none bg-transparent"
+        aria-label="Close menu"
+        onClick={onClose}
+      />
+      <nav className="absolute left-0 top-full z-50 mt-2 flex max-h-[70vh] w-56 flex-col gap-1 overflow-y-auto rounded-xl border border-border bg-surface p-3 shadow-card">
         {items.map((item) => (
           <button
             key={item.target}
@@ -42,8 +47,16 @@ export function NavMenu({ open, role, active, onNavigate, onClose }: Props) {
             {item.label}
           </button>
         ))}
+        <button
+          className="mt-1 cursor-pointer rounded-lg border-t border-border bg-transparent px-3 pb-2.5 pt-3 text-left text-[15px] font-medium text-text-h"
+          onClick={() => {
+            onClose()
+            onSignOut()
+          }}
+        >
+          Sign out
+        </button>
       </nav>
-      <button className="flex-1 cursor-default border-none bg-black/40" aria-label="Close menu" onClick={onClose} />
-    </div>
+    </>
   )
 }
