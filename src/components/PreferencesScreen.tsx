@@ -3,9 +3,9 @@ import { usePreferences } from '../hooks/usePreferences'
 import { useGlobalSettings } from '../hooks/useGlobalSettings'
 import { useAuth } from '../hooks/useAuth'
 import { DEFAULT_LIST_PAGE_SIZE } from './common/ListView'
-import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
 import { Select } from './common/Select'
+import { Breadcrumb } from './common/Breadcrumb'
 import { card, screenHeading, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
@@ -25,9 +25,7 @@ export function PreferencesScreen({ onBack }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      <Button variant="link" onClick={onBack}>
-        ‹ All patients
-      </Button>
+      <Breadcrumb onClick={onBack} />
 
       <h2 className={screenHeading}>Preferences</h2>
 

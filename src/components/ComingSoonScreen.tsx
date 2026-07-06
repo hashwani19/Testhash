@@ -1,4 +1,4 @@
-import { Button } from './common/Button'
+import { Breadcrumb } from './common/Breadcrumb'
 import { screenHeading } from '../styles'
 
 interface Props {
@@ -10,9 +10,7 @@ interface Props {
 export function ComingSoonScreen({ title, description, onBack }: Props) {
   return (
     <div className="flex flex-col gap-3.5">
-      <Button variant="link" onClick={onBack}>
-        ‹ All patients
-      </Button>
+      <Breadcrumb onClick={onBack} />
       <h2 className={screenHeading}>{title}</h2>
       <p className="py-8 text-center text-sm text-text">{description}</p>
     </div>

@@ -4,6 +4,7 @@ import type { Patient, PatientGroup } from '../types'
 import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
 import { cardBase } from './common/Card'
+import { Breadcrumb } from './common/Breadcrumb'
 import { card, cx, screenHeading } from '../styles'
 
 interface Props {
@@ -43,9 +44,7 @@ export function ManageGroupsScreen({ groups, patients, onAdd, onRename, onDelete
 
   return (
     <div className="flex flex-col gap-3.5">
-      <Button variant="link" onClick={onBack}>
-        ‹ All patients
-      </Button>
+      <Breadcrumb onClick={onBack} />
 
       <h2 className={screenHeading}>Manage Patient Groups</h2>
       <p className="text-sm text-text">

@@ -792,6 +792,15 @@ UI at all — only the data-fetching layer.
   flag, used both in the appointments list and live in the booking form
   itself once a typed name matches nobody (§8.11), rather than a one-off
   inline `<span>` in each place.
+- A new shared **`Breadcrumb`** component is the one place every "back up a
+  level" control renders through (Patient Detail, Manage Groups,
+  Preferences, the Coming Soon placeholders) — previously each screen
+  rendered its own `Button variant="link"` with the same "‹ All patients"
+  text, styled as a plain small underlined link. `Breadcrumb` is
+  deliberately larger, semibold, and in the accent color instead — it's the
+  primary way back to the list from a full-screen detail view, not an
+  incidental inline link, so it should read as a real navigation control at
+  a glance rather than blend into body text.
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 

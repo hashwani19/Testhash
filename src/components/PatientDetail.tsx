@@ -5,6 +5,7 @@ import { EyeRecordHistory } from './EyeRecordHistory'
 import { ConfirmModal } from './ConfirmModal'
 import { Button } from './common/Button'
 import { Card, CardHeader } from './common/Card'
+import { Breadcrumb } from './common/Breadcrumb'
 import { EditIcon } from './common/icons'
 
 interface Props {
@@ -40,9 +41,7 @@ export function PatientDetail({
 
   return (
     <div className="flex flex-col gap-4">
-      <Button variant="link" onClick={onBack}>
-        ‹ All patients
-      </Button>
+      <Breadcrumb onClick={onBack} />
 
       <Card className="flex flex-col gap-3.5">
         <CardHeader
