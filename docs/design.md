@@ -509,15 +509,30 @@ that returns a list has a fixed **default sort order** (noted per row below);
 callers can override with an explicit `?sort=` param later if ever needed,
 but the unsorted default is never "whatever order the DB happened to return."
 
+Every list endpoint that can grow unbounded (patients, visits, audit log,
+staff accounts) is paginated with `page` (0-indexed, default `0`) and
+`limit` (default/max TBD, e.g. `20`) query params, and returns
+`{ items: [...], totalCount: number }` rather than a bare array —
+`totalCount` is the count across *all* pages, not just the returned page,
+so the client can render "N things" and compute total page count without
+an extra request. (`GET /patient-groups` is deliberately excluded — it's a
+small, admin-managed selector list, not something expected to need
+paging.) This is a deliberate, load-bearing contract: the client's
+`ListView` component already has a server-paged mode built around exactly
+this shape (`items` = current page, `totalCount` = grand total, `page`/
+`onPageChange` round-tripped to the API) so that swapping a hook's
+internals from `localStorage` to `fetch` doesn't require changing the list
+UI at all — only the data-fetching layer.
+
 | Method & path | Role required | Purpose | Default sort |
 |---|---|---|---|
 | `POST /auth/login` | — | Authenticate, set session cookie | — |
 | `POST /auth/logout` | any | Invalidate session | — |
 | `GET /auth/me` | any | Current user + role | — |
-| `GET /users` | admin | List staff accounts | `full_name` asc |
+| `GET /users?page=&limit=` | admin | List staff accounts | `full_name` asc |
 | `POST /users` | admin | Create staff account | — |
 | `PATCH /users/:id` | admin | Update role/active status | — |
-| `GET /patients?search=&group_id=&sort=` | any | List/search patients. `search` matches **name** (substring, case-insensitive) **or** `patient_number` (substring, so a partial number or date prefix like `P-20260705` also works) — ≥3 characters or omitted, shorter values → `400` (§5.2). Optional `group_id` filters to one group. Optional `sort=group` overrides the default (group name asc, then `created_at` desc within a group) — omit for the plain default below. Summary rows only (`patient_number`/name/age/gender/group); full clinical detail lives on the visit endpoints below | `created_at` **desc** (newest-registered first) |
+| `GET /patients?search=&group_id=&sort=&page=&limit=` | any | List/search patients. `search` matches **name** (substring, case-insensitive) **or** `patient_number` (substring, so a partial number or date prefix like `P-20260705` also works) — ≥3 characters or omitted, shorter values → `400` (§5.2). Optional `group_id` filters to one group. Optional `sort=group` overrides the default (group name asc, then `created_at` desc within a group) — omit for the plain default below. Summary rows only (`patient_number`/name/age/gender/group); full clinical detail lives on the visit endpoints below | `created_at` **desc** (newest-registered first) |
 | `POST /patients` | admin, doctor, front_desk | Create patient (demographics only, optionally including `group_id` — request body may not include clinical fields). Response includes the generated `patient_number` | — |
 | `GET /patients/:id` | any | Patient detail (demographics, including group; visit history fetched separately via `/patients/:id/visits`) | — |
 | `GET /patients/by-number/:patient_number` | any | **Exact-match** convenience alias for the common case of already having the full ID (e.g. a barcode/QR scan) — skips the substring search. Resolves to the same detail response as `GET /patients/:id` | — |
@@ -527,7 +542,7 @@ but the unsorted default is never "whatever order the DB happened to return."
 | `POST /patient-groups` | admin | Create a group | — |
 | `PATCH /patient-groups/:id` | admin | Rename a group | — |
 | `DELETE /patient-groups/:id` | admin | Soft-delete a group (existing patients keep their `group_id`/name for history; the group drops out of future assignment/filter lists) | — |
-| `GET /patients/:id/visits` | admin, doctor, front_desk | Visit history for a patient | `visit_at` **desc** (most recent visit first) |
+| `GET /patients/:id/visits?page=&limit=` | admin, doctor, front_desk | Visit history for a patient | `visit_at` **desc** (most recent visit first) |
 | `POST /patients/:id/visits` | admin, doctor, front_desk | Create a visit — one payload containing a `visit_at` datetime, up to 4 refraction rows (distance/reading × left/right), diagnosis, treatment plan, and lenses | — |
 | `GET /visits/:id` | admin, doctor, front_desk | Single visit detail | — |
 | `PATCH /visits/:id` | admin, doctor, front_desk | Update a visit | — |
@@ -536,7 +551,7 @@ but the unsorted default is never "whatever order the DB happened to return."
 | `GET /attachments/:id` | admin, doctor | Fetch (redirect to a short-lived signed R2 URL) | — |
 | `DELETE /attachments/:id` | admin | Remove attachment | — |
 | `GET /patients/:id/export` | admin | Full patient data export (JSON/PDF) — data portability | — |
-| `GET /audit-log?entity_type=&entity_id=` | admin | Audit trail lookup | `created_at` **desc** (most recent activity first) |
+| `GET /audit-log?entity_type=&entity_id=&page=&limit=` | admin | Audit trail lookup | `created_at` **desc** (most recent activity first) |
 
 ## 7. Client changes (high level)
 
@@ -571,6 +586,14 @@ but the unsorted default is never "whatever order the DB happened to return."
 - A new admin-only Manage Groups screen (§8.8), plus a group filter/sort
   control and a group selector added to the existing patient list and
   patient form.
+- Lists render through a shared `ListView` component with two modes: today
+  (local-storage) it's handed the entire filtered array and pages through
+  it client-side; once a screen's data comes from the real API it's handed
+  only the current page's `items` plus the API's `totalCount`, and owns the
+  `page` number itself, re-fetching on `onPageChange` (§6's
+  `page`/`limit`/`totalCount` contract exists specifically so this swap
+  doesn't require changing `ListView` or any screen's markup — only the
+  data-fetching hook underneath it).
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 
