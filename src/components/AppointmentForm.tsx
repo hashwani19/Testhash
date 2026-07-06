@@ -80,22 +80,53 @@ export function AppointmentForm({ patients, onSubmit, onCancel }: Props) {
 
   return (
     <form className={`${card} flex flex-col gap-3.5`} onSubmit={submit}>
-      <div className="flex flex-wrap gap-2.5">
-        <label className={`${fieldLabel} min-w-[130px]`}>
-          <span className={fieldLabelText}>Date</span>
+      {mode === 'search' && (
+        <label className={fieldLabel}>
+          <span className={fieldLabelText}>Patient (name or number)</span>
           <TextInput
-            type="date"
-            value={date}
-            min={todayDateOnly()}
-            onChange={(e) => setDate(e.target.value)}
-            required
+            type="search"
+            value={patientSearch}
+            onChange={(e) => setPatientSearch(e.target.value)}
+            placeholder={`Name or number (${MIN_SEARCH_LENGTH}+ chars)`}
+            autoFocus
           />
+
+          {matches.length > 0 && (
+            <ul className="flex flex-col gap-1.5 pt-1">
+              {matches.map((p) => (
+                <li key={p.id}>
+                  <Button
+                    variant="unstyled"
+                    className="flex w-full flex-col rounded-lg border border-border bg-bg px-3 py-2 text-left cursor-pointer"
+                    onClick={() => {
+                      setMode('existing')
+                      setSelectedPatientId(p.id)
+                      setPatientSearch('')
+                    }}
+                  >
+                    <span className="font-semibold text-text-h">{p.name}</span>
+                    <span className="text-[13px] text-text">{p.patientNumber}</span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {patientSearch.trim() !== '' && (
+            <Button
+              variant="secondary"
+              className="mt-1 self-start"
+              onClick={() => {
+                setMode('new')
+                setName(patientSearch.trim())
+                setPatientSearch('')
+              }}
+            >
+              Add &quot;{patientSearch.trim()}&quot; as a new patient
+            </Button>
+          )}
         </label>
-        <label className={`${fieldLabel} min-w-[100px]`}>
-          <span className={fieldLabelText}>Time (optional)</span>
-          <TextInput type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-        </label>
-      </div>
+      )}
 
       {mode === 'existing' && selectedPatient && (
         <div className="flex items-center justify-between rounded-xl border border-border bg-bg px-3 py-2.5">
@@ -181,52 +212,22 @@ export function AppointmentForm({ patients, onSubmit, onCancel }: Props) {
         </>
       )}
 
-      {mode === 'search' && (
-        <label className={fieldLabel}>
-          <span className={fieldLabelText}>Patient (name or number)</span>
+      <div className="flex flex-wrap gap-2.5">
+        <label className={`${fieldLabel} min-w-[130px]`}>
+          <span className={fieldLabelText}>Date</span>
           <TextInput
-            type="search"
-            value={patientSearch}
-            onChange={(e) => setPatientSearch(e.target.value)}
-            placeholder={`Name or number (${MIN_SEARCH_LENGTH}+ chars)`}
+            type="date"
+            value={date}
+            min={todayDateOnly()}
+            onChange={(e) => setDate(e.target.value)}
+            required
           />
-
-          {matches.length > 0 && (
-            <ul className="flex flex-col gap-1.5 pt-1">
-              {matches.map((p) => (
-                <li key={p.id}>
-                  <Button
-                    variant="unstyled"
-                    className="flex w-full flex-col rounded-lg border border-border bg-bg px-3 py-2 text-left cursor-pointer"
-                    onClick={() => {
-                      setMode('existing')
-                      setSelectedPatientId(p.id)
-                      setPatientSearch('')
-                    }}
-                  >
-                    <span className="font-semibold text-text-h">{p.name}</span>
-                    <span className="text-[13px] text-text">{p.patientNumber}</span>
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {patientSearch.trim() !== '' && (
-            <Button
-              variant="secondary"
-              className="mt-1 self-start"
-              onClick={() => {
-                setMode('new')
-                setName(patientSearch.trim())
-                setPatientSearch('')
-              }}
-            >
-              Add &quot;{patientSearch.trim()}&quot; as a new patient
-            </Button>
-          )}
         </label>
-      )}
+        <label className={`${fieldLabel} min-w-[100px]`}>
+          <span className={fieldLabelText}>Time (optional)</span>
+          <TextInput type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+        </label>
+      </div>
 
       <div className="flex justify-end gap-2.5">
         <Button variant="secondary" onClick={onCancel}>
