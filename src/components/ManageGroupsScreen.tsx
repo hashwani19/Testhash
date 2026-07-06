@@ -3,7 +3,8 @@ import type { FormEvent } from 'react'
 import type { Patient, PatientGroup } from '../types'
 import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
-import { card, screenHeading } from '../styles'
+import { cardBase } from './common/Card'
+import { card, cx, screenHeading } from '../styles'
 
 interface Props {
   groups: PatientGroup[]
@@ -73,10 +74,7 @@ export function ManageGroupsScreen({ groups, patients, onAdd, onRename, onDelete
       ) : (
         <ul className="flex flex-col gap-2">
           {groups.map((group) => (
-            <li
-              key={group.id}
-              className="flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-2.5"
-            >
+            <li key={group.id} className={cx(cardBase, 'flex items-center gap-2.5')}>
               {editingId === group.id ? (
                 <TextInput
                   type="text"

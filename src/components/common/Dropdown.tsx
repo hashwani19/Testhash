@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ElementType, ReactNode } from 'react'
 import { Button } from './Button'
-import { cx } from '../../styles'
+import { cx, dimmedBackdrop } from '../../styles'
 
 interface Props {
   /** Renders the trigger control; receives the click handler that toggles the panel open. */
@@ -73,7 +73,7 @@ export function Dropdown({
             variant="unstyled"
             className={cx(
               'fixed inset-0 z-40 cursor-default border-none',
-              dimBackdrop ? 'bg-black/15 backdrop-blur-[2px]' : 'bg-transparent',
+              dimBackdrop ? dimmedBackdrop : 'bg-transparent',
             )}
             aria-label={closeLabel}
             onClick={close}

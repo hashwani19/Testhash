@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
-import { card } from '../styles'
+import { card, dimmedBackdrop } from '../styles'
 
 const CONFIRM_WORD = 'confirm'
 
@@ -30,9 +30,20 @@ export function ConfirmModal({
   const [typed, setTyped] = useState('')
   const canConfirm = mode === 'yesNo' || typed.trim().toLowerCase() === CONFIRM_WORD
 
+  // Lock body scroll while open, same as the hamburger nav drawer (Dropdown's
+  // lockScroll) — the backdrop already blocks clicks, but wheel/touch scroll
+  // bubbles past it to the document by default.
+  useEffect(() => {
+    const original = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = original
+    }
+  }, [])
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-5"
+      className={`fixed inset-0 z-50 flex items-center justify-center p-5 ${dimmedBackdrop}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-modal-title"

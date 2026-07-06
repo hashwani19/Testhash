@@ -9,8 +9,8 @@ import { SearchBox } from './common/SearchBox'
 import { Select } from './common/Select'
 import { TextInput } from './common/TextInput'
 import { ListView } from './common/ListView'
-import { cardBase } from './common/Card'
-import { cx, fieldLabel, fieldLabelText } from '../styles'
+import { Card } from './common/Card'
+import { fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   appointments: Appointment[]
@@ -93,7 +93,7 @@ export function AppointmentsScreen({ appointments, patients, onAddAsPatient, onA
             : undefined
 
           return (
-            <div className={cx(cardBase, 'flex items-start justify-between gap-2')}>
+            <Card className="flex items-start justify-between gap-2">
               <div className="flex flex-col gap-0.5">
                 <span className="font-semibold text-text-h">
                   {name}
@@ -128,7 +128,7 @@ export function AppointmentsScreen({ appointments, patients, onAddAsPatient, onA
                   </Button>
                 )
               )}
-            </div>
+            </Card>
           )
         }}
       />
