@@ -784,9 +784,10 @@ UI at all — only the data-fetching layer.
   during this feature's own testing, so `GlobalSettingsProvider` was built
   as a context from the start.
 - A new shared **`Badge`** component (small pill label) is the one place any
-  such label in the app renders through — introduced for the appointment
-  list's "New patient" flag (§8.11) rather than another one-off inline
-  `<span>`, so a future badge (e.g. a status label) reuses it too.
+  such label in the app renders through — introduced for the "New patient"
+  flag, used both in the appointments list and live in the booking form
+  itself once a typed name matches nobody (§8.11), rather than a one-off
+  inline `<span>` in each place.
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 
@@ -988,21 +989,29 @@ this is additive on top of that shell, not a rewrite of it.
   worked out later, is valid — `date` and the patient are the only two
   required things, §5.2), plus a patient — resolved by lookup, not chosen
   from an explicit "existing vs. new" toggle:
-  - The form starts on a single **name-or-number search** (same ≥3 character
-    minimum as the patient list's search, §5.2). Picking a match from the
-    results books against that **existing** patient.
-  - If no match is the right person (or there are no matches at all), an
-    **"Add '&lt;typed text&gt;' as a new patient"** button appears as soon as
-    something is typed — clicking it carries the typed text over as the
-    name and reveals the **new-patient** fields: date of birth (age computed
-    from it, same as the patient form, §8.3) or a manually entered age,
-    **mobile number** (India format, §5.2), and address. None of these
-    fields touch the `patients` table yet — they live on the appointment row
-    itself until "Add as patient" (below) runs.
-  - Whichever path was taken, a "Change" control clears it and returns to
-    the search box — there's no separate mode switch to reason about,
-    booking is always "search first," and "new patient" is what happens
-    when that search comes up empty for the person in front of you.
+  - The form starts on a single **name-or-number** field that doubles as
+    both the search query and, if nothing matches, the new patient's name —
+    there's no separate "Name" field and no button to press either way.
+    Once ≥3 characters are typed (same minimum as the patient list's
+    search, §5.2), matching patients appear live below the field; picking
+    one books against that **existing** patient.
+  - If nothing matches (checked live, on every keystroke past the 3-character
+    minimum — not gated behind a button), the **new-patient** fields appear
+    automatically in the same spot: a "New patient" `Badge` (§7), date of
+    birth (age computed from it, same as the patient form, §8.3) or a
+    manually entered age, **mobile number** (India format, §5.2), and
+    address. The typed text becomes the name as-is — no confirmation step.
+    None of these fields touch the `patients` table yet — they live on the
+    appointment row itself until "Add as patient" (§8.11 below) runs.
+  - If the user keeps typing and the text starts matching someone after
+    all, the new-patient fields disappear and the match list takes over
+    again — the form always reflects the *current* text, not whichever
+    state it last settled into.
+  - Once an existing patient is picked, a "Change" control clears the
+    selection and returns to the editable name-or-number field — there's no
+    separate mode switch to reason about, booking is always "search first,"
+    and "new patient" is simply what the same field shows when that search
+    comes up empty for the person in front of you.
 - **List** (`AppointmentsScreen`): built on the same `ListView`/`SearchBox`
   components as the patient list (§8.3) — a count line, search box with a
   filter/sort popover, and pagination once there are enough rows. Each row
