@@ -21,7 +21,7 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   ghost:
     'rounded-lg px-3 py-1.5 text-[13px] font-semibold bg-accent text-accent-contrast whitespace-nowrap cursor-pointer',
   link: 'bg-transparent border-none text-text underline text-[13px] self-start py-2 cursor-pointer',
-  icon: 'bg-transparent border-none text-text text-xl leading-none cursor-pointer px-2 py-1',
+  icon: 'inline-flex h-7 w-7 items-center justify-center rounded-lg border-none bg-transparent text-text text-xl leading-none cursor-pointer',
   iconCircle: 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full cursor-pointer',
   unstyled: '',
 }

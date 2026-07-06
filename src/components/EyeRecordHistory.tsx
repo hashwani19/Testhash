@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import type { Eye, EyeRefraction, EyeVisit, VisionType } from '../types'
 import { Button } from './common/Button'
+import { Card, CardHeader } from './common/Card'
+import { ConfirmModal } from './ConfirmModal'
 import { hasRefractionData } from '../utils/eyeVisit'
 
 interface Props {
@@ -22,6 +25,16 @@ function formatDateOnly(isoDate: string): string {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
+  })
+}
+
+function formatVisitDateTime(visitAt: string): string {
+  return new Date(visitAt).toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   })
 }
 
@@ -59,65 +72,87 @@ function EyeSection({ eye, refractions }: { eye: Eye; refractions: EyeVisit['ref
 }
 
 export function EyeRecordHistory({ visits, canDelete, onEdit, onDelete }: Props) {
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
+  const confirmingVisit = visits.find((v) => v.id === confirmingDeleteId) ?? null
+
   if (visits.length === 0) {
     return <p className="py-8 text-center text-sm text-text">No history yet. Add the first eye record.</p>
   }
 
   return (
-    <ul className="flex flex-col gap-2.5">
-      {visits.map((visit) => (
-        <li key={visit.id} className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface px-3.5 py-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-text-h">
-              {new Date(visit.visitAt).toLocaleString(undefined, {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-              })}
-            </span>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="unstyled"
-                className="cursor-pointer rounded-lg border-none bg-transparent px-2 py-1 text-[13px] font-medium text-accent"
-                aria-label="Edit record"
-                onClick={() => onEdit(visit)}
-              >
-                Edit
-              </Button>
-              {canDelete && (
-                <Button variant="icon" aria-label="Delete record" onClick={() => onDelete(visit.id)}>
-                  ×
-                </Button>
+    <>
+      <ul className="flex flex-col gap-2.5">
+        {visits.map((visit) => (
+          <li key={visit.id}>
+            <Card className="flex flex-col gap-1.5">
+              <CardHeader
+                title={formatVisitDateTime(visit.visitAt)}
+                actions={
+                  <>
+                    <Button
+                      variant="unstyled"
+                      className="inline-flex h-7 items-center cursor-pointer rounded-lg border-none bg-transparent px-2 text-[13px] font-medium text-accent"
+                      aria-label="Edit record"
+                      onClick={() => onEdit(visit)}
+                    >
+                      Edit
+                    </Button>
+                    {canDelete && (
+                      <Button
+                        variant="icon"
+                        aria-label="Delete record"
+                        onClick={() => setConfirmingDeleteId(visit.id)}
+                      >
+                        ×
+                      </Button>
+                    )}
+                  </>
+                }
+              />
+              <EyeSection eye="left" refractions={visit.refractions.left} />
+              <EyeSection eye="right" refractions={visit.refractions.right} />
+              {visit.lenses && (
+                <p className="mt-1 text-[13px] text-text">
+                  <strong>Lenses:</strong> {visit.lenses}
+                </p>
               )}
-            </div>
-          </div>
-          <EyeSection eye="left" refractions={visit.refractions.left} />
-          <EyeSection eye="right" refractions={visit.refractions.right} />
-          {visit.lenses && (
-            <p className="mt-1 text-[13px] text-text">
-              <strong>Lenses:</strong> {visit.lenses}
-            </p>
-          )}
-          {visit.diagnosis && (
-            <p className="mt-1 text-[13px] text-text">
-              <strong>Diagnosis:</strong> {visit.diagnosis}
-            </p>
-          )}
-          {visit.treatmentPlan && (
-            <p className="mt-1 text-[13px] text-text">
-              <strong>Treatment plan:</strong> {visit.treatmentPlan}
-            </p>
-          )}
-          {visit.followUpDate && (
-            <p className="mt-1 text-[13px] text-text">
-              <strong>Follow-up:</strong> {formatDateOnly(visit.followUpDate)}
-            </p>
-          )}
-          {visit.notes && <p className="mt-1 text-[13px] text-text">{visit.notes}</p>}
-        </li>
-      ))}
-    </ul>
+              {visit.diagnosis && (
+                <p className="mt-1 text-[13px] text-text">
+                  <strong>Diagnosis:</strong> {visit.diagnosis}
+                </p>
+              )}
+              {visit.treatmentPlan && (
+                <p className="mt-1 text-[13px] text-text">
+                  <strong>Treatment plan:</strong> {visit.treatmentPlan}
+                </p>
+              )}
+              {visit.followUpDate && (
+                <p className="mt-1 text-[13px] text-text">
+                  <strong>Follow-up:</strong> {formatDateOnly(visit.followUpDate)}
+                </p>
+              )}
+              {visit.notes && <p className="mt-1 text-[13px] text-text">{visit.notes}</p>}
+            </Card>
+          </li>
+        ))}
+      </ul>
+
+      {confirmingVisit && (
+        <ConfirmModal
+          title="Delete this record?"
+          warning={`This permanently deletes the ${formatVisitDateTime(
+            confirmingVisit.visitAt,
+          )} treatment record. This cannot be undone.`}
+          mode="yesNo"
+          confirmLabel="Delete"
+          tone="danger"
+          onConfirm={() => {
+            onDelete(confirmingVisit.id)
+            setConfirmingDeleteId(null)
+          }}
+          onCancel={() => setConfirmingDeleteId(null)}
+        />
+      )}
+    </>
   )
 }

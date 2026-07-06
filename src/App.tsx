@@ -161,10 +161,7 @@ function AppShell() {
               setEditingVisit(visit)
               setView('editRecord')
             }}
-            onDeleteRecord={(id) => {
-              if (!confirm('Delete this record?')) return
-              deleteVisit(id)
-            }}
+            onDeleteRecord={deleteVisit}
             onBack={goToList}
           />
         )}
