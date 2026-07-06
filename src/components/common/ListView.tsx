@@ -34,7 +34,7 @@ interface Props<T> {
    *  just the current page's size). */
   totalCount?: number
   /** Client-side page size. Ignored when `pagination` is provided — a
-   *  server-paged caller controls page size on its own request. Defaults to 10. */
+   *  server-paged caller controls page size on its own request. Defaults to 50. */
   pageSize?: number
   /**
    * Hand paging control to the caller — pass this once patients (or
@@ -72,7 +72,7 @@ export function ListView<T>({
   itemLabelPlural,
   emptyMessage,
   totalCount,
-  pageSize = 10,
+  pageSize = 50,
   pagination,
 }: Props<T>) {
   const [internalPage, setInternalPage] = useState(0)

@@ -511,7 +511,8 @@ but the unsorted default is never "whatever order the DB happened to return."
 
 Every list endpoint that can grow unbounded (patients, visits, audit log,
 staff accounts) is paginated with `page` (0-indexed, default `0`) and
-`limit` (default/max TBD, e.g. `20`) query params, and returns
+`limit` (default `50`, matching the client's `ListView` page size; max TBD)
+query params, and returns
 `{ items: [...], totalCount: number }` rather than a bare array —
 `totalCount` is the count across *all* pages, not just the returned page,
 so the client can render "N things" and compute total page count without

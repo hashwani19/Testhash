@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Eye, EyeRefraction, EyeVisit, VisionType } from '../types'
 import { Button } from './common/Button'
 import { Card, CardHeader } from './common/Card'
+import { ListView } from './common/ListView'
 import { EditIcon } from './common/icons'
 import { ConfirmModal } from './ConfirmModal'
 import { hasRefractionData } from '../utils/eyeVisit'
@@ -76,62 +77,60 @@ export function EyeRecordHistory({ visits, canDelete, onEdit, onDelete }: Props)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const confirmingVisit = visits.find((v) => v.id === confirmingDeleteId) ?? null
 
-  if (visits.length === 0) {
-    return <p className="py-8 text-center text-sm text-text">No history yet. Add the first eye record.</p>
-  }
-
   return (
     <>
-      <ul className="flex flex-col gap-2.5">
-        {visits.map((visit) => (
-          <li key={visit.id}>
-            <Card className="flex flex-col gap-1.5">
-              <CardHeader
-                title={formatVisitDateTime(visit.visitAt)}
-                actions={
-                  <>
-                    <Button variant="icon" aria-label="Edit record" onClick={() => onEdit(visit)}>
-                      <EditIcon />
+      <ListView
+        items={visits}
+        getKey={(visit) => visit.id}
+        itemLabel="record"
+        emptyMessage="No history yet. Add the first eye record."
+        renderItem={(visit) => (
+          <Card className="flex flex-col gap-1.5">
+            <CardHeader
+              title={formatVisitDateTime(visit.visitAt)}
+              actions={
+                <>
+                  <Button variant="icon" aria-label="Edit record" onClick={() => onEdit(visit)}>
+                    <EditIcon />
+                  </Button>
+                  {canDelete && (
+                    <Button
+                      variant="icon"
+                      aria-label="Delete record"
+                      onClick={() => setConfirmingDeleteId(visit.id)}
+                    >
+                      ×
                     </Button>
-                    {canDelete && (
-                      <Button
-                        variant="icon"
-                        aria-label="Delete record"
-                        onClick={() => setConfirmingDeleteId(visit.id)}
-                      >
-                        ×
-                      </Button>
-                    )}
-                  </>
-                }
-              />
-              <EyeSection eye="left" refractions={visit.refractions.left} />
-              <EyeSection eye="right" refractions={visit.refractions.right} />
-              {visit.lenses && (
-                <p className="mt-1 text-[13px] text-text">
-                  <strong>Lenses:</strong> {visit.lenses}
-                </p>
-              )}
-              {visit.diagnosis && (
-                <p className="mt-1 text-[13px] text-text">
-                  <strong>Diagnosis:</strong> {visit.diagnosis}
-                </p>
-              )}
-              {visit.treatmentPlan && (
-                <p className="mt-1 text-[13px] text-text">
-                  <strong>Treatment plan:</strong> {visit.treatmentPlan}
-                </p>
-              )}
-              {visit.followUpDate && (
-                <p className="mt-1 text-[13px] text-text">
-                  <strong>Follow-up:</strong> {formatDateOnly(visit.followUpDate)}
-                </p>
-              )}
-              {visit.notes && <p className="mt-1 text-[13px] text-text">{visit.notes}</p>}
-            </Card>
-          </li>
-        ))}
-      </ul>
+                  )}
+                </>
+              }
+            />
+            <EyeSection eye="left" refractions={visit.refractions.left} />
+            <EyeSection eye="right" refractions={visit.refractions.right} />
+            {visit.lenses && (
+              <p className="mt-1 text-[13px] text-text">
+                <strong>Lenses:</strong> {visit.lenses}
+              </p>
+            )}
+            {visit.diagnosis && (
+              <p className="mt-1 text-[13px] text-text">
+                <strong>Diagnosis:</strong> {visit.diagnosis}
+              </p>
+            )}
+            {visit.treatmentPlan && (
+              <p className="mt-1 text-[13px] text-text">
+                <strong>Treatment plan:</strong> {visit.treatmentPlan}
+              </p>
+            )}
+            {visit.followUpDate && (
+              <p className="mt-1 text-[13px] text-text">
+                <strong>Follow-up:</strong> {formatDateOnly(visit.followUpDate)}
+              </p>
+            )}
+            {visit.notes && <p className="mt-1 text-[13px] text-text">{visit.notes}</p>}
+          </Card>
+        )}
+      />
 
       {confirmingVisit && (
         <ConfirmModal
