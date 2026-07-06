@@ -34,11 +34,12 @@ export interface AppointmentInput {
 }
 
 /**
- * Owns the appointments list, including the admin-configurable auto-delete
- * sweep (§5.2, §8.11): appointments dated more than `autoDeleteAfterDays`
- * in the past are dropped whenever this hook (re-)mounts or the global
- * setting changes. There's no manual delete in this phase — the sweep is
- * the only thing that ever removes an appointment.
+ * Owns the appointments list. Every role can edit or delete (single or
+ * bulk) any appointment — there's no admin-only restriction here, unlike
+ * clinical record deletion (§4, §8.11). On top of manual delete, the
+ * admin-configurable auto-delete sweep (§5.2, §8.11) also drops
+ * appointments dated more than `autoDeleteAfterDays` in the past whenever
+ * this hook (re-)mounts or the global setting changes.
  */
 export function useAppointments() {
   const [appointments, setAppointments] = useState<Appointment[]>(() => loadAppointments())
@@ -80,5 +81,45 @@ export function useAppointments() {
     )
   }, [])
 
-  return { appointments, addAppointment, linkAppointmentToPatient }
+  const updateAppointment = useCallback((id: string, input: AppointmentInput) => {
+    setAppointments((prev) =>
+      prev.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              date: input.date,
+              time: input.time || undefined,
+              patientId: input.patientId,
+              name: input.newPatient?.name.trim(),
+              dob: input.newPatient?.dob || undefined,
+              manualAge: input.newPatient?.dob ? undefined : input.newPatient?.manualAge,
+              mobile: input.newPatient?.mobile?.trim() || undefined,
+              address: input.newPatient?.address?.trim() || undefined,
+              updatedAt: Date.now(),
+            }
+          : a,
+      ),
+    )
+  }, [])
+
+  const deleteAppointment = useCallback((id: string) => {
+    setAppointments((prev) => prev.filter((a) => a.id !== id))
+  }, [])
+
+  /** Bulk delete — every role can select multiple rows and remove them in
+   *  one confirm (§8.11); there's no separate "select all then delete one
+   *  by one" requirement to satisfy, so this just filters by a set of ids. */
+  const deleteAppointments = useCallback((ids: string[]) => {
+    const idSet = new Set(ids)
+    setAppointments((prev) => prev.filter((a) => !idSet.has(a.id)))
+  }, [])
+
+  return {
+    appointments,
+    addAppointment,
+    linkAppointmentToPatient,
+    updateAppointment,
+    deleteAppointment,
+    deleteAppointments,
+  }
 }

@@ -112,12 +112,15 @@ open to any authenticated role (§6).
 
 **Appointments** (§8.11) reuse the exact same create-patient/create-visit
 permissions every role already has — there's no separate "can book
-appointments" grant to reason about. Booking, viewing, "add as patient," and
-"add visit" are open to all three roles, same as demographics/clinical
-records above. The one appointments-related thing that *is* admin-only is
-the **global auto-delete setting** (§5.2, §8.10, §8.11) — a `doctor` or
-`front_desk` session gets `403` from `GET`/`PATCH /settings` (§6), same
-enforcement pattern as everything else in this table.
+appointments" grant to reason about. Booking, viewing, editing, deleting
+(single or bulk), "add as patient," and "add visit" are all open to every
+role — unlike clinical records, appointment deletion is **not** admin-only;
+any of the three roles can delete any appointment, since a booking mistake
+made by front desk shouldn't require an admin to come fix it. The one
+appointments-related thing that *is* admin-only is the **global
+auto-delete setting** (§5.2, §8.10, §8.11) — a `doctor` or `front_desk`
+session gets `403` from `GET`/`PATCH /settings` (§6), same enforcement
+pattern as everything else in this table.
 
 Permissions are enforced **server-side** on every API call — the role in the
 session determines what the API returns/accepts, never trust the client.
@@ -689,7 +692,8 @@ UI at all — only the data-fetching layer.
 | `GET /audit-log?entity_type=&entity_id=&page=&limit=` | admin | Audit trail lookup | `created_at` **desc** (most recent activity first) |
 | `GET /appointments?search=&from=&to=&sort=&page=&limit=` | any | List/search appointments (§8.11). `search` matches the resolved patient name (linked patient's name, or the prospective `name` — ≥3 chars, same rule as `/patients`, §5.2). `from`/`to` filter to a date range (either or both, inclusive). `sort` overrides the default: `name_asc`/`name_desc` | `date`, `time` asc (soonest first) |
 | `POST /appointments` | any | Book an appointment — either `patient_id` (existing patient) or `name`/`dob`/`manual_age`/`mobile`/`address` (prospective patient), plus `date` (required) and `time` (optional). `date` must be today or later — rejects a past date with `400` (§8.11) | — |
-| `PATCH /appointments/:id` | any | Set `patient_id` once a prospective patient is actually registered (§5.2) — the only update this endpoint supports in this phase; no other field is ever edited after booking | — |
+| `PATCH /appointments/:id` | any | Update any of `date`/`time`/`patient_id`/`name`/`dob`/`manual_age`/`mobile`/`address` — used both for the Edit action (§8.11) and to set `patient_id` once a prospective patient is registered via "Add as patient" | — |
+| `DELETE /appointments/:id` | any | Delete a single appointment (§8.11) — not admin-only, unlike `DELETE /visits/:id`; the client's "bulk delete" is just this endpoint called once per selected id | — |
 | `GET /settings` | admin | App-wide settings (auto-delete toggle + day threshold, §5.2) | — |
 | `PATCH /settings` | admin | Update either/both fields | — |
 
@@ -779,6 +783,10 @@ UI at all — only the data-fetching layer.
   is exactly the bug an earlier, plain-hook version of `usePreferences` hit
   during this feature's own testing, so `GlobalSettingsProvider` was built
   as a context from the start.
+- A new shared **`Badge`** component (small pill label) is the one place any
+  such label in the app renders through — introduced for the appointment
+  list's "New patient" flag (§8.11) rather than another one-off inline
+  `<span>`, so a future badge (e.g. a status label) reuses it too.
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 
@@ -889,7 +897,7 @@ data.
 | Manage patient groups (create/rename/delete) | ✅ | ❌ | ❌ |
 | View Activity (audit log) | ✅ | ❌ | ❌ |
 | Manage staff accounts | ✅ | ❌ | ❌ |
-| Appointments — book/view/convert (§8.11) | ✅ | ✅ | ✅ |
+| Appointments — book/view/edit/delete/convert (§8.11) | ✅ | ✅ | ✅ |
 | Global app settings — appointment auto-delete (§8.10) | ✅ | ❌ | ❌ |
 | Preferences (own theme + list page size, §8.10) | ✅ | ✅ | ✅ |
 
@@ -998,10 +1006,12 @@ this is additive on top of that shell, not a rewrite of it.
 - **List** (`AppointmentsScreen`): built on the same `ListView`/`SearchBox`
   components as the patient list (§8.3) — a count line, search box with a
   filter/sort popover, and pagination once there are enough rows. Each row
-  shows the resolved name (linked patient's name, or the prospective name),
-  a **"New patient"** badge when there's no linked patient yet, the date +
-  time, and either the linked patient's `patient_number` or (for a
-  prospective patient) age + mobile number as quick identifying context.
+  shows the resolved name, then directly below it a **"New patient" badge**
+  when there's no linked patient yet (a reusable `Badge` component, §7 —
+  the one place any small pill label in the app renders through, not just
+  this one usage), then the date + time, then either the linked patient's
+  `patient_number` or (for a prospective patient) age + mobile number as
+  quick identifying context.
   - **Search**: by name (linked or prospective), same ≥3 character rule as
     patients.
   - **Sort**: soonest-appointment-first (default), or name ascending/
@@ -1010,28 +1020,43 @@ this is additive on top of that shell, not a rewrite of it.
     just a single-day filter, so front desk can see "this week's
     appointments" as easily as "today's."
   - **Reset filters** control, same convention as the patient list (§8.3).
-- **Per-row action** — exactly one of the two, depending on whether the
-  appointment already has a linked patient:
-  - **"Add as patient"** (prospective patient) — opens the patient form
-    (§8.3) prefilled with the name/DOB/age/mobile/address captured at
+- **Per-row actions**, all open to **every role** (§4) — booking, editing,
+  and deleting an appointment carry none of the admin-only restrictions
+  clinical record deletion has:
+  - **Edit** (pencil icon) — reopens `AppointmentForm` pre-filled with the
+    appointment's current date/time and patient (existing or prospective),
+    saving via `PATCH /appointments/:id` (§6). Anyone can edit any
+    appointment; there's no "only the person who booked it" restriction.
+  - **Delete** (× icon) — a confirm-before-delete dialog (the same
+    `ConfirmModal` used for every other destructive action in the app),
+    then `DELETE /appointments/:id` (§6).
+  - **"Add as patient"** (prospective patient only) — opens the patient
+    form (§8.3) prefilled with the name/DOB/age/mobile/address captured at
     booking time. Submitting it creates the patient **and** links this
     appointment to the new `patient_id` (`PATCH /appointments/:id`, §6) —
     the appointment isn't deleted or hidden afterward, it simply behaves as
-    an existing-patient appointment (with an "Add visit" action) from then
-    on if the same person is looked up again.
-  - **"Add visit"** (existing patient) — jumps straight to the visit record
-    form (§8.5) for that patient, the same form reached from Patient Detail.
-    If the linked patient was since deleted, this action is hidden (nothing
-    left to add a visit against).
-- **No manual cancel/delete** of an appointment in this phase — the only
-  thing that ever removes one is the auto-delete sweep (below) or an admin
-  disabling that setting and someone else's stale data aging out later. A
-  cancel/complete workflow is a plausible future addition (§13).
-- **Auto-delete**: whenever the admin-only "Automatically delete old
-  appointments" setting (§8.10) is on, any appointment dated more than the
-  configured number of days in the past (default 2, §5.2) is swept away —
-  this runs whenever the app loads or an admin changes either setting. It's
-  a **global** setting, not per-user: one admin turning it off turns it off
+    an existing-patient appointment (with an "Add visit" action instead)
+    from then on if the same person is looked up again.
+  - **"Add visit"** (existing patient only) — jumps straight to the visit
+    record form (§8.5) for that patient, the same form reached from
+    Patient Detail. If the linked patient was since deleted, this action is
+    hidden (nothing left to add a visit against). Both this and "Add as
+    patient" render through the same shared `Button variant="secondary"` —
+    deliberately identical styling, since they occupy the same slot on a
+    row and differ only in *which one* applies, not in visual weight.
+- **Bulk delete**: a checkbox on every row plus a "Select all" checkbox
+  above the list; once one or more rows are checked, a "Delete selected
+  (N)" button appears and runs one confirm dialog before deleting all
+  selected appointments at once. There's no dedicated bulk-delete API
+  endpoint — the client just calls `DELETE /appointments/:id` once per
+  selected id (§6), which is plenty efficient at this clinic's scale (§11)
+  without a bespoke batch route.
+- **Auto-delete**: independent of the manual delete/bulk-delete above,
+  whenever the admin-only "Automatically delete old appointments" setting
+  (§8.10) is on, any appointment dated more than the configured number of
+  days in the past (default 2, §5.2) is swept away automatically — this
+  runs whenever the app loads or an admin changes either setting. It's a
+  **global** setting, not per-user: one admin turning it off turns it off
   for everyone, matching the "global app settings" framing in §8.10.
 
 ## 9. Offline sync strategy (phased)
@@ -1135,10 +1160,11 @@ build them if multi-device offline editing turns out to be a real need.
   remains out of scope; an `invoices` table would be additive the same way,
   referencing `patients`/`eye_visits` without changing what's here.
 - **No appointment status/cancel workflow in this phase** (§5.2, §8.11) —
-  an appointment is either booked or gone (via the auto-delete sweep); there
-  is no booked/completed/cancelled state machine. If front desk needs to
-  mark a booking cancelled without waiting for it to age out, that's a
-  `status` column addition, not a schema rework.
+  an appointment is either booked or gone (deleted manually/in bulk by any
+  role, or swept automatically once stale); there is no booked/completed/
+  cancelled state machine. If a clinic wants to distinguish "cancelled" from
+  "just deleted" for reporting purposes, that's a `status` column addition,
+  not a schema rework.
 - **Appointment auto-delete threshold is admin-configurable** (`app_settings.
   auto_delete_after_days`, default 2), not hardcoded — chosen over a fixed
   constant so a clinic that wants a longer/shorter retention window doesn't

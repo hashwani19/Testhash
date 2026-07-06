@@ -25,7 +25,7 @@ import { LoginScreen } from './components/LoginScreen'
 import { OfflineBanner } from './components/OfflineBanner'
 import { InstallBanner } from './components/InstallBanner'
 import { Button } from './components/common/Button'
-import type { EyeVisit, Patient } from './types'
+import type { Appointment, EyeVisit, Patient } from './types'
 
 type View =
   | 'list'
@@ -38,6 +38,7 @@ type View =
   | 'activity'
   | 'appointments'
   | 'newAppointment'
+  | 'editAppointment'
   | 'preferences'
 
 const VIEW_TO_NAV_TARGET: Partial<Record<View, NavTarget>> = {
@@ -45,6 +46,7 @@ const VIEW_TO_NAV_TARGET: Partial<Record<View, NavTarget>> = {
   activity: 'activity',
   appointments: 'appointments',
   newAppointment: 'appointments',
+  editAppointment: 'appointments',
 }
 
 function AppShell() {
@@ -53,7 +55,14 @@ function AppShell() {
   const { addVisit, updateVisit, deleteVisit, deleteVisitsForPatient, getVisitsForPatient } =
     useEyeVisits()
   const { groups, addGroup, renameGroup, deleteGroup } = usePatientGroups()
-  const { appointments, addAppointment, linkAppointmentToPatient } = useAppointments()
+  const {
+    appointments,
+    addAppointment,
+    linkAppointmentToPatient,
+    updateAppointment,
+    deleteAppointment,
+    deleteAppointments,
+  } = useAppointments()
   const { preferences } = usePreferences()
   useThemeEffect(preferences.theme)
 
@@ -66,6 +75,7 @@ function AppShell() {
   // submitted, links the appointment to the newly created patient.
   const [newPatientPrefill, setNewPatientPrefill] = useState<Partial<Patient> | null>(null)
   const [linkAppointmentId, setLinkAppointmentId] = useState<string | null>(null)
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
 
   if (!user) return <LoginScreen />
 
@@ -83,6 +93,7 @@ function AppShell() {
     setEditingVisit(null)
     setNewPatientPrefill(null)
     setLinkAppointmentId(null)
+    setEditingAppointment(null)
     if (target === 'patients') setView('list')
     else if (target === 'groups') setView('manageGroups')
     else if (target === 'activity') setView('activity')
@@ -245,7 +256,14 @@ function AppShell() {
 
         {view === 'appointments' && (
           <>
-            <Button variant="primary" fullWidth onClick={() => setView('newAppointment')}>
+            <Button
+              variant="primary"
+              fullWidth
+              onClick={() => {
+                setEditingAppointment(null)
+                setView('newAppointment')
+              }}
+            >
               Add appointment
             </Button>
             <AppointmentsScreen
@@ -267,6 +285,12 @@ function AppShell() {
                 setSelectedPatientId(appointment.patientId)
                 setView('newRecord')
               }}
+              onEdit={(appointment) => {
+                setEditingAppointment(appointment)
+                setView('editAppointment')
+              }}
+              onDelete={deleteAppointment}
+              onBulkDelete={deleteAppointments}
             />
           </>
         )}
@@ -279,6 +303,22 @@ function AppShell() {
               setView('appointments')
             }}
             onCancel={() => setView('appointments')}
+          />
+        )}
+
+        {view === 'editAppointment' && editingAppointment && (
+          <AppointmentForm
+            patients={patients}
+            initial={editingAppointment}
+            onSubmit={(input) => {
+              updateAppointment(editingAppointment.id, input)
+              setEditingAppointment(null)
+              setView('appointments')
+            }}
+            onCancel={() => {
+              setEditingAppointment(null)
+              setView('appointments')
+            }}
           />
         )}
 

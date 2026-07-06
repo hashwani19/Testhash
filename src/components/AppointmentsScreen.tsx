@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Appointment, Patient } from '../types'
 import { getPatientAge } from '../utils/age'
 import { MIN_SEARCH_LENGTH } from '../utils/patientQuery'
@@ -10,6 +11,9 @@ import { Select } from './common/Select'
 import { TextInput } from './common/TextInput'
 import { ListView } from './common/ListView'
 import { Card } from './common/Card'
+import { Badge } from './common/Badge'
+import { EditIcon } from './common/icons'
+import { ConfirmModal } from './ConfirmModal'
 import { fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
@@ -17,6 +21,9 @@ interface Props {
   patients: Patient[]
   onAddAsPatient: (appointment: Appointment) => void
   onAddVisit: (appointment: Appointment) => void
+  onEdit: (appointment: Appointment) => void
+  onDelete: (id: string) => void
+  onBulkDelete: (ids: string[]) => void
 }
 
 // new Date("YYYY-MM-DD") parses as UTC midnight, which can display as the
@@ -39,9 +46,37 @@ function formatTime(time: string): string {
   })
 }
 
-export function AppointmentsScreen({ appointments, patients, onAddAsPatient, onAddVisit }: Props) {
+export function AppointmentsScreen({
+  appointments,
+  patients,
+  onAddAsPatient,
+  onAddVisit,
+  onEdit,
+  onDelete,
+  onBulkDelete,
+}: Props) {
   const { search, setSearch, from, setFrom, to, setTo, sort, setSort, resetFilters, isFilterActive, results } =
     useAppointmentQuery(appointments, patients)
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
+  const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false)
+
+  const confirmingAppointment = appointments.find((a) => a.id === confirmingDeleteId) ?? null
+  const allSelected = results.length > 0 && results.every((a) => selectedIds.has(a.id))
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    setSelectedIds(allSelected ? new Set() : new Set(results.map((a) => a.id)))
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -75,6 +110,20 @@ export function AppointmentsScreen({ appointments, patients, onAddAsPatient, onA
         }}
       />
 
+      {results.length > 0 && (
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-2 text-[13px] text-text">
+            <input type="checkbox" className="accent-accent" checked={allSelected} onChange={toggleSelectAll} />
+            Select all
+          </label>
+          {selectedIds.size > 0 && (
+            <Button variant="danger" onClick={() => setConfirmingBulkDelete(true)}>
+              Delete selected ({selectedIds.size})
+            </Button>
+          )}
+        </div>
+      )}
+
       <ListView
         items={results}
         getKey={(appointment) => appointment.id}
@@ -93,45 +142,105 @@ export function AppointmentsScreen({ appointments, patients, onAddAsPatient, onA
             : undefined
 
           return (
-            <Card className="flex items-start justify-between gap-2">
-              <div className="flex flex-col gap-0.5">
-                <span className="font-semibold text-text-h">
-                  {name}
-                  {isNewPatient && (
-                    <span className="ml-2 rounded-full border border-border bg-bg px-2 py-0.5 text-[11px] font-medium text-text">
-                      New patient
-                    </span>
-                  )}
-                </span>
-                <span className="text-[13px] text-text">
-                  {formatDateOnly(appointment.date)}
-                  {appointment.time ? ` · ${formatTime(appointment.time)}` : ''}
-                </span>
-                {isNewPatient ? (
+            <Card className="flex flex-col gap-2">
+              <div className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  className="mt-1 accent-accent"
+                  checked={selectedIds.has(appointment.id)}
+                  onChange={() => toggleSelected(appointment.id)}
+                  aria-label={`Select ${name}'s appointment`}
+                />
+
+                <div className="flex flex-1 flex-col gap-0.5">
+                  <span className="font-semibold text-text-h">{name}</span>
+                  {isNewPatient && <Badge>New patient</Badge>}
                   <span className="text-[13px] text-text">
-                    {age != null ? `${age} yrs` : 'Age unknown'}
-                    {appointment.mobile ? ` · ${appointment.mobile}` : ''}
+                    {formatDateOnly(appointment.date)}
+                    {appointment.time ? ` · ${formatTime(appointment.time)}` : ''}
                   </span>
-                ) : (
-                  linkedPatient && <span className="text-[13px] text-text">{linkedPatient.patientNumber}</span>
-                )}
+                  {isNewPatient ? (
+                    <span className="text-[13px] text-text">
+                      {age != null ? `${age} yrs` : 'Age unknown'}
+                      {appointment.mobile ? ` · ${appointment.mobile}` : ''}
+                    </span>
+                  ) : (
+                    linkedPatient && (
+                      <span className="text-[13px] text-text">{linkedPatient.patientNumber}</span>
+                    )
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Button variant="icon" aria-label={`Edit ${name}'s appointment`} onClick={() => onEdit(appointment)}>
+                    <EditIcon />
+                  </Button>
+                  <Button
+                    variant="icon"
+                    aria-label={`Delete ${name}'s appointment`}
+                    onClick={() => setConfirmingDeleteId(appointment.id)}
+                  >
+                    ×
+                  </Button>
+                </div>
               </div>
 
-              {isNewPatient ? (
-                <Button variant="secondary" onClick={() => onAddAsPatient(appointment)}>
-                  Add as patient
-                </Button>
-              ) : (
-                linkedPatient && (
-                  <Button variant="secondary" onClick={() => onAddVisit(appointment)}>
-                    Add visit
+              <div className="flex justify-end">
+                {isNewPatient ? (
+                  <Button variant="secondary" onClick={() => onAddAsPatient(appointment)}>
+                    Add as patient
                   </Button>
-                )
-              )}
+                ) : (
+                  linkedPatient && (
+                    <Button variant="secondary" onClick={() => onAddVisit(appointment)}>
+                      Add visit
+                    </Button>
+                  )
+                )}
+              </div>
             </Card>
           )
         }}
       />
+
+      {confirmingAppointment && (
+        <ConfirmModal
+          title="Delete this appointment?"
+          warning={`This permanently deletes the appointment for ${resolveAppointmentName(
+            confirmingAppointment,
+            patients,
+          )}. This cannot be undone.`}
+          mode="yesNo"
+          confirmLabel="Delete"
+          tone="danger"
+          onConfirm={() => {
+            onDelete(confirmingAppointment.id)
+            setSelectedIds((prev) => {
+              const next = new Set(prev)
+              next.delete(confirmingAppointment.id)
+              return next
+            })
+            setConfirmingDeleteId(null)
+          }}
+          onCancel={() => setConfirmingDeleteId(null)}
+        />
+      )}
+
+      {confirmingBulkDelete && (
+        <ConfirmModal
+          title={`Delete ${selectedIds.size} appointment${selectedIds.size === 1 ? '' : 's'}?`}
+          warning="This permanently deletes the selected appointments. This cannot be undone."
+          mode="yesNo"
+          confirmLabel="Delete"
+          tone="danger"
+          onConfirm={() => {
+            onBulkDelete(Array.from(selectedIds))
+            setSelectedIds(new Set())
+            setConfirmingBulkDelete(false)
+          }}
+          onCancel={() => setConfirmingBulkDelete(false)}
+        />
+      )}
     </div>
   )
 }

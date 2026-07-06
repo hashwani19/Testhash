@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import type { Patient } from '../types'
+import type { Appointment, Patient } from '../types'
 import type { AppointmentInput } from '../hooks/useAppointments'
 import { computeAgeFromDob } from '../utils/age'
 import { MIN_SEARCH_LENGTH } from '../utils/patientQuery'
@@ -11,6 +11,8 @@ import { card, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   patients: Patient[]
+  /** Editing an existing appointment rather than booking a new one. */
+  initial?: Appointment
   onSubmit: (input: AppointmentInput) => void
   onCancel: () => void
 }
@@ -19,19 +21,25 @@ interface Props {
  *  lookup, not chosen directly (there's no existing/new toggle, §see below). */
 type PatientMode = 'search' | 'existing' | 'new'
 
-export function AppointmentForm({ patients, onSubmit, onCancel }: Props) {
-  const [date, setDate] = useState(todayDateOnly())
-  const [time, setTime] = useState('')
-  const [mode, setMode] = useState<PatientMode>('search')
+export function AppointmentForm({ patients, initial, onSubmit, onCancel }: Props) {
+  const [date, setDate] = useState(initial?.date ?? todayDateOnly())
+  const [time, setTime] = useState(initial?.time ?? '')
+  const [mode, setMode] = useState<PatientMode>(() => {
+    if (initial?.patientId) return 'existing'
+    if (initial?.name) return 'new'
+    return 'search'
+  })
 
   const [patientSearch, setPatientSearch] = useState('')
-  const [selectedPatientId, setSelectedPatientId] = useState('')
+  const [selectedPatientId, setSelectedPatientId] = useState(initial?.patientId ?? '')
 
-  const [name, setName] = useState('')
-  const [dob, setDob] = useState('')
-  const [manualAge, setManualAge] = useState('')
-  const [mobile, setMobile] = useState('')
-  const [address, setAddress] = useState('')
+  const [name, setName] = useState(initial?.name ?? '')
+  const [dob, setDob] = useState(initial?.dob ?? '')
+  const [manualAge, setManualAge] = useState(
+    initial?.manualAge != null ? String(initial.manualAge) : '',
+  )
+  const [mobile, setMobile] = useState(initial?.mobile ?? '')
+  const [address, setAddress] = useState(initial?.address ?? '')
 
   const computedAge = dob ? computeAgeFromDob(dob) : undefined
   const selectedPatient = patients.find((p) => p.id === selectedPatientId) ?? null
@@ -234,7 +242,7 @@ export function AppointmentForm({ patients, onSubmit, onCancel }: Props) {
           Cancel
         </Button>
         <Button type="submit" variant="primary" disabled={!canSubmit}>
-          Book appointment
+          {initial ? 'Save changes' : 'Book appointment'}
         </Button>
       </div>
     </form>
