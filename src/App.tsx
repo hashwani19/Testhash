@@ -269,6 +269,7 @@ function AppShell() {
             <AppointmentsScreen
               appointments={appointments}
               patients={patients}
+              isAdmin={isAdmin}
               onAddAsPatient={(appointment) => {
                 setNewPatientPrefill({
                   name: appointment.name,

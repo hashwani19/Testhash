@@ -19,6 +19,10 @@ import { fieldLabel, fieldLabelText } from '../styles'
 interface Props {
   appointments: Appointment[]
   patients: Patient[]
+  /** Admin gets bulk select-all + delete-selected instead of a per-row
+   *  delete icon — the other two roles get the per-row icon and no bulk
+   *  select UI at all. */
+  isAdmin: boolean
   onAddAsPatient: (appointment: Appointment) => void
   onAddVisit: (appointment: Appointment) => void
   onEdit: (appointment: Appointment) => void
@@ -49,6 +53,7 @@ function formatTime(time: string): string {
 export function AppointmentsScreen({
   appointments,
   patients,
+  isAdmin,
   onAddAsPatient,
   onAddVisit,
   onEdit,
@@ -110,17 +115,23 @@ export function AppointmentsScreen({
         }}
       />
 
-      {results.length > 0 && (
+      {isAdmin && results.length > 0 && (
         <div className="flex items-center justify-between">
           <label className="flex items-center gap-2 text-[13px] text-text">
             <input type="checkbox" className="accent-accent" checked={allSelected} onChange={toggleSelectAll} />
             Select all
           </label>
-          {selectedIds.size > 0 && (
-            <Button variant="danger" onClick={() => setConfirmingBulkDelete(true)}>
-              Delete selected ({selectedIds.size})
-            </Button>
-          )}
+          {/* Always mounted (just invisible with nothing selected) so its
+           *  height doesn't pop in and shove the list down the moment a
+           *  row gets checked — that jump reads as a layout bug. */}
+          <Button
+            variant="danger"
+            className={selectedIds.size === 0 ? 'invisible' : undefined}
+            disabled={selectedIds.size === 0}
+            onClick={() => setConfirmingBulkDelete(true)}
+          >
+            Delete selected ({selectedIds.size})
+          </Button>
         </div>
       )}
 
@@ -155,13 +166,15 @@ export function AppointmentsScreen({
 
           return (
             <Card className="flex items-start gap-2">
-              <input
-                type="checkbox"
-                className="mt-1 accent-accent"
-                checked={selectedIds.has(appointment.id)}
-                onChange={() => toggleSelected(appointment.id)}
-                aria-label={`Select ${name}'s appointment`}
-              />
+              {isAdmin && (
+                <input
+                  type="checkbox"
+                  className="mt-1 accent-accent"
+                  checked={selectedIds.has(appointment.id)}
+                  onChange={() => toggleSelected(appointment.id)}
+                  aria-label={`Select ${name}'s appointment`}
+                />
+              )}
 
               <div className="flex flex-1 flex-col gap-0.5">
                 <span className="font-semibold text-text-h">{name}</span>
@@ -174,13 +187,15 @@ export function AppointmentsScreen({
                   <Button variant="icon" aria-label={`Edit ${name}'s appointment`} onClick={() => onEdit(appointment)}>
                     <EditIcon />
                   </Button>
-                  <Button
-                    variant="icon"
-                    aria-label={`Delete ${name}'s appointment`}
-                    onClick={() => setConfirmingDeleteId(appointment.id)}
-                  >
-                    ×
-                  </Button>
+                  {!isAdmin && (
+                    <Button
+                      variant="icon"
+                      aria-label={`Delete ${name}'s appointment`}
+                      onClick={() => setConfirmingDeleteId(appointment.id)}
+                    >
+                      ×
+                    </Button>
+                  )}
                 </div>
 
                 {isNewPatient ? (

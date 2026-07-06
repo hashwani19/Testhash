@@ -112,13 +112,17 @@ open to any authenticated role (§6).
 
 **Appointments** (§8.11) reuse the exact same create-patient/create-visit
 permissions every role already has — there's no separate "can book
-appointments" grant to reason about. Booking, viewing, editing, deleting
-(single or bulk), "add as patient," and "add visit" are all open to every
-role — unlike clinical records, appointment deletion is **not** admin-only;
-any of the three roles can delete any appointment, since a booking mistake
-made by front desk shouldn't require an admin to come fix it. The one
-appointments-related thing that *is* admin-only is the **global
-auto-delete setting** (§5.2, §8.10, §8.11) — a `doctor` or `front_desk`
+appointments" grant to reason about. Booking, viewing, editing, deleting,
+"add as patient," and "add visit" are all open to every role — unlike
+clinical records, appointment deletion is **not** admin-only; any of the
+three roles can delete any appointment, since a booking mistake made by
+front desk shouldn't require an admin to come fix it. The *how* differs by
+role purely as a UI convenience, not a permission: `doctor`/`front_desk`
+get a per-row delete icon, `admin` gets bulk select-all + delete-selected
+instead of the per-row icon (§8.11) — same underlying `DELETE
+/appointments/:id` (§6) either way. The one appointments-related thing
+that *is* admin-only is the **global auto-delete setting** (§5.2, §8.10,
+§8.11) — a `doctor` or `front_desk`
 session gets `403` from `GET`/`PATCH /settings` (§6), same enforcement
 pattern as everything else in this table.
 
@@ -1031,14 +1035,21 @@ this is additive on top of that shell, not a rewrite of it.
   - **Reset filters** control, same convention as the patient list (§8.3).
 - **Per-row actions**, all open to **every role** (§4) — booking, editing,
   and deleting an appointment carry none of the admin-only restrictions
-  clinical record deletion has:
+  clinical record deletion has. The *permission* is identical for every
+  role (`DELETE /appointments/:id`, §6, never checks role beyond
+  authentication); only the **interaction pattern** for deleting differs
+  by role, to keep the common case (one row, right now) fast for
+  `doctor`/`front_desk` while giving `admin` a bulk tool instead of
+  cluttering every row with a control admins mostly use in bulk anyway:
   - **Edit** (pencil icon) — reopens `AppointmentForm` pre-filled with the
     appointment's current date/time and patient (existing or prospective),
     saving via `PATCH /appointments/:id` (§6). Anyone can edit any
     appointment; there's no "only the person who booked it" restriction.
-  - **Delete** (× icon) — a confirm-before-delete dialog (the same
-    `ConfirmModal` used for every other destructive action in the app),
-    then `DELETE /appointments/:id` (§6).
+    Shown for every role.
+  - **Delete (× icon), `doctor`/`front_desk` only** — a confirm-before-delete
+    dialog (the same `ConfirmModal` used for every other destructive
+    action in the app), then `DELETE /appointments/:id` (§6). `admin` does
+    not see this icon at all — see bulk delete below instead.
   - **"Add patient"** (prospective patient only) — opens the patient
     form (§8.3) prefilled with the name/DOB/age/mobile/address captured at
     booking time. Submitting it creates the patient **and** links this
@@ -1049,17 +1060,23 @@ this is additive on top of that shell, not a rewrite of it.
   - **"Add visit"** (existing patient only) — jumps straight to the visit
     record form (§8.5) for that patient, the same form reached from
     Patient Detail. If the linked patient was since deleted, this action is
-    hidden (nothing left to add a visit against). Both this and "Add as
+    hidden (nothing left to add a visit against). Both this and "Add
     patient" render through the same shared `Button variant="secondary"` —
     deliberately identical styling, since they occupy the same slot on a
     row and differ only in *which one* applies, not in visual weight.
-- **Bulk delete**: a checkbox on every row plus a "Select all" checkbox
-  above the list; once one or more rows are checked, a "Delete selected
-  (N)" button appears and runs one confirm dialog before deleting all
-  selected appointments at once. There's no dedicated bulk-delete API
-  endpoint — the client just calls `DELETE /appointments/:id` once per
-  selected id (§6), which is plenty efficient at this clinic's scale (§11)
-  without a bespoke batch route.
+- **Bulk delete, `admin` only**: a checkbox on every row plus a "Select
+  all" checkbox above the list; once one or more rows are checked, a
+  "Delete selected (N)" button confirms once and deletes every selected
+  appointment. `admin` gets this instead of the per-row × icon, not in
+  addition to it. There's no dedicated bulk-delete API endpoint — the
+  client just calls `DELETE /appointments/:id` once per selected id (§6),
+  which is plenty efficient at this clinic's scale (§11) without a bespoke
+  batch route.
+  - The "Delete selected" button stays mounted in the layout at all times
+    (just invisible with nothing checked) rather than appearing only once
+    something is selected — it and the "Select all" checkbox are the same
+    height, so checking the first row never shifts the list underneath it
+    down the page the way a suddenly-appearing button would.
 - **Auto-delete**: independent of the manual delete/bulk-delete above,
   whenever the admin-only "Automatically delete old appointments" setting
   (§8.10) is on, any appointment dated more than the configured number of
