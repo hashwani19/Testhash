@@ -70,7 +70,7 @@ function AppShell() {
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
   const [editingVisit, setEditingVisit] = useState<EyeVisit | null>(null)
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
-  // Set when "Add as patient" is used on a new-patient appointment — prefills
+  // Set when "Add patient" is used on a new-patient appointment — prefills
   // the patient form with the details captured at booking time, and once
   // submitted, links the appointment to the newly created patient.
   const [newPatientPrefill, setNewPatientPrefill] = useState<Partial<Patient> | null>(null)

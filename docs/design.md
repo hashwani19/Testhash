@@ -401,7 +401,7 @@ erDiagram
   - **Existing vs. prospective is a discriminant on `patient_id`**, not a
     separate `status`/`type` column — `patient_id IS NULL` *is* "this is a
     prospective patient," and the moment `PATCH /appointments/:id` sets it
-    (because "Add as patient" ran, §8.11), the row behaves as an
+    (because "Add patient" ran, §8.11), the row behaves as an
     existing-patient appointment from then on; `name`/`dob`/etc. are left in
     place as a historical record but no longer read for display (the linked
     patient's own name/DOB take over).
@@ -692,7 +692,7 @@ UI at all — only the data-fetching layer.
 | `GET /audit-log?entity_type=&entity_id=&page=&limit=` | admin | Audit trail lookup | `created_at` **desc** (most recent activity first) |
 | `GET /appointments?search=&from=&to=&sort=&page=&limit=` | any | List/search appointments (§8.11). `search` matches the resolved patient name (linked patient's name, or the prospective `name` — ≥3 chars, same rule as `/patients`, §5.2). `from`/`to` filter to a date range (either or both, inclusive). `sort` overrides the default: `name_asc`/`name_desc` | `date`, `time` asc (soonest first) |
 | `POST /appointments` | any | Book an appointment — either `patient_id` (existing patient) or `name`/`dob`/`manual_age`/`mobile`/`address` (prospective patient), plus `date` (required) and `time` (optional). `date` must be today or later — rejects a past date with `400` (§8.11) | — |
-| `PATCH /appointments/:id` | any | Update any of `date`/`time`/`patient_id`/`name`/`dob`/`manual_age`/`mobile`/`address` — used both for the Edit action (§8.11) and to set `patient_id` once a prospective patient is registered via "Add as patient" | — |
+| `PATCH /appointments/:id` | any | Update any of `date`/`time`/`patient_id`/`name`/`dob`/`manual_age`/`mobile`/`address` — used both for the Edit action (§8.11) and to set `patient_id` once a prospective patient is registered via "Add patient" | — |
 | `DELETE /appointments/:id` | any | Delete a single appointment (§8.11) — not admin-only, unlike `DELETE /visits/:id`; the client's "bulk delete" is just this endpoint called once per selected id | — |
 | `GET /settings` | admin | App-wide settings (auto-delete toggle + day threshold, §5.2) | — |
 | `PATCH /settings` | admin | Update either/both fields | — |
@@ -1002,7 +1002,7 @@ this is additive on top of that shell, not a rewrite of it.
     manually entered age, **mobile number** (India format, §5.2), and
     address. The typed text becomes the name as-is — no confirmation step.
     None of these fields touch the `patients` table yet — they live on the
-    appointment row itself until "Add as patient" (§8.11 below) runs.
+    appointment row itself until "Add patient" (§8.11 below) runs.
   - If the user keeps typing and the text starts matching someone after
     all, the new-patient fields disappear and the match list takes over
     again — the form always reflects the *current* text, not whichever
@@ -1039,7 +1039,7 @@ this is additive on top of that shell, not a rewrite of it.
   - **Delete** (× icon) — a confirm-before-delete dialog (the same
     `ConfirmModal` used for every other destructive action in the app),
     then `DELETE /appointments/:id` (§6).
-  - **"Add as patient"** (prospective patient only) — opens the patient
+  - **"Add patient"** (prospective patient only) — opens the patient
     form (§8.3) prefilled with the name/DOB/age/mobile/address captured at
     booking time. Submitting it creates the patient **and** links this
     appointment to the new `patient_id` (`PATCH /appointments/:id`, §6) —
