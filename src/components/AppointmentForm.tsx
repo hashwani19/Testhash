@@ -160,6 +160,19 @@ export function AppointmentForm({ patients, onSubmit, onCancel }: Props) {
             />
           </label>
 
+          <label className={fieldLabel}>
+            <span className={fieldLabelText}>Mobile number</span>
+            <TextInput
+              type="tel"
+              inputMode="numeric"
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value)}
+              placeholder="10-digit mobile number"
+              pattern="[6-9][0-9]{9}"
+              title="10-digit Indian mobile number"
+            />
+          </label>
+
           <div className="flex flex-wrap gap-2.5">
             <label className={`${fieldLabel} min-w-[90px]`}>
               <span className={fieldLabelText}>Date of birth</span>
@@ -186,19 +199,6 @@ export function AppointmentForm({ patients, onSubmit, onCancel }: Props) {
               />
             </label>
           </div>
-
-          <label className={fieldLabel}>
-            <span className={fieldLabelText}>Mobile number</span>
-            <TextInput
-              type="tel"
-              inputMode="numeric"
-              value={mobile}
-              onChange={(e) => setMobile(e.target.value)}
-              placeholder="10-digit mobile number"
-              pattern="[6-9][0-9]{9}"
-              title="10-digit Indian mobile number"
-            />
-          </label>
 
           <label className={fieldLabel}>
             <span className={fieldLabelText}>Address</span>
