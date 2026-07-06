@@ -4,14 +4,12 @@
 
 export const card = 'bg-surface border border-border rounded-2xl p-4 shadow-card'
 
-// Shared type scale. pageTitle is the splash-screen brand moment (login,
-// full width, no flanking chrome) — appBarTitle is the same brand name
-// compressed to fit the in-app header between the hamburger and profile
-// icons; it's deliberately smaller so it doesn't truncate on common phone
-// widths (~360-430px). screenHeading is a full-screen section title
-// (Manage Groups, Activity, Appointments, ...).
+// Shared type scale. pageTitle is the app's brand-name heading, used both
+// on the login splash and in the in-app header — it's allowed to wrap
+// onto two lines there rather than shrinking or truncating to fit next to
+// the hamburger/profile icons. screenHeading is a full-screen section
+// title (Manage Groups, Activity, Appointments, ...).
 export const pageTitle = 'text-[22px] font-bold text-text-h'
-export const appBarTitle = 'text-lg font-bold text-text-h'
 export const screenHeading = 'text-xl font-bold text-text-h'
 
 // Fixed-size circular touch target shared by header icon buttons (hamburger,

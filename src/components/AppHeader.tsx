@@ -3,7 +3,7 @@ import type { Role } from '../types'
 import { NavMenu } from './NavMenu'
 import type { NavTarget } from './NavMenu'
 import { ProfileMenu } from './ProfileMenu'
-import { appBarTitle, iconButton } from '../styles'
+import { iconButton, pageTitle } from '../styles'
 
 interface Props {
   subtitle: string
@@ -20,20 +20,23 @@ export function AppHeader({ subtitle, fullName, role, activeNavTarget, onNavigat
   return (
     <header className="px-5 pt-7 pb-2">
       <div className="flex items-center justify-between gap-3">
-        <div className="relative flex min-w-0 flex-1 items-center gap-2">
-          <button className={iconButton} aria-label="Open menu" onClick={() => setMenuOpen((o) => !o)}>
-            ☰
-          </button>
-          <h1 className={`min-w-0 flex-1 truncate ${appBarTitle}`}>Ortho and Vision Care</h1>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="relative shrink-0">
+            <button className={iconButton} aria-label="Open menu" onClick={() => setMenuOpen((o) => !o)}>
+              ☰
+            </button>
 
-          <NavMenu
-            open={menuOpen}
-            role={role}
-            active={activeNavTarget}
-            onNavigate={onNavigate}
-            onSignOut={onSignOut}
-            onClose={() => setMenuOpen(false)}
-          />
+            <NavMenu
+              open={menuOpen}
+              role={role}
+              active={activeNavTarget}
+              onNavigate={onNavigate}
+              onSignOut={onSignOut}
+              onClose={() => setMenuOpen(false)}
+            />
+          </div>
+
+          <h1 className={`min-w-0 flex-1 ${pageTitle}`}>Ortho and Vision Care</h1>
         </div>
 
         <ProfileMenu fullName={fullName} role={role} onSignOut={onSignOut} />
