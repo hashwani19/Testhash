@@ -2,6 +2,14 @@ export type Gender = 'female' | 'male' | 'other' | 'unspecified'
 
 export type Role = 'admin' | 'doctor' | 'front_desk'
 
+export type ThemePreference = 'light' | 'dark' | 'auto'
+
+export interface UserPreferences {
+  theme: ThemePreference
+  /** Items per page in list views. Undefined means "use the list's own default (20)". */
+  listPageSize?: number
+}
+
 export interface User {
   id: string
   email: string

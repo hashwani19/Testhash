@@ -9,10 +9,18 @@ interface Props {
   role: Role
   activeNavTarget: NavTarget
   onNavigate: (target: NavTarget) => void
+  onOpenPreferences: () => void
   onSignOut: () => void
 }
 
-export function AppHeader({ fullName, role, activeNavTarget, onNavigate, onSignOut }: Props) {
+export function AppHeader({
+  fullName,
+  role,
+  activeNavTarget,
+  onNavigate,
+  onOpenPreferences,
+  onSignOut,
+}: Props) {
   return (
     <header className="px-5 pt-7 pb-2">
       <div className="flex items-center justify-between gap-3">
@@ -22,7 +30,12 @@ export function AppHeader({ fullName, role, activeNavTarget, onNavigate, onSignO
           <h1 className={`min-w-0 flex-1 ${pageTitle}`}>Ortho and Vision Care</h1>
         </div>
 
-        <ProfileMenu fullName={fullName} role={role} onSignOut={onSignOut} />
+        <ProfileMenu
+          fullName={fullName}
+          role={role}
+          onOpenPreferences={onOpenPreferences}
+          onSignOut={onSignOut}
+        />
       </div>
     </header>
   )

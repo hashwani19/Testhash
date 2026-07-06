@@ -123,6 +123,7 @@ more granular later (e.g. per-patient access lists), split into `roles` +
 ```mermaid
 erDiagram
     USERS ||--o{ SESSIONS : has
+    USERS ||--o| USER_PREFERENCES : has
     USERS ||--o{ AUDIT_LOG : "acts in"
     USERS ||--o{ PATIENTS : "created by"
     USERS ||--o{ EYE_VISITS : "examined by"
@@ -220,6 +221,12 @@ erDiagram
         text user_id FK
         text expires_at
         text created_at
+    }
+    USER_PREFERENCES {
+        text user_id PK "FK -> users.id"
+        text theme
+        int list_page_size
+        text updated_at
     }
 ```
 
@@ -332,6 +339,22 @@ erDiagram
 - **`audit_log.before_json` / `after_json`**: snapshot of the changed row
   (JSON-encoded), not full-table diffs — enough to reconstruct history without
   a general-purpose event-sourcing system.
+- **`user_preferences`**: one row per user, holding personal (not clinical)
+  settings — device-independent, since the same account may be used from
+  more than one device/browser. One-to-zero-or-one with `users` (a user who
+  has never opened Preferences simply has no row; reads fall back to
+  `theme='auto'`/`list_page_size=NULL` in application code rather than the
+  API needing to pre-populate a row per new user).
+  - **`theme`**: `'light' | 'dark' | 'auto'`. `'auto'` follows the browser's
+    `prefers-color-scheme` media query (light/dark based on the OS/browser
+    setting) exactly like the client already does today with no preference
+    system at all — `'light'`/`'dark'` force that scheme regardless of the
+    OS setting.
+  - **`list_page_size`**: nullable integer — items per page in list views
+    (patient list, visit history, ...) app-wide. `NULL` means "use the
+    client's own built-in default (20)" rather than the API/DB asserting an
+    opinion about what that default should be; the client is the single
+    source of truth for the fallback value (§7).
 - **Timestamps & default sort order**: every record-bearing table carries a
   proper datetime, and every list view has a defined default sort — never
   incidental insertion order:
@@ -476,6 +499,14 @@ CREATE TABLE audit_log (
 );
 CREATE INDEX idx_audit_entity ON audit_log(entity_type, entity_id);
 CREATE INDEX idx_audit_actor ON audit_log(actor_user_id, created_at);
+
+-- One row per user, created lazily on first write (not on user creation).
+CREATE TABLE user_preferences (
+    user_id        TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    theme          TEXT NOT NULL DEFAULT 'auto' CHECK (theme IN ('light', 'dark', 'auto')),
+    list_page_size INTEGER,                     -- null = use the client's own default (20, §7)
+    updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
 ```
 
 **Porting to Postgres later**: `TEXT` timestamp/date columns → `TIMESTAMPTZ`/`DATE`;
@@ -530,6 +561,8 @@ UI at all — only the data-fetching layer.
 | `POST /auth/login` | — | Authenticate, set session cookie | — |
 | `POST /auth/logout` | any | Invalidate session | — |
 | `GET /auth/me` | any | Current user + role | — |
+| `GET /me/preferences` | any | Current user's own theme + list page size (§5.2). Not gated by role — every account manages its own | — |
+| `PATCH /me/preferences` | any | Update either/both fields; creates the row on first write if it doesn't exist yet | — |
 | `GET /users?page=&limit=` | admin | List staff accounts | `full_name` asc |
 | `POST /users` | admin | Create staff account | — |
 | `PATCH /users/:id` | admin | Update role/active status | — |
@@ -604,6 +637,19 @@ UI at all — only the data-fetching layer.
   setSearch/groupId/setGroupId/sort/setSort/resetFilters/isFilterActive/
   results) stays the same either way, so `PatientList` and `SearchBox`
   don't change when that swap happens.
+- Per-user preferences (theme; list page size) are likewise isolated behind
+  `usePreferences`, backed by a `PreferencesProvider` context (mirroring
+  `AuthProvider`) rather than a plain hook — every consumer (the theme
+  effect, `PreferencesScreen`, `PatientList`, `EyeRecordHistory`) needs to
+  see the *same* current value, which a plain per-call `useState` hook
+  can't give them. Today it reads/writes a `localStorage` map keyed by
+  user id; once the backend exists it becomes `GET`/`PATCH /me/preferences`
+  (§6) instead, with the same returned shape (`preferences`,
+  `updatePreferences`) so none of those consumers change. `ListView`'s own
+  `pageSize` default (20) is only ever a *fallback* — a caller passes
+  `preferences.listPageSize` through when set, so the effective page size
+  is "the user's saved choice, else 20", never something `ListView` decides
+  on its own.
 - Existing offline-shell behavior (service worker precache, install banners)
   is unaffected — it's a separate concern from data sync.
 
@@ -716,6 +762,7 @@ data.
 | View Activity (audit log) | ✅ | ❌ | ❌ |
 | Manage staff accounts | ✅ | ❌ | ❌ |
 | Appointments nav item (screen deferred, §13) | ✅ | ✅ | ✅ |
+| Preferences (own theme + list page size, §8.10) | ✅ | ✅ | ✅ |
 
 ### 8.7 Carried over unchanged
 
@@ -760,6 +807,29 @@ this is additive on top of that shell, not a rewrite of it.
   (§10), which a client-only localStorage app has no equivalent for. This
   section describes the real-backend screen now that it's a reachable nav
   destination.
+
+### 8.10 Preferences (own account, every role)
+
+- Reachable from the **profile menu** (the avatar/initials popover in the
+  top-right, §8.2's counterpart on the right side of the header), not the
+  hamburger nav — it's a "my account" setting, not a top-level navigation
+  destination, and applies equally to all three roles (§8.6).
+- **Theme**: `light` / `dark` / `auto` (§5.2). `auto` — the default —
+  matches the OS/browser's `prefers-color-scheme`, exactly like the app's
+  behavior before this screen existed; picking `light` or `dark` overrides
+  that regardless of the OS setting. Applies immediately on change, no
+  separate save step.
+- **Items per page in lists**: a number field controlling `ListView`'s page
+  size app-wide (patient list, visit history, ...). Blank means "use the
+  default (20)" (§5.2, §7) rather than the field ever showing a specific
+  number the user didn't choose.
+- Both settings are **per-user, not per-device** — reading `GET
+  /me/preferences` (§6) after login is what makes them follow the same
+  person to a different browser/device, unlike a device-local setting
+  would.
+- No admin override of another user's preferences in this phase — everyone
+  manages only their own (`PATCH /me/preferences` always targets the
+  caller, there's no `:user_id` in the path).
 
 ## 9. Offline sync strategy (phased)
 

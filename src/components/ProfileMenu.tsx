@@ -5,6 +5,7 @@ import { Dropdown } from './common/Dropdown'
 interface Props {
   fullName: string
   role: Role
+  onOpenPreferences: () => void
   onSignOut: () => void
 }
 
@@ -17,7 +18,7 @@ function initials(fullName: string): string {
     .join('')
 }
 
-export function ProfileMenu({ fullName, role, onSignOut }: Props) {
+export function ProfileMenu({ fullName, role, onOpenPreferences, onSignOut }: Props) {
   return (
     <Dropdown
       align="right"
@@ -41,7 +42,17 @@ export function ProfileMenu({ fullName, role, onSignOut }: Props) {
           </span>
           <Button
             variant="unstyled"
-            className="mt-1 cursor-pointer rounded-lg border-t border-border bg-transparent px-3 pb-2.5 pt-3 text-left text-[15px] font-medium text-text-h"
+            className="mt-1 cursor-pointer rounded-lg border-t border-border bg-transparent px-3 pt-3 pb-1.5 text-left text-[15px] font-medium text-text-h"
+            onClick={() => {
+              close()
+              onOpenPreferences()
+            }}
+          >
+            Preferences
+          </Button>
+          <Button
+            variant="unstyled"
+            className="cursor-pointer rounded-lg bg-transparent px-3 pt-1.5 pb-2.5 text-left text-[15px] font-medium text-text-h"
             onClick={() => {
               close()
               onSignOut()

@@ -3,6 +3,7 @@ import { getPatientAge } from '../utils/age'
 import { MIN_SEARCH_LENGTH } from '../utils/patientQuery'
 import type { PatientSort } from '../utils/patientQuery'
 import { usePatientQuery } from '../hooks/usePatientQuery'
+import { usePreferences } from '../hooks/usePreferences'
 import { Button } from './common/Button'
 import { SearchBox } from './common/SearchBox'
 import { Select } from './common/Select'
@@ -19,6 +20,7 @@ interface Props {
 export function PatientList({ patients, groups, onSelect }: Props) {
   const { search, setSearch, groupId, setGroupId, sort, setSort, resetFilters, isFilterActive, results } =
     usePatientQuery(patients, groups)
+  const { preferences } = usePreferences()
 
   const groupName = (id?: string) => groups.find((g) => g.id === id)?.name
 
@@ -61,6 +63,7 @@ export function PatientList({ patients, groups, onSelect }: Props) {
       <ListView
         items={results}
         getKey={(patient) => patient.id}
+        pageSize={preferences.listPageSize}
         itemLabel="patient"
         emptyMessage={patients.length === 0 ? 'No patients yet. Add the first one.' : 'No patients match.'}
         renderItem={(patient) => {

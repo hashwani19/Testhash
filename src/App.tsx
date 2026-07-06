@@ -1,15 +1,19 @@
 import { useState } from 'react'
 import { AuthProvider } from './auth/AuthContext'
+import { PreferencesProvider } from './preferences/PreferencesProvider'
 import { useAuth } from './hooks/useAuth'
 import { usePatients } from './hooks/usePatients'
 import { useEyeVisits } from './hooks/useEyeVisits'
 import { usePatientGroups } from './hooks/usePatientGroups'
+import { usePreferences } from './hooks/usePreferences'
+import { useThemeEffect } from './hooks/useThemeEffect'
 import { PatientList } from './components/PatientList'
 import { PatientForm } from './components/PatientForm'
 import { PatientDetail } from './components/PatientDetail'
 import { EyeRecordForm } from './components/EyeRecordForm'
 import { ManageGroupsScreen } from './components/ManageGroupsScreen'
 import { ComingSoonScreen } from './components/ComingSoonScreen'
+import { PreferencesScreen } from './components/PreferencesScreen'
 import { AppHeader } from './components/AppHeader'
 import type { NavTarget } from './components/NavMenu'
 import { ConfirmModal } from './components/ConfirmModal'
@@ -29,6 +33,7 @@ type View =
   | 'manageGroups'
   | 'activity'
   | 'appointments'
+  | 'preferences'
 
 const VIEW_TO_NAV_TARGET: Partial<Record<View, NavTarget>> = {
   manageGroups: 'groups',
@@ -42,6 +47,8 @@ function AppShell() {
   const { addVisit, updateVisit, deleteVisit, deleteVisitsForPatient, getVisitsForPatient } =
     useEyeVisits()
   const { groups, addGroup, renameGroup, deleteGroup } = usePatientGroups()
+  const { preferences } = usePreferences()
+  useThemeEffect(preferences.theme)
 
   const [view, setView] = useState<View>('list')
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
@@ -80,6 +87,7 @@ function AppShell() {
         role={user.role}
         activeNavTarget={VIEW_TO_NAV_TARGET[view] ?? 'patients'}
         onNavigate={navigateTo}
+        onOpenPreferences={() => setView('preferences')}
         onSignOut={requestSignOut}
       />
 
@@ -212,6 +220,8 @@ function AppShell() {
             onBack={goToList}
           />
         )}
+
+        {view === 'preferences' && <PreferencesScreen onBack={goToList} />}
       </main>
     </div>
   )
@@ -220,7 +230,9 @@ function AppShell() {
 function App() {
   return (
     <AuthProvider>
-      <AppShell />
+      <PreferencesProvider>
+        <AppShell />
+      </PreferencesProvider>
     </AuthProvider>
   )
 }

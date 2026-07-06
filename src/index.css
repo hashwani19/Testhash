@@ -32,6 +32,36 @@
   }
 }
 
+/* Explicit theme preference (Preferences screen) overrides the OS setting
+   above. `:root[data-theme=...]` has higher specificity than a bare `:root`
+   (inside or outside the media query), so these win whenever
+   useThemeEffect has set the attribute — 'auto' leaves the attribute unset
+   and the media query above keeps governing exactly as it did before this
+   preference existed. */
+:root[data-theme='light'] {
+  --text: #475569;
+  --text-h: #0f172a;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --accent: #6366f1;
+  --accent-contrast: #ffffff;
+  --medium: #f59e0b;
+  --high: #ef4444;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.04);
+}
+
+:root[data-theme='dark'] {
+  --text: #94a3b8;
+  --text-h: #f1f5f9;
+  --bg: #0f172a;
+  --surface: #161e2e;
+  --border: #263349;
+  --accent: #818cf8;
+  --accent-contrast: #0f172a;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
 /* Maps the runtime-overridable design tokens above onto Tailwind's theme so
    utilities like bg-surface/text-text-h/shadow-card pick up dark mode for free. */
 @theme inline {

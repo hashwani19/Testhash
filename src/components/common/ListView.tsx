@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button } from './Button'
 
+/** ListView's own fallback page size — only used when a caller doesn't pass `pageSize`. */
+export const DEFAULT_LIST_PAGE_SIZE = 20
+
 interface ServerPagination {
   /** 0-indexed current page, owned by the caller (e.g. mirrors an API's `page` query param). */
   page: number
@@ -34,7 +37,7 @@ interface Props<T> {
    *  just the current page's size). */
   totalCount?: number
   /** Client-side page size. Ignored when `pagination` is provided — a
-   *  server-paged caller controls page size on its own request. Defaults to 50. */
+   *  server-paged caller controls page size on its own request. Defaults to 20. */
   pageSize?: number
   /**
    * Hand paging control to the caller — pass this once patients (or
@@ -72,7 +75,7 @@ export function ListView<T>({
   itemLabelPlural,
   emptyMessage,
   totalCount,
-  pageSize = 50,
+  pageSize = DEFAULT_LIST_PAGE_SIZE,
   pagination,
 }: Props<T>) {
   const [internalPage, setInternalPage] = useState(0)

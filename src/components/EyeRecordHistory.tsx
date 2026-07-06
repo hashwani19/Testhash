@@ -5,6 +5,7 @@ import { Card, CardHeader } from './common/Card'
 import { ListView } from './common/ListView'
 import { EditIcon } from './common/icons'
 import { ConfirmModal } from './ConfirmModal'
+import { usePreferences } from '../hooks/usePreferences'
 import { hasRefractionData } from '../utils/eyeVisit'
 
 interface Props {
@@ -76,12 +77,14 @@ function EyeSection({ eye, refractions }: { eye: Eye; refractions: EyeVisit['ref
 export function EyeRecordHistory({ visits, canDelete, onEdit, onDelete }: Props) {
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const confirmingVisit = visits.find((v) => v.id === confirmingDeleteId) ?? null
+  const { preferences } = usePreferences()
 
   return (
     <>
       <ListView
         items={visits}
         getKey={(visit) => visit.id}
+        pageSize={preferences.listPageSize}
         itemLabel="record"
         emptyMessage="No history yet. Add the first eye record."
         renderItem={(visit) => (
