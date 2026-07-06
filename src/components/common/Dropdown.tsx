@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { ElementType, ReactNode } from 'react'
 import { Button } from './Button'
 import { cx, dimmedBackdrop } from '../../styles'
@@ -20,10 +20,8 @@ interface Props {
   panelClassName?: string
   /** Host element for the panel — 'nav' for navigation menus, 'div' otherwise. */
   as?: ElementType
-  /** Dim + blur the backdrop instead of leaving it invisible (used for the full-screen nav drawer). */
+  /** Dim the backdrop instead of leaving it invisible (used for the full-screen nav drawer). */
   dimBackdrop?: boolean
-  /** Lock page scroll while open (used for the full-screen nav drawer). */
-  lockScroll?: boolean
   /** aria-label for the backdrop's close button. */
   closeLabel?: string
 }
@@ -44,22 +42,9 @@ export function Dropdown({
   panelClassName = 'gap-1 p-3',
   as: Panel = 'div',
   dimBackdrop = false,
-  lockScroll = false,
   closeLabel = 'Close menu',
 }: Props) {
   const [open, setOpen] = useState(false)
-
-  // Lock body scroll while open so the page behind a full-screen drawer
-  // can't be scrolled — the backdrop already blocks clicks, but wheel/touch
-  // scroll bubbles past it to the document by default.
-  useEffect(() => {
-    if (!lockScroll || !open) return
-    const original = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = original
-    }
-  }, [lockScroll, open])
 
   const close = () => setOpen(false)
 

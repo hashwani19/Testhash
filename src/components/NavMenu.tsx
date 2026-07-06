@@ -27,7 +27,6 @@ export function NavMenu({ role, active, onNavigate, onSignOut }: Props) {
       align="left"
       as="nav"
       dimBackdrop
-      lockScroll
       closeLabel="Close menu"
       trigger={({ onClick }) => (
         <Button

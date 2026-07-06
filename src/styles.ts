@@ -11,7 +11,7 @@ export const card = 'bg-surface border border-border rounded-2xl p-4 shadow-card
 // hamburger nav drawer, ConfirmModal) — a single source of truth so a
 // confirmation dialog and the nav drawer always dim the page behind them
 // the same way, rather than each picking its own opacity.
-export const dimmedBackdrop = 'bg-black/15 backdrop-blur-[2px]'
+export const dimmedBackdrop = 'bg-black/50'
 
 // Shared type scale. pageTitle is the app's brand-name heading, used both
 // on the login splash and in the in-app header — it's allowed to wrap
