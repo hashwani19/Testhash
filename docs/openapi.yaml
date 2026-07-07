@@ -72,6 +72,10 @@ tags:
     description: Per-user, per-device-independent settings (design.md §5.2).
   - name: Branding
     description: Per-tenant header title/subtitle/logo (design.md §5.5).
+  - name: Prescription Template
+    description: >-
+      Per-tenant A4 print configuration for visit prescriptions — fixed
+      layout, configurable content only (design.md §5.6).
   - name: Users
     description: Staff account management within a tenant (admin-only).
   - name: Patients
@@ -464,6 +468,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantBranding'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ---------------------------------------------------------------------
+  # Prescription Template
+  # ---------------------------------------------------------------------
+  /prescription-template:
+    get:
+      tags: [Prescription Template]
+      operationId: getPrescriptionTemplate
+      summary: The tenant's print configuration
+      x-required-roles: [any]
+      description: >-
+        Defaulted (`showLetterhead: true`, `topMarginMm: 0`, `footerNote:
+        null`) if the tenant has never saved one. Open to any role since
+        it's needed to render the print view for everyone, same reasoning
+        as `GET /branding` (design.md §5.6).
+      responses:
+        '200':
+          description: Current print configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrescriptionTemplate'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [Prescription Template]
+      operationId: updatePrescriptionTemplate
+      summary: Update the tenant's print configuration
+      x-required-roles: [admin]
+      description: >-
+        Creates the `prescription_templates` row on first write if it
+        doesn't exist yet, same lazy-create pattern as `PATCH /branding`
+        (design.md §5.6).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrescriptionTemplateUpdateRequest'
+      responses:
+        '200':
+          description: Updated print configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrescriptionTemplate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -992,6 +1048,31 @@ paths:
       responses:
         '204':
           description: Visit deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /visits/{id}/print:
+    post:
+      tags: [Visits]
+      operationId: logPrescriptionPrint
+      summary: Log a prescription print
+      x-required-roles: [admin, doctor, front_desk]
+      description: >-
+        Writes an audit_log row only (`action: export`, `entityType:
+        eye_visit`, design.md §5.6/§10) — the prescription itself is
+        rendered entirely client-side from data already fetched (the visit,
+        the patient, tenant branding, and the prescription template), so
+        there's nothing for this endpoint to return beyond confirming the
+        audit entry was written.
+      parameters:
+        - $ref: '#/components/parameters/VisitId'
+      responses:
+        '204':
+          description: Print logged.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1601,6 +1682,38 @@ components:
           type: string
           nullable: true
         subtitle:
+          type: string
+          nullable: true
+
+    # -- Prescription template -----------------------------------------------
+    PrescriptionTemplate:
+      type: object
+      required: [showLetterhead, topMarginMm, updatedAt]
+      properties:
+        showLetterhead:
+          type: boolean
+          description: >-
+            If false, the print view's header area is left blank instead of
+            rendering the tenant's branding — for clinics using pre-printed
+            letterhead stationery (design.md §5.6).
+        topMarginMm:
+          type: integer
+          description: Extra blank space reserved at the page top, mainly meaningful alongside showLetterhead=false.
+        footerNote:
+          type: string
+          nullable: true
+          description: Free text printed at the bottom of every prescription from this tenant.
+        updatedAt:
+          type: string
+          format: date-time
+    PrescriptionTemplateUpdateRequest:
+      type: object
+      properties:
+        showLetterhead:
+          type: boolean
+        topMarginMm:
+          type: integer
+        footerNote:
           type: string
           nullable: true
 

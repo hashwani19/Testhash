@@ -180,6 +180,7 @@ erDiagram
     TENANTS ||--o{ AUDIT_LOG : has
     TENANTS ||--|| APP_SETTINGS : has
     TENANTS ||--o| TENANT_BRANDING : has
+    TENANTS ||--o| PRESCRIPTION_TEMPLATES : has
     USERS ||--o{ SESSIONS : has
     USERS ||--o| USER_PREFERENCES : has
     USERS ||--o{ AUDIT_LOG : "acts in"
@@ -331,6 +332,13 @@ erDiagram
         text title "falls back to tenants.name if unset, §5.5"
         text subtitle "free text, e.g. doctor name(s), §5.5"
         text logo_storage_key "R2 key in a PUBLIC bucket, not attachments' private one, §5.5"
+        text updated_at
+    }
+    PRESCRIPTION_TEMPLATES {
+        text tenant_id PK "one row per tenant, created lazily, §5.6"
+        int show_letterhead "if 0, header area is left blank for pre-printed letterhead stationery, §5.6"
+        int top_margin_mm "extra blank space reserved at the page top, §5.6"
+        text footer_note "free text, e.g. clinic address/disclaimer, §5.6"
         text updated_at
     }
     PLATFORM_SETTINGS {
@@ -781,6 +789,18 @@ CREATE TABLE tenant_branding (
     updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- One row per tenant, created lazily on first PATCH /prescription-template
+-- (same pattern as tenant_branding/user_preferences, §5.6) — a tenant with
+-- no row here just gets the plain default layout (digital letterhead shown,
+-- no extra margin, no footer note).
+CREATE TABLE prescription_templates (
+    tenant_id        TEXT PRIMARY KEY REFERENCES tenants(id),
+    show_letterhead  INTEGER NOT NULL DEFAULT 1,  -- boolean; 0 leaves the header blank for pre-printed letterhead paper (§5.6)
+    top_margin_mm    INTEGER NOT NULL DEFAULT 0,  -- extra blank space at the page top, mainly meaningful alongside show_letterhead = 0
+    footer_note      TEXT,                        -- free text, e.g. clinic address/disclaimer/contact info
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Service-wide configuration, managed by super_user (§4.1) — distinct from
 -- app_settings above, which is per-tenant. Singleton row, same pattern
 -- app_settings itself used before it became per-tenant. Exact fields are
@@ -975,6 +995,91 @@ itself:
   `logo_storage_key` and deletes the R2 object — the header then falls back
   to title/subtitle text only, same as a tenant that never uploaded one.
 
+### 5.6 Prescription printing
+
+Staff can print an A4 page of a single visit's prescription — the same
+clinical content already shown on-screen (§8.5: the Distance/Reading
+refraction grid per eye, lenses, diagnosis, treatment plan, follow-up date,
+notes), formatted to hand to a patient or file physically. Modeled as
+`prescription_templates` (§5.1/§5.3), one row per tenant, **fixed layout
+with configurable content — not a custom HTML/layout template**:
+
+- **What's configurable, and why that's the line drawn here**: a full
+  custom-HTML template (a tenant designing their own layout/markup from
+  scratch) was considered and deliberately not built — it needs a template
+  engine, sanitization (a stored template is rendered for every staff
+  member at that clinic, so a malicious or compromised admin account could
+  otherwise inject markup that runs when a colleague opens the print view —
+  the same class of concern as any stored content other users will render,
+  not unique to this feature, but avoidable entirely by not offering
+  arbitrary markup in the first place), and a live preview — a
+  substantially bigger feature than what was asked for. Instead, the layout
+  itself is fixed and shared by every tenant; what's configurable is:
+  - **`show_letterhead`**: whether the tenant's branding (§5.5 — title,
+    subtitle, logo) renders digitally at the top of the page, or that area
+    is left blank. Real clinics commonly have pre-printed letterhead
+    stationery and want the software to print *around* it, not duplicate
+    it — this is the actual, concrete reason a "template" is worth having
+    at all, more than cosmetic layout preference.
+  - **`top_margin_mm`**: extra blank space reserved at the page top,
+    mainly meaningful alongside `show_letterhead = 0` (room for the
+    physical letterhead to already occupy), but not enforced as
+    mutually exclusive with it.
+  - **`footer_note`**: free text printed at the bottom of every
+    prescription from this tenant — address, phone, a disclaimer, "valid
+    for N months," whatever the clinic wants — same free-text philosophy
+    already used for `tenant_branding.subtitle`/`eye_visits.lenses`.
+  - Admin-only to edit (`PATCH /prescription-template`, §6), same
+    permission tier as branding — it's tenant-wide customization, not a
+    personal preference.
+- **Every field slot always prints, blank or not** — unlike the on-screen
+  visit history (§8.4), which hides a field entirely when it's empty, the
+  printed page shows every label (both eyes' Distance/Reading Sphere/
+  Cylinder/Axis/VA, Lenses, Diagnosis, Treatment plan, Follow-up date,
+  Notes) with its value or a blank line if unset. This deliberately matches
+  a real prescription pad's fixed layout (§5.2's reproduced card) rather
+  than the screen's space-saving "only show what's filled in" — a
+  clinician handed a printed page expects to see the whole prescription
+  shape, with blanks being informative (nothing was prescribed there)
+  rather than the field simply not existing on the page. This is not
+  configurable per tenant, consistent with the fixed-layout decision above.
+- **Doctor attribution comes from the visit itself**
+  (`eye_visits.examiner_id`), not a static per-tenant signature field — a
+  multi-doctor clinic's printed prescription always names whoever actually
+  examined that patient for that visit, which a tenant-wide static field
+  couldn't get right.
+- **Rendered entirely client-side**, no server-side PDF generation
+  service: a full-screen print overlay (same pattern as `ImageViewer`/
+  `ConfirmModal`, §7) renders the prescription from data the client
+  already has (visit + patient + tenant branding + the print template),
+  styled with `@page { size: A4; ... }` print CSS, and hands off to the
+  browser's native print dialog — which already covers "save as PDF" on
+  every major platform without this service needing to render one itself.
+- **Always renders light (black on white), regardless of the viewer's own
+  theme preference** (§5.2/§8.10) — a printed medical document needs to
+  stay legible and ink-economical on paper; a staff member's personal
+  dark-mode preference for the *app* has no bearing on what should print.
+- **Printing is logged as an export-class audit action**
+  (`action = 'export'`, `entity_type = 'eye_visit'`) via
+  `POST /visits/:id/print` (§6) — same reasoning as the existing
+  `GET /patients/:id/export`: data leaving the system onto paper is
+  meaningfully different from just viewing it on-screen, worth an audit
+  trail even though nothing is actually mutated. The endpoint's only job is
+  writing that audit row; the client already had everything it needed to
+  render the page before calling it.
+- **Open to `admin`/`doctor`/`front_desk` alike** (§4) — printing a
+  prescription is a read-oriented action on data all three roles can
+  already view, not a delete-like action needing restriction. It does
+  **not** include attachment photos/scans — those are a separate concept
+  (uploaded scans, §7) from the visit's own clinical text, and printing
+  doesn't change `front_desk`'s existing attachment-view restriction
+  (§4/§8.4) since attachments were never part of what's printed.
+- **One template per tenant, assumed** — same shape as `tenant_branding`.
+  If a clinic ever needs more than one (e.g. distinct letterheads per
+  doctor or per branch), that's an additive
+  `prescription_templates(id, tenant_id, ...)` table with a selector at
+  print time, not a rework of anything above (§13).
+
 ## 6. API surface (v1)
 
 **Canonical machine-readable spec: [`docs/openapi.yaml`](./openapi.yaml)**
@@ -1039,6 +1144,8 @@ UI at all — only the data-fetching layer.
 | `PATCH /branding` | admin | Update `title`/`subtitle` (§5.5). Creates the `tenant_branding` row on first write if it doesn't exist yet, same as `PATCH /me/preferences` | — |
 | `POST /branding/logo` | admin | Upload a logo (multipart → a **public** R2 bucket, distinct from attachments' private one, §5.5/§10). Client compresses before upload the same way attachment photos are (§7), just tuned smaller | — |
 | `DELETE /branding/logo` | admin | Remove the logo — header falls back to title/subtitle text only (§5.5) | — |
+| `GET /prescription-template` | any | The tenant's print configuration (§5.6) — `showLetterhead`/`topMarginMm`/`footerNote`, defaulted if the tenant has never saved one. Open to any role since it's needed to render the print view for everyone, same as branding | — |
+| `PATCH /prescription-template` | admin | Update `showLetterhead`/`topMarginMm`/`footerNote` (§5.6). Creates the row on first write if it doesn't exist yet | — |
 | `GET /users?page=&limit=` | admin | List staff accounts (own tenant only) | `full_name` asc |
 | `POST /users` | admin, super_user | Create a staff account. `admin` creates `doctor`/`front_desk`/`admin` under their own tenant; a `super_user` may additionally set `role: 'super_user'` on a new user under the reserved platform tenant (§4.1/§5.4) — no other caller may ever set that role | — |
 | `PATCH /users/:id` | admin | Update role/active status | — |
@@ -1057,6 +1164,7 @@ UI at all — only the data-fetching layer.
 | `GET /visits/:id` | admin, doctor, front_desk | Single visit detail | — |
 | `PATCH /visits/:id` | admin, doctor, front_desk | Update a visit | — |
 | `DELETE /visits/:id` | admin | Delete a visit | — |
+| `POST /visits/:id/print` | admin, doctor, front_desk | Log a prescription print (§5.6) as an export-class audit action (`action='export'`, `entity_type='eye_visit'`). Writes only an audit row — the print itself is rendered entirely client-side from data already fetched, nothing to return | — |
 | `POST /visits/:id/attachments` | admin, doctor | Upload a file (multipart → R2) | — |
 | `GET /attachments/:id` | admin, doctor | Fetch (redirect to a short-lived signed R2 URL) | — |
 | `DELETE /attachments/:id` | admin | Remove attachment | — |
@@ -1096,6 +1204,31 @@ UI at all — only the data-fetching layer.
   Preferences screen (§8.10), since it's a tenant-wide setting an admin
   manages on the clinic's behalf, not a personal "my account" setting every
   role gets its own copy of.
+- **A "Prescription Template" settings screen** (admin-only, §5.6/§8.2), same
+  reachability pattern as Branding — three fields: a **Show digital
+  letterhead** toggle (default on; off leaves the print header blank for
+  pre-printed letterhead stationery), a **Top margin (mm)** number (default
+  0, mainly meant to pair with the letterhead toggle being off), and a
+  **Footer note** free-text field. No live preview in this phase — printing
+  an actual visit (§8.4) is the way to check how a change looks; saving
+  applies immediately to every subsequent print with nothing retroactive to
+  update, since printing has no stored artifact (§5.6).
+- **A new `PrescriptionPrint` full-screen overlay** (§5.6), same
+  fixed/`z-50` pattern `ImageViewer`/`ConfirmModal` already use, triggered by
+  a new Print icon on each visit in `EyeRecordHistory` (§8.4/§8.5) alongside
+  the existing Edit/Delete icons. Renders the visit's full fixed layout —
+  every field slot (both eyes' Distance/Reading Sphere/Cylinder/Axis/VA,
+  Lenses, Diagnosis, Treatment plan, Follow-up date, Notes) always shown,
+  blank where unset, unlike the on-screen history's "hide if empty" display
+  (§5.6) — styled with `@page { size: A4; margin: <topMarginMm-aware
+  value>; }` print CSS, forced to a light/high-contrast palette regardless
+  of the viewer's own theme preference (§5.2/§8.10), and calls
+  `window.print()` once mounted rather than adding any client-side routing
+  (this app has none today — `App.tsx` is a single `view` state switch, not
+  a router) just for this one screen. The rest of the app shell is hidden
+  during printing via a `.no-print` class + `@media print`, so only the
+  overlay's content ends up on the page. Fires `POST /visits/:id/print`
+  (§6) once the print dialog opens, for the audit trail.
 - **A new "Accept invite" screen** (§8.1) for a freshly-provisioned admin's
   first login — a set-password form reached via the emailed invite link's
   token, not part of the normal login flow.
@@ -1324,6 +1457,7 @@ emailed link.
   | Activity | ✅ | ❌ | ❌ |
   | Appointments | ✅ | ✅ | ✅ |
   | Branding | ✅ | ❌ | ❌ |
+  | Prescription Template | ✅ | ❌ | ❌ |
 
 - **Patients** → Patient List (§8.3), unchanged as the default landing
   screen right after login for every role.
@@ -1334,6 +1468,10 @@ emailed link.
   permissions those actions already have elsewhere (§4).
 - **Branding** → the new Branding settings screen (§5.5/§7), admin-only —
   edit `title`/`subtitle`, upload/remove the logo.
+- **Prescription Template** → the new Prescription Template settings screen
+  (§5.6/§7), admin-only — edit `showLetterhead`/`topMarginMm`/`footerNote`.
+  Printing itself isn't reached from here — that's a per-visit action in
+  Patient Detail (§8.4), open to every role.
 - Selecting an item highlights it as active, closes the drawer, and
   navigates. No breadcrumbs or nested nav in this phase — every
   destination is a flat, single-level screen.
@@ -1381,6 +1519,12 @@ emailed link.
   is **admin-only**.
 - Attachments are not rendered at all for `front_desk` — not greyed out,
   simply absent from the page.
+- A **Print icon** on every visit card, open to all three roles (§5.6/§8.6)
+  — opens the full-screen `PrescriptionPrint` overlay (§7) for that visit.
+  Unlike the card itself (which omits empty rows/sections, above), the
+  printed page always shows every field slot, blank where unset (§5.6) —
+  the on-screen card and the printed page deliberately don't look identical
+  to each other.
 
 ### 8.5 Visit Record Form (create/edit)
 
@@ -1415,6 +1559,8 @@ emailed link.
 | Global app settings — appointment auto-delete (§8.10) | ✅ | ❌ | ❌ |
 | Preferences (own theme + list page size, §8.10) | ✅ | ✅ | ✅ |
 | Branding — title/subtitle/logo (§5.5/§8.2) | ✅ | ❌ | ❌ |
+| Print a visit's prescription (§5.6/§8.4) | ✅ | ✅ | ✅ |
+| Prescription Template — letterhead/margin/footer (§5.6/§8.2) | ✅ | ❌ | ❌ |
 
 ### 8.7 Carried over unchanged
 
@@ -1661,7 +1807,10 @@ build them if multi-device offline editing turns out to be a real need.
   `audit_log` with actor, before/after snapshot, and timestamp (§5.3).
   Read-access logging (who *viewed* a chart, not just who changed it) is
   not in Phase 1 — add an `action = 'view'` audit path later if required by
-  a specific compliance regime.
+  a specific compliance regime. Printing a prescription (§5.6) is treated
+  as an `export`, same as `GET /patients/:id/export` — data leaving the
+  system onto paper warrants a trail even though the request itself
+  mutates nothing.
 - **Consent**: `consents` table tracks what a patient has agreed to, with
   grant/revoke timestamps and an optional signed-document reference in R2.
 - **Retention / right to erasure**: patients are soft-deleted by default
@@ -1775,3 +1924,24 @@ build them if multi-device offline editing turns out to be a real need.
   auto_delete_after_days`, default 2), not hardcoded — chosen over a fixed
   constant so a clinic that wants a longer/shorter retention window doesn't
   need a code change (§8.10, §8.11).
+- ~~Prescription printing~~ — **resolved: specified in §5.6
+  (`prescription_templates`), §6 (`GET`/`PATCH /prescription-template`,
+  `POST /visits/:id/print`), and §7/§8.4/§8.6.** Deliberately a fixed
+  layout with configurable content (letterhead toggle, top margin, footer
+  note), not a custom HTML/layout template — see §5.6 for why arbitrary
+  per-tenant markup wasn't built.
+- **One prescription template per tenant, assumed** (§5.6) — same
+  simplifying assumption as `tenant_branding`. A clinic with several
+  doctors on different physical letterhead stationery, or with more than
+  one physical branch, can't have a different template per doctor/branch
+  yet; that's an additive `id`+selector on `prescription_templates`, not a
+  rework.
+- **No "duplicate copy" (patient copy + clinic file copy on one page)
+  layout** — only asked for an A4-sized single prescription; a two-up
+  carbon-copy-style layout is a plausible future addition to the same
+  fixed-layout approach, not a different feature.
+- **No print-preview/what-if screen separate from actually printing** —
+  editing the Prescription Template (§7) has no live preview in this
+  phase; the feedback loop is printing (or "Save as PDF"-ing) a real visit.
+  Add a preview if the two-round-trip loop (edit template, then go find a
+  visit to test-print) proves annoying in practice.
