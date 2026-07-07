@@ -1083,7 +1083,8 @@ with configurable content — not a custom HTML/layout template**:
   designed — adapted for the current single-implicit-clinic architecture
   rather than the multi-tenant one above:
   - `PrescriptionTemplateProvider` holds one instance-wide
-    `PrescriptionTemplate` (`showLetterhead`/`topMarginMm`/`footerNote`),
+    `PrescriptionTemplate` (`showLetterhead`/`topMarginMm`/`clinicName`/
+    `clinicAddress`/`doctorName`/`doctorCredentials`/`footerNote`),
     same load-or-seed-then-persist-on-change shape as
     `GlobalSettingsProvider` — there's no `tenant_id` to key it by yet, so
     it's a single value, not a per-tenant table. Editable from a new
@@ -1100,22 +1101,39 @@ with configurable content — not a custom HTML/layout template**:
     page's US Letter sizing/top-margin are set through a `<style>` tag it
     renders itself (`@page { size: letter; margin: ... }`), since the margin
     depends on the live template value.
-  - The header uses the app's existing hardcoded "Ortho and Vision Care"
-    title when `showLetterhead` is on — real per-tenant branding (§5.5)
-    isn't implemented in this build yet either, so there's nothing to pull
-    a dynamic title from. Swap in `branding.title` here once that lands.
-  - No `examiner_id`/doctor-attribution field exists on this build's
-    `EyeVisit` at all (unlike the real schema, §5.3), so the printed page
-    doesn't attempt a "seen by" line — adding one is a form change beyond
-    this feature's scope, not a print-view change.
+  - **The letterhead header became a two-column block** when
+    `showLetterhead` is on: clinic identity (logo thumbnail, `clinicName`,
+    `clinicAddress`) on the left, `doctorName`/`doctorCredentials`
+    right-aligned — closer to a real prescription pad's layout than the
+    original single centered title line. `clinicName` falls back to the
+    previous hardcoded "Ortho and Vision Care" when unset, so templates
+    saved before this field existed keep printing unchanged. This is
+    deliberately narrower than real per-tenant branding (§5.5): only the
+    *printed letterhead's* clinic name is admin-editable here — the
+    app-wide title (login screen, in-app header, browser tab) stays
+    hardcoded, since that's still the bigger, unimplemented tenant-branding
+    concept, not this local, print-only field.
+  - **`doctorName`/`doctorCredentials` are a static per-template field**,
+    not per-visit — a deliberate, pragmatic deviation from this build's own
+    stated design further up (§5.6: "doctor attribution comes from the
+    visit itself, `eye_visits.examiner_id`, not a static per-tenant
+    signature field"). No `examiner_id`/doctor-attribution field exists on
+    this build's `EyeVisit` at all (unlike the real schema, §5.3), and
+    adding one is a form change beyond this feature's scope — so a static
+    template-level doctor name/credentials is what's actually printed,
+    same as every other template field.
   - `AuditAction` gained an `'export'` value (`'create' | 'update' |
     'delete' | 'export'`) purely for this — printing logs one entry the same
     way every other mutation already does, via `logEntry` from
     `useAuditLog`, even though nothing is actually mutated.
-  - **A logo, uploaded once in the same Preferences section, renders as a
-    faint centered watermark behind the prescription content** (not in the
-    header — this build has no real letterhead logo either, §5.5) —
-    `PrescriptionTemplate.logoDataUrl`, compressed client-side via a new
+  - **A logo, uploaded once in the same Preferences section, renders in two
+    places from the same stored `logoDataUrl`**: a faint centered watermark
+    behind the prescription content, and a small icon next to the clinic
+    name in the letterhead header — one upload, no separate "header logo"
+    field, since this build has only one clinic identity to represent
+    (§5.5's real, multi-purpose tenant-branding logo is still not
+    implemented). `PrescriptionTemplate.logoDataUrl`, compressed client-side
+    via a new
     `compressLogoFile` (same `browser-image-compression` approach as
     attachments/§7, but tuned smaller — 800px/~0.15MB, since a watermark
     only ever needs to look right at low opacity, not full resolution — and

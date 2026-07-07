@@ -15,6 +15,12 @@ interface Props {
   onPrinted: () => void
 }
 
+// Matches the string every other hardcoded "Ortho and Vision Care" surface
+// still uses (LoginScreen, AppHeader, index.html) — this is the only one of
+// the four that became admin-editable (docs/design.md §5.6); the other
+// three are a separate, unimplemented "tenant branding" concept (§5.5).
+const DEFAULT_CLINIC_NAME = 'Ortho and Vision Care'
+
 function formatSigned(value?: number): string {
   if (value == null) return ''
   return value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2)
@@ -169,8 +175,25 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
         )}
 
         {template.showLetterhead && (
-          <header className="mb-4 border-b-2 border-black pb-3 text-center">
-            <h1 className="text-2xl font-bold">Ortho and Vision Care</h1>
+          <header className="mb-4 flex items-start justify-between gap-4 border-b-2 border-black pb-3">
+            <div className="flex items-start gap-3">
+              {template.logoDataUrl && (
+                <img src={template.logoDataUrl} alt="" className="h-14 w-14 shrink-0 object-contain" />
+              )}
+              <div>
+                <h1 className="text-2xl font-bold">{template.clinicName?.trim() || DEFAULT_CLINIC_NAME}</h1>
+                {template.clinicAddress && (
+                  <p className="whitespace-pre-line text-xs">{template.clinicAddress}</p>
+                )}
+              </div>
+            </div>
+
+            {(template.doctorName || template.doctorCredentials) && (
+              <div className="shrink-0 text-right">
+                {template.doctorName && <p className="font-semibold">{template.doctorName}</p>}
+                {template.doctorCredentials && <p className="text-xs">{template.doctorCredentials}</p>}
+              </div>
+            )}
           </header>
         )}
 
