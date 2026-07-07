@@ -107,6 +107,7 @@ export function PatientDetail({
       </div>
 
       <EyeRecordHistory
+        patient={patient}
         visits={visits}
         canDelete={canDeleteRecords}
         canViewAttachments={canViewAttachments}

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AuthProvider } from './auth/AuthContext'
 import { PreferencesProvider } from './preferences/PreferencesProvider'
 import { GlobalSettingsProvider } from './settings/GlobalSettingsProvider'
+import { PrescriptionTemplateProvider } from './settings/PrescriptionTemplateProvider'
 import { AuditLogProvider } from './auditLog/AuditLogProvider'
 import { useAuth } from './hooks/useAuth'
 import { usePatients } from './hooks/usePatients'
@@ -360,9 +361,11 @@ function App() {
     <AuthProvider>
       <AuditLogProvider>
         <GlobalSettingsProvider>
-          <PreferencesProvider>
-            <AppShell />
-          </PreferencesProvider>
+          <PrescriptionTemplateProvider>
+            <PreferencesProvider>
+              <AppShell />
+            </PreferencesProvider>
+          </PrescriptionTemplateProvider>
         </GlobalSettingsProvider>
       </AuditLogProvider>
     </AuthProvider>

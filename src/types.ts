@@ -76,7 +76,20 @@ export interface GlobalSettings {
   autoDeleteAfterDays: number
 }
 
-export type AuditAction = 'create' | 'update' | 'delete'
+/** App-wide print configuration for prescriptions (docs/design.md §5.6) —
+ *  fixed layout, configurable content only, admin-configurable. */
+export interface PrescriptionTemplate {
+  /** If false, the printed header is left blank instead of showing the
+   *  clinic name — for practices using pre-printed letterhead paper. */
+  showLetterhead: boolean
+  /** Extra blank space reserved at the top of the printed page, mainly
+   *  meaningful alongside `showLetterhead: false`. */
+  topMarginMm: number
+  /** Free text printed at the bottom of every prescription. */
+  footerNote?: string
+}
+
+export type AuditAction = 'create' | 'update' | 'delete' | 'export'
 export type AuditEntityType = 'patient' | 'patient_group' | 'eye_visit' | 'appointment' | 'attachment'
 
 export interface AuditLogEntry {

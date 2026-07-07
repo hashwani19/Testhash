@@ -1,15 +1,19 @@
 import { useState } from 'react'
-import type { Attachment, Eye, EyeRefraction, EyeVisit, VisionType } from '../types'
+import type { Attachment, Eye, EyeRefraction, EyeVisit, Patient, VisionType } from '../types'
 import { Button } from './common/Button'
 import { Card, CardHeader } from './common/Card'
 import { ListView } from './common/ListView'
 import { ImageViewer, type ViewerImage } from './common/ImageViewer'
-import { EditIcon } from './common/icons'
+import { EditIcon, PrintIcon } from './common/icons'
 import { ConfirmModal } from './ConfirmModal'
+import { PrescriptionPrint } from './PrescriptionPrint'
 import { usePreferences } from '../hooks/usePreferences'
+import { usePrescriptionTemplate } from '../hooks/usePrescriptionTemplate'
+import { useAuditLog } from '../hooks/useAuditLog'
 import { hasRefractionData } from '../utils/eyeVisit'
 
 interface Props {
+  patient: Patient
   visits: EyeVisit[]
   canDelete: boolean
   /** Hidden entirely for front_desk (§8.4 of docs/design.md) — not just read-only. */
@@ -98,6 +102,7 @@ function VisitAttachments({
 }
 
 export function EyeRecordHistory({
+  patient,
   visits,
   canDelete,
   canViewAttachments,
@@ -108,7 +113,10 @@ export function EyeRecordHistory({
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const confirmingVisit = visits.find((v) => v.id === confirmingDeleteId) ?? null
   const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null)
+  const [printingVisit, setPrintingVisit] = useState<EyeVisit | null>(null)
   const { preferences } = usePreferences()
+  const { template } = usePrescriptionTemplate()
+  const { logEntry } = useAuditLog()
 
   return (
     <>
@@ -126,6 +134,9 @@ export function EyeRecordHistory({
                 title={formatVisitDateTime(visit.visitAt)}
                 actions={
                   <>
+                    <Button variant="icon" aria-label="Print record" onClick={() => setPrintingVisit(visit)}>
+                      <PrintIcon />
+                    </Button>
                     <Button variant="icon" aria-label="Edit record" onClick={() => onEdit(visit)}>
                       <EditIcon />
                     </Button>
@@ -199,6 +210,23 @@ export function EyeRecordHistory({
 
       {viewer && (
         <ImageViewer images={viewer.images} initialIndex={viewer.index} onClose={() => setViewer(null)} />
+      )}
+
+      {printingVisit && (
+        <PrescriptionPrint
+          patient={patient}
+          visit={printingVisit}
+          template={template}
+          onClose={() => setPrintingVisit(null)}
+          onPrinted={() =>
+            logEntry({
+              action: 'export',
+              entityType: 'eye_visit',
+              entityId: printingVisit.id,
+              entityLabel: `${patient.name} — ${formatVisitDateTime(printingVisit.visitAt)}`,
+            })
+          }
+        />
       )}
     </>
   )

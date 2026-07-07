@@ -21,6 +21,7 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   create: 'created',
   update: 'updated',
   delete: 'deleted',
+  export: 'printed/exported',
 }
 
 const ENTITY_TYPE_LABELS: Record<AuditEntityType, string> = {

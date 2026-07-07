@@ -1079,6 +1079,39 @@ with configurable content — not a custom HTML/layout template**:
   doctor or per branch), that's an additive
   `prescription_templates(id, tenant_id, ...)` table with a selector at
   print time, not a rework of anything above (§13).
+- **Printing is implemented** in this local-storage build, not just
+  designed — adapted for the current single-implicit-clinic architecture
+  rather than the multi-tenant one above:
+  - `PrescriptionTemplateProvider` holds one instance-wide
+    `PrescriptionTemplate` (`showLetterhead`/`topMarginMm`/`footerNote`),
+    same load-or-seed-then-persist-on-change shape as
+    `GlobalSettingsProvider` — there's no `tenant_id` to key it by yet, so
+    it's a single value, not a per-tenant table. Editable from a new
+    "Prescription template (admin only)" section in `PreferencesScreen`,
+    alongside the existing app-settings section, rather than a separate
+    nav destination — matching how the auto-delete settings are already
+    surfaced there today, not the more elaborate multi-screen nav §8.2
+    describes for the eventual real backend.
+  - `PrescriptionPrint` renders via a React portal directly onto
+    `document.body` (not nested inside `#root` like every other overlay in
+    this app) specifically so one `@media print { #root { display: none } }`
+    rule in `index.css` can hide the entire normal app during print, without
+    threading a "no-print" class through every screen individually. The
+    page's A4 sizing/top-margin are set through a `<style>` tag it renders
+    itself (`@page { size: A4; margin: ... }`), since the margin depends on
+    the live template value.
+  - The header uses the app's existing hardcoded "Ortho and Vision Care"
+    title when `showLetterhead` is on — real per-tenant branding (§5.5)
+    isn't implemented in this build yet either, so there's nothing to pull
+    a dynamic title from. Swap in `branding.title` here once that lands.
+  - No `examiner_id`/doctor-attribution field exists on this build's
+    `EyeVisit` at all (unlike the real schema, §5.3), so the printed page
+    doesn't attempt a "seen by" line — adding one is a form change beyond
+    this feature's scope, not a print-view change.
+  - `AuditAction` gained an `'export'` value (`'create' | 'update' |
+    'delete' | 'export'`) purely for this — printing logs one entry the same
+    way every other mutation already does, via `logEntry` from
+    `useAuditLog`, even though nothing is actually mutated.
 
 ## 6. API surface (v1)
 

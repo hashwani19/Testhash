@@ -89,3 +89,15 @@ body {
 #root {
   min-height: 100svh;
 }
+
+/* PrescriptionPrint (docs/design.md §5.6) renders via a portal directly onto
+   document.body, outside #root, specifically so this one rule can hide the
+   entire normal app during print instead of threading a "no-print" class
+   through every screen. The printed page's own A4 sizing/margins are set
+   per-print by PrescriptionPrint itself (its top margin depends on the
+   admin-configurable template), not here. */
+@media print {
+  #root {
+    display: none !important;
+  }
+}
