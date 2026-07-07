@@ -179,6 +179,7 @@ erDiagram
     TENANTS ||--o{ APPOINTMENTS : has
     TENANTS ||--o{ AUDIT_LOG : has
     TENANTS ||--|| APP_SETTINGS : has
+    TENANTS ||--o| TENANT_BRANDING : has
     USERS ||--o{ SESSIONS : has
     USERS ||--o| USER_PREFERENCES : has
     USERS ||--o{ AUDIT_LOG : "acts in"
@@ -323,6 +324,13 @@ erDiagram
         text tenant_id PK "one row per tenant, §5.4 — not a global singleton anymore"
         int auto_delete_old_appointments
         int auto_delete_after_days
+        text updated_at
+    }
+    TENANT_BRANDING {
+        text tenant_id PK "one row per tenant, created lazily like user_preferences, §5.5"
+        text title "falls back to tenants.name if unset, §5.5"
+        text subtitle "free text, e.g. doctor name(s), §5.5"
+        text logo_storage_key "R2 key in a PUBLIC bucket, not attachments' private one, §5.5"
         text updated_at
     }
     PLATFORM_SETTINGS {
@@ -762,6 +770,17 @@ CREATE TABLE app_settings (
     updated_at                    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- One row per tenant, created lazily on first PATCH /branding (same pattern
+-- as user_preferences, §5.5) — a tenant with no row here just displays
+-- tenants.name with no subtitle/logo.
+CREATE TABLE tenant_branding (
+    tenant_id        TEXT PRIMARY KEY REFERENCES tenants(id),
+    title            TEXT,               -- null = fall back to tenants.name (§5.5)
+    subtitle         TEXT,               -- free text, e.g. "Dr. Priya Sharma, Dr. Arjun Mehta"
+    logo_storage_key TEXT,               -- R2 key in a PUBLIC bucket — not the private one attachments use (§5.5/§10)
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Service-wide configuration, managed by super_user (§4.1) — distinct from
 -- app_settings above, which is per-tenant. Singleton row, same pattern
 -- app_settings itself used before it became per-tenant. Exact fields are
@@ -903,6 +922,59 @@ already chosen in §3.3.
   while every tenant is assumed to be an India-based clinic, but worth
   revisiting if this service ever serves clinics outside India.
 
+### 5.5 Tenant branding
+
+Every clinic sees its own identity in the app header instead of a hardcoded
+app name — a **title**, an optional **subtitle** (typically the clinic's
+doctor(s), e.g. "Dr. Priya Sharma, Dr. Arjun Mehta"), and an optional
+**logo**. Modeled as `tenant_branding` (§5.1/§5.3), separate from `tenants`
+itself:
+
+- **Owned by the tenant's own `admin`, not `super_user`.** `tenants` (name,
+  contact info, status) is core identity a `super_user` manages at
+  provisioning/revocation time (§5.4); branding is day-to-day cosmetic
+  customization the clinic should be able to change themselves without
+  going through the platform operator — same split of responsibility
+  already drawn between `tenants` and `app_settings` (§5.1/§5.4), just for a
+  third, purely cosmetic concern. `GET /branding` is open to any role (it's
+  needed to render the header for everyone); `PATCH /branding` and the logo
+  upload/delete endpoints are `admin`-only (§6).
+- **`title` defaults to `tenants.name` when unset** — a tenant doesn't have
+  to configure anything to get a sensible header; setting `title`
+  overrides it (e.g. a legal business name like "Sharma Eye Care Pvt Ltd"
+  vs. a shorter display title "Sharma Eye Care"). Same
+  computed-unless-overridden shape as `patients`/`appointments`
+  `manual_age` overriding a `dob`-computed value elsewhere in this schema —
+  a default that's always available, with an explicit opt-in to replace it.
+- **`subtitle` is free text**, not a structured list of doctors — "one or
+  more doctor's names" is exactly the kind of short, clinic-authored line
+  that doesn't need its own child table and editing UI (matching how
+  `eye_visits.lenses`/`eye_refractions.visual_acuity` are already modeled as
+  free text rather than structured fields, §5.2). The clinic types it
+  however reads best to them; the client doesn't parse or validate its
+  contents.
+- **The row is created lazily**, same as `user_preferences` (§5.1/§5.3) —
+  not at provisioning time. A tenant that never touches `PATCH /branding`
+  simply has no `tenant_branding` row, and the header falls back to
+  `tenants.name` with no subtitle/logo.
+- **Logo storage is deliberately different from attachments' (§10)**: a
+  clinic's logo is a public-facing branding asset, not PHI — it belongs in
+  a **public** R2 bucket (or a public-access prefix/custom domain) served by
+  a plain, long-cacheable URL, not the short-lived signed URLs
+  `GET /attachments/:id` uses for prescription photos (§5.1/§6). Signing and
+  expiring a clinic's own logo URL would just add cache-busting friction
+  for zero confidentiality benefit.
+- **Compressed client-side before upload**, reusing the same
+  `browser-image-compression` approach already used for prescription
+  photos (§7) but tuned for a small header icon rather than a legible
+  clinical photo — a logo only ever needs to render at a few dozen pixels
+  tall, so a much smaller max dimension (e.g. ~512px) and stricter size
+  target than the ~1800px/~0.4MB used for attachments is appropriate; exact
+  numbers are an implementation detail, not a design fork.
+- **Removing a logo** (`DELETE /branding/logo`, §6) clears
+  `logo_storage_key` and deletes the R2 object — the header then falls back
+  to title/subtitle text only, same as a tenant that never uploaded one.
+
 ## 6. API surface (v1)
 
 All endpoints under `/api`, JSON in/out, session cookie required except
@@ -949,9 +1021,12 @@ UI at all — only the data-fetching layer.
 | `POST /auth/accept-invite` | — (public, token in body) | Accept a provisioning invite — `token` + new `password` — sets the password, activates the user, clears the invite fields, and signs them in (§5.4) | — |
 | `POST /auth/login` | — | Authenticate, set session cookie. Resolves both the user *and* their tenant from `email` — globally unique (§5.4) — no separate tenant-selection step | — |
 | `POST /auth/logout` | any | Invalidate session | — |
-| `GET /auth/me` | any | Current user + role + tenant name (for client branding, §7) | — |
+| `GET /auth/me` | any | Current user + role, plus `branding: { title, subtitle, logoUrl }` (§5.5) bundled in so the header can render from one call instead of a second round-trip on every app load | — |
 | `GET /me/preferences` | any | Current user's own theme + list page size (§5.2). Not gated by role — every account manages its own | — |
 | `PATCH /me/preferences` | any | Update either/both fields; creates the row on first write if it doesn't exist yet | — |
+| `PATCH /branding` | admin | Update `title`/`subtitle` (§5.5). Creates the `tenant_branding` row on first write if it doesn't exist yet, same as `PATCH /me/preferences` | — |
+| `POST /branding/logo` | admin | Upload a logo (multipart → a **public** R2 bucket, distinct from attachments' private one, §5.5/§10). Client compresses before upload the same way attachment photos are (§7), just tuned smaller | — |
+| `DELETE /branding/logo` | admin | Remove the logo — header falls back to title/subtitle text only (§5.5) | — |
 | `GET /users?page=&limit=` | admin | List staff accounts (own tenant only) | `full_name` asc |
 | `POST /users` | admin, super_user | Create a staff account. `admin` creates `doctor`/`front_desk`/`admin` under their own tenant; a `super_user` may additionally set `role: 'super_user'` on a new user under the reserved platform tenant (§4.1/§5.4) — no other caller may ever set that role | — |
 | `PATCH /users/:id` | admin | Update role/active status | — |
@@ -994,10 +1069,21 @@ UI at all — only the data-fetching layer.
   hidden entirely for `front_desk`.
 - **App branding becomes per-tenant.** "Ortho and Vision Care" is currently
   a hardcoded string in `AppHeader`; once the backend serves multiple
-  differently-named clinics (§5.4), the header renders the tenant's `name`
-  from `GET /auth/me` instead. No client-side tenant *switching* UI is
+  differently-named clinics (§5.4/§5.5), the header instead renders
+  `branding.title` (from `GET /auth/me`, falling back to the tenant's `name`
+  if unset), `branding.subtitle` beneath/beside it in a visually secondary
+  style if set (e.g. the clinic's doctor(s)), and `branding.logoUrl` as a
+  small image near the title if the tenant has uploaded one — all three
+  optional beyond `title`'s fallback, so a tenant that's configured nothing
+  still gets a sensible header. No client-side tenant *switching* UI is
   needed — a user belongs to exactly one tenant (§5.4), so there's nothing
-  to switch between, just one name to display.
+  to switch between, just one identity to display.
+- **A "Branding" settings screen** (admin-only, §5.5/§8.2) for editing
+  `title`/`subtitle` and uploading/removing the logo — reachable from the
+  hamburger nav alongside Groups/Activity (§8.2), not the profile-menu
+  Preferences screen (§8.10), since it's a tenant-wide setting an admin
+  manages on the clinic's behalf, not a personal "my account" setting every
+  role gets its own copy of.
 - **A new "Accept invite" screen** (§8.1) for a freshly-provisioned admin's
   first login — a set-password form reached via the emailed invite link's
   token, not part of the normal login flow.
@@ -1225,6 +1311,7 @@ emailed link.
   | Groups | ✅ | ❌ | ❌ |
   | Activity | ✅ | ❌ | ❌ |
   | Appointments | ✅ | ✅ | ✅ |
+  | Branding | ✅ | ❌ | ❌ |
 
 - **Patients** → Patient List (§8.3), unchanged as the default landing
   screen right after login for every role.
@@ -1233,6 +1320,8 @@ emailed link.
 - **Appointments** → Appointments (§8.11), open to all three roles — booking,
   viewing, and converting an appointment to a patient/visit use the same
   permissions those actions already have elsewhere (§4).
+- **Branding** → the new Branding settings screen (§5.5/§7), admin-only —
+  edit `title`/`subtitle`, upload/remove the logo.
 - Selecting an item highlights it as active, closes the drawer, and
   navigates. No breadcrumbs or nested nav in this phase — every
   destination is a flat, single-level screen.
@@ -1313,6 +1402,7 @@ emailed link.
 | Appointments — book/view/edit/delete/convert (§8.11) | ✅ | ✅ | ✅ |
 | Global app settings — appointment auto-delete (§8.10) | ✅ | ❌ | ❌ |
 | Preferences (own theme + list page size, §8.10) | ✅ | ✅ | ✅ |
+| Branding — title/subtitle/logo (§5.5/§8.2) | ✅ | ❌ | ❌ |
 
 ### 8.7 Carried over unchanged
 
@@ -1531,6 +1621,12 @@ build them if multi-device offline editing turns out to be a real need.
   encryption for `patients.address`/`name` only if a future threat model
   requires it (adds significant key-management complexity for a small
   clinic tool).
+- **Not every R2 object is equally sensitive**: prescription-photo
+  `attachments` are PHI and stay in a private bucket behind short-lived
+  signed URLs (§6); a tenant's branding logo (§5.5) is a public-facing asset
+  with no confidentiality requirement and lives in a separate **public**
+  bucket with a plain, long-cacheable URL instead — treating it like PHI
+  would only add signing/expiry overhead for no actual protection.
 - **Authentication**: password hashed with argon2id (or bcrypt if the
   runtime lacks argon2 support); session tokens are random, hashed before
   storage in `sessions`, short expiry with sliding renewal.
