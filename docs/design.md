@@ -997,7 +997,7 @@ itself:
 
 ### 5.6 Prescription printing
 
-Staff can print an A4 page of a single visit's prescription — the same
+Staff can print a US Letter page of a single visit's prescription — the same
 clinical content already shown on-screen (§8.5: the Distance/Reading
 refraction grid per eye, lenses, diagnosis, treatment plan, follow-up date,
 notes), formatted to hand to a patient or file physically. Modeled as
@@ -1052,7 +1052,7 @@ with configurable content — not a custom HTML/layout template**:
   service: a full-screen print overlay (same pattern as `ImageViewer`/
   `ConfirmModal`, §7) renders the prescription from data the client
   already has (visit + patient + tenant branding + the print template),
-  styled with `@page { size: A4; ... }` print CSS, and hands off to the
+  styled with `@page { size: letter; ... }` print CSS, and hands off to the
   browser's native print dialog — which already covers "save as PDF" on
   every major platform without this service needing to render one itself.
 - **Always renders light (black on white), regardless of the viewer's own
@@ -1097,9 +1097,9 @@ with configurable content — not a custom HTML/layout template**:
     this app) specifically so one `@media print { #root { display: none } }`
     rule in `index.css` can hide the entire normal app during print, without
     threading a "no-print" class through every screen individually. The
-    page's A4 sizing/top-margin are set through a `<style>` tag it renders
-    itself (`@page { size: A4; margin: ... }`), since the margin depends on
-    the live template value.
+    page's US Letter sizing/top-margin are set through a `<style>` tag it
+    renders itself (`@page { size: letter; margin: ... }`), since the margin
+    depends on the live template value.
   - The header uses the app's existing hardcoded "Ortho and Vision Care"
     title when `showLetterhead` is on — real per-tenant branding (§5.5)
     isn't implemented in this build yet either, so there's nothing to pull
@@ -1253,7 +1253,7 @@ UI at all — only the data-fetching layer.
   every field slot (both eyes' Distance/Reading Sphere/Cylinder/Axis/VA,
   Lenses, Diagnosis, Treatment plan, Follow-up date, Notes) always shown,
   blank where unset, unlike the on-screen history's "hide if empty" display
-  (§5.6) — styled with `@page { size: A4; margin: <topMarginMm-aware
+  (§5.6) — styled with `@page { size: letter; margin: <topMarginMm-aware
   value>; }` print CSS, forced to a light/high-contrast palette regardless
   of the viewer's own theme preference (§5.2/§8.10), and calls
   `window.print()` once mounted rather than adding any client-side routing
@@ -1970,7 +1970,7 @@ build them if multi-device offline editing turns out to be a real need.
   yet; that's an additive `id`+selector on `prescription_templates`, not a
   rework.
 - **No "duplicate copy" (patient copy + clinic file copy on one page)
-  layout** — only asked for an A4-sized single prescription; a two-up
+  layout** — only asked for a US Letter-sized single prescription; a two-up
   carbon-copy-style layout is a plausible future addition to the same
   fixed-layout approach, not a different feature.
 - **No print-preview/what-if screen separate from actually printing** —

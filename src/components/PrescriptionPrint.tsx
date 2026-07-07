@@ -72,9 +72,9 @@ function DetailLine({ label, value }: { label: string; value: string }) {
  * stays visible, without needing to thread a `.no-print` class through
  * every screen individually.
  *
- * A4-sized: the page box itself is set once, globally, in index.css
- * (`@page { size: A4; }`); the top margin is set here per-print since it
- * depends on the tenant's template (`topMarginMm`) rather than being fixed.
+ * US Letter-sized (`@page { size: letter; }`, set inline below rather than
+ * in index.css since the top margin depends on the live template's
+ * `topMarginMm` rather than being a fixed value).
  *
  * Always renders in fixed black-on-white, regardless of the viewer's own
  * theme preference (§5.2/§8.10) — deliberately doesn't use the app's
@@ -108,11 +108,11 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
 
   return createPortal(
     <>
-      <style>{`@page { size: A4; margin: ${topMarginMm}mm 15mm 15mm 15mm; }`}</style>
+      <style>{`@page { size: letter; margin: ${topMarginMm}mm 15mm 15mm 15mm; }`}</style>
 
       <div className={`fixed inset-0 z-50 overflow-y-auto print:hidden ${dimmedBackdrop}`} onClick={onClose} />
 
-      <div className="relative z-50 mx-auto my-8 w-full max-w-[210mm] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
+      <div className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
         {template.showLetterhead && (
           <header className="mb-4 border-b-2 border-black pb-3 text-center">
             <h1 className="text-2xl font-bold">Ortho and Vision Care</h1>
