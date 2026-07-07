@@ -31,3 +31,30 @@ export async function compressImageFile(file: File): Promise<CompressedImage> {
     sizeBytes: compressed.size,
   }
 }
+
+// A clinic logo only ever renders small (a header icon) or faint (a print
+// watermark) — nowhere near the resolution a legible prescription photo
+// needs — so it gets its own, much smaller target than compressImageFile.
+// Kept as PNG rather than re-encoded to JPEG: logos are commonly a
+// transparent-background graphic, and flattening that to JPEG would turn
+// the transparent area into an opaque (usually white or black) box —
+// especially bad once it's rendered faint as a watermark, where that box
+// would show up as a ghostly rectangle behind the prescription text.
+const LOGO_MAX_DIMENSION_PX = 800
+const LOGO_MAX_SIZE_MB = 0.15
+
+export async function compressLogoFile(file: File): Promise<CompressedImage> {
+  const compressed = await imageCompression(file, {
+    maxWidthOrHeight: LOGO_MAX_DIMENSION_PX,
+    maxSizeMB: LOGO_MAX_SIZE_MB,
+    useWebWorker: true,
+    fileType: 'image/png',
+  })
+  const dataUrl = await imageCompression.getDataUrlFromFile(compressed)
+  return {
+    fileName: file.name,
+    contentType: compressed.type,
+    dataUrl,
+    sizeBytes: compressed.size,
+  }
+}

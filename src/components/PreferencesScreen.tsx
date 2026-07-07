@@ -1,12 +1,16 @@
+import { useState } from 'react'
+import type { ChangeEvent } from 'react'
 import type { ThemePreference } from '../types'
 import { usePreferences } from '../hooks/usePreferences'
 import { useGlobalSettings } from '../hooks/useGlobalSettings'
 import { usePrescriptionTemplate } from '../hooks/usePrescriptionTemplate'
 import { useAuth } from '../hooks/useAuth'
+import { compressLogoFile } from '../utils/imageCompression'
 import { DEFAULT_LIST_PAGE_SIZE } from './common/ListView'
 import { TextInput } from './common/TextInput'
 import { Textarea } from './common/Textarea'
 import { Select } from './common/Select'
+import { Button } from './common/Button'
 import { Breadcrumb } from './common/Breadcrumb'
 import { card, screenHeading, fieldLabel, fieldLabelText } from '../styles'
 
@@ -25,6 +29,20 @@ export function PreferencesScreen({ onBack }: Props) {
   const { user } = useAuth()
   const { settings, updateSettings } = useGlobalSettings()
   const { template, updateTemplate } = usePrescriptionTemplate()
+  const [compressingLogo, setCompressingLogo] = useState(false)
+
+  const handleLogoSelected = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setCompressingLogo(true)
+    try {
+      const compressed = await compressLogoFile(file)
+      updateTemplate({ logoDataUrl: compressed.dataUrl })
+    } finally {
+      setCompressingLogo(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -130,6 +148,40 @@ export function PreferencesScreen({ onBack }: Props) {
                 placeholder="Address, phone, or a disclaimer printed at the bottom of every prescription"
               />
             </label>
+
+            <div className="flex flex-col gap-2">
+              <span className={fieldLabelText}>Logo watermark (optional)</span>
+              {template.logoDataUrl && (
+                <img
+                  src={template.logoDataUrl}
+                  alt="Current logo"
+                  className="h-16 w-16 rounded-lg border border-border object-contain bg-bg p-1"
+                />
+              )}
+              <div className="flex flex-wrap gap-2.5">
+                <div className="relative w-fit">
+                  <Button variant="secondary" disabled={compressingLogo}>
+                    {compressingLogo ? 'Processing…' : template.logoDataUrl ? 'Replace logo' : 'Add logo'}
+                  </Button>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={compressingLogo}
+                    onChange={handleLogoSelected}
+                    className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-default"
+                    aria-label="Add logo"
+                  />
+                </div>
+                {template.logoDataUrl && (
+                  <Button variant="secondary" onClick={() => updateTemplate({ logoDataUrl: undefined })}>
+                    Remove logo
+                  </Button>
+                )}
+              </div>
+              <p className="text-[13px] text-text">
+                Printed faint and centered behind the prescription content, not in the header.
+              </p>
+            </div>
           </div>
         </>
       )}

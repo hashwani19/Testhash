@@ -1112,6 +1112,38 @@ with configurable content — not a custom HTML/layout template**:
     'delete' | 'export'`) purely for this — printing logs one entry the same
     way every other mutation already does, via `logEntry` from
     `useAuditLog`, even though nothing is actually mutated.
+  - **A logo, uploaded once in the same Preferences section, renders as a
+    faint centered watermark behind the prescription content** (not in the
+    header — this build has no real letterhead logo either, §5.5) —
+    `PrescriptionTemplate.logoDataUrl`, compressed client-side via a new
+    `compressLogoFile` (same `browser-image-compression` approach as
+    attachments/§7, but tuned smaller — 800px/~0.15MB, since a watermark
+    only ever needs to look right at low opacity, not full resolution — and
+    kept as PNG rather than re-encoded to JPEG, since a logo is commonly a
+    transparent-background graphic and flattening that to JPEG would turn
+    the transparent area into a visible opaque box once rendered faint).
+    Positioned via a single absolutely-positioned `<img>` placed *first* in
+    the printed page's DOM order, so every later (normal-flow) element
+    paints over it automatically — no `z-index` needed to keep it behind
+    the text.
+  - `Button` (`components/common/Button.tsx`) gained `forwardRef` support,
+    purely to let `PrescriptionPrint` imperatively focus its own Close
+    button — see the next bullet.
+  - **Focus recovery after the OS print/share UI closes** needed more than
+    the obvious `afterprint` + `window.focus()` first attempt: `afterprint`
+    doesn't reliably fire on every platform (iOS routes printing through a
+    native share-sheet UI, not an in-page dialog), and `window.focus()`
+    can leave the *document* without any focused *element* even once the
+    browser considers the tab focused again — which on iOS specifically
+    surfaced as a stray, non-interactive focus target near the top of the
+    screen rather than fixing anything. Landed on three overlapping
+    signals (`afterprint`, a `matchMedia('print')` change listener, and
+    `visibilitychange` — the most reliable on mobile, since the native
+    print UI backgrounds the page either way it's dismissed), all moving
+    focus onto the real, visible Close button specifically — a focus
+    target that's guaranteed to both look right and do something useful
+    if it's visibly focused and gets tapped, unlike a focused window or a
+    focused full-viewport backdrop with nothing to click.
 
 ## 6. API surface (v1)
 

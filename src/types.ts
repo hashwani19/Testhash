@@ -87,6 +87,10 @@ export interface PrescriptionTemplate {
   topMarginMm: number
   /** Free text printed at the bottom of every prescription. */
   footerNote?: string
+  /** Compressed logo image as a data URL, rendered faint and centered
+   *  behind the prescription content as a watermark. Optional — no logo
+   *  means no watermark, not a placeholder. */
+  logoDataUrl?: string
 }
 
 export type AuditAction = 'create' | 'update' | 'delete' | 'export'

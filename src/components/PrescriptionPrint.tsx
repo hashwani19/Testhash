@@ -155,6 +155,18 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
       <div className={`fixed inset-0 z-50 overflow-y-auto print:hidden ${dimmedBackdrop}`} onClick={onClose} />
 
       <div className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
+        {template.logoDataUrl && (
+          // Absolutely positioned and first in DOM order so every later
+          // (normal-flow) sibling below paints on top of it automatically —
+          // no z-index juggling needed to keep the watermark behind the text.
+          <img
+            src={template.logoDataUrl}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 m-auto h-2/3 w-2/3 object-contain opacity-10"
+          />
+        )}
+
         {template.showLetterhead && (
           <header className="mb-4 border-b-2 border-black pb-3 text-center">
             <h1 className="text-2xl font-bold">Ortho and Vision Care</h1>
