@@ -84,6 +84,7 @@ function DetailLine({ label, value }: { label: string; value: string }) {
  */
 export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted }: Props) {
   const hasPrinted = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -104,14 +105,41 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
   }, [])
 
   useEffect(() => {
-    // Dismissing the print dialog (printed or cancelled) leaves the page
-    // without focus on some browsers/webviews — the very next tap gets
-    // swallowed reclaiming it instead of hitting whatever it landed on.
-    // Explicitly reclaiming focus once printing is done avoids that "dead"
-    // first tap.
-    const onAfterPrint = () => window.focus()
-    window.addEventListener('afterprint', onAfterPrint)
-    return () => window.removeEventListener('afterprint', onAfterPrint)
+    // Dismissing the print UI — printed *or* cancelled — leaves the page
+    // without focus on some browsers/webviews, so the very next tap gets
+    // spent reclaiming it instead of hitting whatever it landed on. Three
+    // overlapping signals rather than just one: `afterprint` doesn't
+    // reliably fire on every platform (particularly mobile Safari/Chrome,
+    // where printing goes through a native share-sheet/print UI rather than
+    // an in-page dialog), and `window.focus()` alone doesn't always restore
+    // in-page touch responsiveness even when the browser considers the tab
+    // focused again — moving focus to a real, concrete element in the
+    // document is what actually fixes the "dead" first tap.
+    const reclaimFocus = () => {
+      window.focus()
+      containerRef.current?.focus()
+    }
+
+    window.addEventListener('afterprint', reclaimFocus)
+
+    const mediaQueryList = window.matchMedia('print')
+    const onMediaChange = (e: MediaQueryListEvent) => {
+      if (!e.matches) reclaimFocus()
+    }
+    mediaQueryList.addEventListener('change', onMediaChange)
+
+    // The most reliable signal on mobile: the native print/share UI
+    // backgrounds the page, and this fires when it's dismissed either way.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') reclaimFocus()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      window.removeEventListener('afterprint', reclaimFocus)
+      mediaQueryList.removeEventListener('change', onMediaChange)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [])
 
   const age = getPatientAge(patient)
@@ -121,7 +149,12 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     <>
       <style>{`@page { size: letter; margin: ${topMarginMm}mm 15mm 15mm 15mm; }`}</style>
 
-      <div className={`fixed inset-0 z-50 overflow-y-auto print:hidden ${dimmedBackdrop}`} onClick={onClose} />
+      <div
+        ref={containerRef}
+        tabIndex={-1}
+        className={`fixed inset-0 z-50 overflow-y-auto outline-none print:hidden ${dimmedBackdrop}`}
+        onClick={onClose}
+      />
 
       <div className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
         {template.showLetterhead && (
