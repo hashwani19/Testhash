@@ -100,4 +100,13 @@ body {
   #root {
     display: none !important;
   }
+
+  /* body's min-height: 100svh above is a screen-only concern (keeps the app
+     shell full-height on a short page) — left in place during print, some
+     browsers resolve svh/vh against the on-screen viewport rather than the
+     printed page's dimensions, which forced a near-empty second page onto
+     every print job regardless of how short the actual content was. */
+  body {
+    min-height: 0;
+  }
 }

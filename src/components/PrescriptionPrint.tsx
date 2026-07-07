@@ -103,6 +103,17 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    // Dismissing the print dialog (printed or cancelled) leaves the page
+    // without focus on some browsers/webviews — the very next tap gets
+    // swallowed reclaiming it instead of hitting whatever it landed on.
+    // Explicitly reclaiming focus once printing is done avoids that "dead"
+    // first tap.
+    const onAfterPrint = () => window.focus()
+    window.addEventListener('afterprint', onAfterPrint)
+    return () => window.removeEventListener('afterprint', onAfterPrint)
+  }, [])
+
   const age = getPatientAge(patient)
   const topMarginMm = 15 + Math.max(template.topMarginMm, 0)
 
@@ -177,7 +188,7 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
           <DetailLine label="Notes" value={visit.notes ?? ''} />
         </div>
 
-        <div className="mt-10 flex justify-end">
+        <div className="mt-6 flex justify-end">
           <div className="w-48 border-t border-black pt-1 text-center">Signature</div>
         </div>
 
