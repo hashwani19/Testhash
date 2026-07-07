@@ -84,7 +84,6 @@ function DetailLine({ label, value }: { label: string; value: string }) {
  */
 export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted }: Props) {
   const hasPrinted = useRef(false)
-  const closeButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -105,45 +104,47 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
   }, [])
 
   useEffect(() => {
-    // Dismissing the print UI — printed *or* cancelled — leaves the page
-    // without focus on some browsers/webviews, so the very next tap gets
-    // spent reclaiming it instead of hitting whatever it landed on. Three
-    // overlapping signals rather than just one: `afterprint` doesn't
-    // reliably fire on every platform (particularly iOS Safari, where
-    // printing goes through a native share-sheet/print UI rather than an
-    // in-page dialog).
-    //
-    // Focuses the visible Close button specifically — not `window.focus()`
-    // (on iOS this appeared to summon some part of the browser's own chrome
-    // near the top of the screen instead of anything in the page) and not
-    // a full-viewport backdrop div (a focus ring around something that big,
-    // with nothing to actually click, is exactly the "not actionable"
-    // symptom this was meant to fix, not a fix for it). A real, visible,
-    // already-interactive button is the one target guaranteed to both look
-    // right and do something useful if the ring is visible and gets tapped.
-    const reclaimFocus = () => closeButtonRef.current?.focus()
+    // Two earlier attempts tried to manage *focus* on this overlay after the
+    // native print/share UI closes (window.focus(), then focusing the Close
+    // button). Both missed the actual problem: this overlay staying open at
+    // all once the user is done with the print UI is exactly what reads as
+    // a stuck, separate "print preview" needing an extra tap to dismiss —
+    // on iOS in particular, where printing goes through a native share-
+    // sheet rather than an in-page dialog, so returning to the page leaves
+    // this on-screen preview sitting there with nothing to indicate it's
+    // this app's own UI rather than leftover print-system chrome. Instead
+    // of fixing focus on it, just close it — the same three overlapping
+    // signals as before (afterprint doesn't reliably fire on every
+    // platform; matchMedia and visibilitychange cover the gap, with
+    // visibilitychange being the most reliable on mobile since the native
+    // UI backgrounds the page either way it's dismissed), but calling
+    // onClose() instead of trying to refocus something.
+    let dismissed = false
+    const handlePrintUiClosed = () => {
+      if (dismissed) return
+      dismissed = true
+      onClose()
+    }
 
-    window.addEventListener('afterprint', reclaimFocus)
+    window.addEventListener('afterprint', handlePrintUiClosed)
 
     const mediaQueryList = window.matchMedia('print')
     const onMediaChange = (e: MediaQueryListEvent) => {
-      if (!e.matches) reclaimFocus()
+      if (!e.matches) handlePrintUiClosed()
     }
     mediaQueryList.addEventListener('change', onMediaChange)
 
-    // The most reliable signal on mobile: the native print/share UI
-    // backgrounds the page, and this fires when it's dismissed either way.
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') reclaimFocus()
+      if (document.visibilityState === 'visible') handlePrintUiClosed()
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
 
     return () => {
-      window.removeEventListener('afterprint', reclaimFocus)
+      window.removeEventListener('afterprint', handlePrintUiClosed)
       mediaQueryList.removeEventListener('change', onMediaChange)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [])
+  }, [onClose])
 
   const age = getPatientAge(patient)
   const topMarginMm = 15 + Math.max(template.topMarginMm, 0)
@@ -245,7 +246,6 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
           Print
         </Button>
         <Button
-          ref={closeButtonRef}
           variant="icon"
           aria-label="Close"
           className="h-9 w-9 rounded-full bg-surface/90 text-xl leading-none"

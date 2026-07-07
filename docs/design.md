@@ -1126,24 +1126,21 @@ with configurable content — not a custom HTML/layout template**:
     the printed page's DOM order, so every later (normal-flow) element
     paints over it automatically — no `z-index` needed to keep it behind
     the text.
-  - `Button` (`components/common/Button.tsx`) gained `forwardRef` support,
-    purely to let `PrescriptionPrint` imperatively focus its own Close
-    button — see the next bullet.
-  - **Focus recovery after the OS print/share UI closes** needed more than
-    the obvious `afterprint` + `window.focus()` first attempt: `afterprint`
-    doesn't reliably fire on every platform (iOS routes printing through a
-    native share-sheet UI, not an in-page dialog), and `window.focus()`
-    can leave the *document* without any focused *element* even once the
-    browser considers the tab focused again — which on iOS specifically
-    surfaced as a stray, non-interactive focus target near the top of the
-    screen rather than fixing anything. Landed on three overlapping
-    signals (`afterprint`, a `matchMedia('print')` change listener, and
-    `visibilitychange` — the most reliable on mobile, since the native
-    print UI backgrounds the page either way it's dismissed), all moving
-    focus onto the real, visible Close button specifically — a focus
-    target that's guaranteed to both look right and do something useful
-    if it's visibly focused and gets tapped, unlike a focused window or a
-    focused full-viewport backdrop with nothing to click.
+  - **The overlay closes itself once the OS print/share UI is dismissed** —
+    printed or cancelled, either way. Two earlier iterations tried to fix
+    *focus* on the still-open overlay instead (first `window.focus()`,
+    then focusing the visible Close button specifically) and both missed
+    the actual problem: on iOS, which routes printing through a native
+    share-sheet rather than an in-page dialog, returning to the page left
+    this overlay's own on-screen preview sitting there with nothing to
+    mark it as this app's UI rather than leftover print-system chrome —
+    exactly what read as a stuck "print preview" needing an extra
+    dismiss tap, no matter what had focus. Closing it outright removes the
+    thing that was confusing, rather than trying to make it less confusing
+    to look at. Detected via three overlapping signals — `afterprint`
+    (doesn't reliably fire on every platform), a `matchMedia('print')`
+    change listener, and `visibilitychange` (the most reliable on mobile,
+    since the native UI backgrounds the page either way it's dismissed).
 
 ## 6. API surface (v1)
 
