@@ -977,6 +977,18 @@ itself:
 
 ## 6. API surface (v1)
 
+**Canonical machine-readable spec: [`docs/openapi.yaml`](./openapi.yaml)**
+(OpenAPI 3.0.3 — every endpoint below, full request/response schemas, a
+`cookieAuth` security scheme, and an `x-required-roles` extension per
+operation since OpenAPI's native `security` keyword models *which auth
+scheme*, not *which role*). A rendered, browsable copy is also checked in at
+[`docs/openapi-reference.html`](./openapi-reference.html) — a
+self-contained static page (Redoc, fully inlined — no CDN/network
+dependency to view it) for anyone who'd rather read than parse YAML. The
+table below stays as the narrative summary; when the two ever disagree,
+`openapi.yaml` is the one to trust and this table should be corrected to
+match, not the other way around.
+
 All endpoints under `/api`, JSON in/out, session cookie required except
 `/auth/login` and `/auth/accept-invite`. Every mutating endpoint writes an
 `audit_log` row server-side. Every endpoint that returns a list has a fixed
