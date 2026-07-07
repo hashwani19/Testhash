@@ -84,7 +84,7 @@ function DetailLine({ label, value }: { label: string; value: string }) {
  */
 export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted }: Props) {
   const hasPrinted = useRef(false)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -109,16 +109,19 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     // without focus on some browsers/webviews, so the very next tap gets
     // spent reclaiming it instead of hitting whatever it landed on. Three
     // overlapping signals rather than just one: `afterprint` doesn't
-    // reliably fire on every platform (particularly mobile Safari/Chrome,
-    // where printing goes through a native share-sheet/print UI rather than
-    // an in-page dialog), and `window.focus()` alone doesn't always restore
-    // in-page touch responsiveness even when the browser considers the tab
-    // focused again — moving focus to a real, concrete element in the
-    // document is what actually fixes the "dead" first tap.
-    const reclaimFocus = () => {
-      window.focus()
-      containerRef.current?.focus()
-    }
+    // reliably fire on every platform (particularly iOS Safari, where
+    // printing goes through a native share-sheet/print UI rather than an
+    // in-page dialog).
+    //
+    // Focuses the visible Close button specifically — not `window.focus()`
+    // (on iOS this appeared to summon some part of the browser's own chrome
+    // near the top of the screen instead of anything in the page) and not
+    // a full-viewport backdrop div (a focus ring around something that big,
+    // with nothing to actually click, is exactly the "not actionable"
+    // symptom this was meant to fix, not a fix for it). A real, visible,
+    // already-interactive button is the one target guaranteed to both look
+    // right and do something useful if the ring is visible and gets tapped.
+    const reclaimFocus = () => closeButtonRef.current?.focus()
 
     window.addEventListener('afterprint', reclaimFocus)
 
@@ -149,12 +152,7 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     <>
       <style>{`@page { size: letter; margin: ${topMarginMm}mm 15mm 15mm 15mm; }`}</style>
 
-      <div
-        ref={containerRef}
-        tabIndex={-1}
-        className={`fixed inset-0 z-50 overflow-y-auto outline-none print:hidden ${dimmedBackdrop}`}
-        onClick={onClose}
-      />
+      <div className={`fixed inset-0 z-50 overflow-y-auto print:hidden ${dimmedBackdrop}`} onClick={onClose} />
 
       <div className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
         {template.showLetterhead && (
@@ -235,6 +233,7 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
           Print
         </Button>
         <Button
+          ref={closeButtonRef}
           variant="icon"
           aria-label="Close"
           className="h-9 w-9 rounded-full bg-surface/90 text-xl leading-none"

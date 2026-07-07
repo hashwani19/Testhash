@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import type { ButtonHTMLAttributes } from 'react'
 import { cx } from '../../styles'
 
@@ -37,10 +38,21 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
  * button props (onClick, disabled, aria-label, autoFocus, ...) pass straight
  * through — `variant`/`fullWidth` cover the shared visual styles, and
  * `className` covers anything one-off. Defaults `type` to "button" so a
- * button dropped inside a <form> never accidentally submits it.
+ * button dropped inside a <form> never accidentally submits it. Forwards
+ * `ref` to the underlying `<button>` — needed anywhere a caller has to
+ * imperatively focus a specific button (e.g. PrescriptionPrint restoring
+ * focus to a real, visible control after the OS print UI closes).
  */
-export function Button({ variant = 'unstyled', fullWidth, type = 'button', className, ...rest }: Props) {
+export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
+  { variant = 'unstyled', fullWidth, type = 'button', className, ...rest },
+  ref,
+) {
   return (
-    <button type={type} className={cx(VARIANT_CLASSES[variant], fullWidth && 'w-full', className)} {...rest} />
+    <button
+      ref={ref}
+      type={type}
+      className={cx(VARIANT_CLASSES[variant], fullWidth && 'w-full', className)}
+      {...rest}
+    />
   )
-}
+})
