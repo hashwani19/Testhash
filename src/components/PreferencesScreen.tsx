@@ -154,10 +154,11 @@ export function PreferencesScreen({ onBack }: Props) {
 
             <label className={fieldLabel}>
               <span className={fieldLabelText}>Doctor's credentials (optional)</span>
-              <TextInput
+              <Textarea
                 value={template.doctorCredentials ?? ''}
                 onChange={(e) => updateTemplate({ doctorCredentials: e.target.value || undefined })}
-                placeholder="e.g. M.B.B.S., M.S., F.C.L.I."
+                rows={2}
+                placeholder={'e.g. M.B.B.S., M.S.\nF.C.L.I., F.I.A.C.L.E. (Aust.)'}
               />
             </label>
 

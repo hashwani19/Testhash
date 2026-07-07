@@ -191,7 +191,9 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
             {(template.doctorName || template.doctorCredentials) && (
               <div className="shrink-0 text-right">
                 {template.doctorName && <p className="font-semibold">{template.doctorName}</p>}
-                {template.doctorCredentials && <p className="text-xs">{template.doctorCredentials}</p>}
+                {template.doctorCredentials && (
+                  <p className="whitespace-pre-line text-xs">{template.doctorCredentials}</p>
+                )}
               </div>
             )}
           </header>
