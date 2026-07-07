@@ -16,6 +16,7 @@ These were confirmed before writing this doc and drive every section below:
 | User accounts | Multiple staff accounts with distinct logins, roles, and an audit trail |
 | Clinical fields | Per eye, **Distance** and **Reading** prescriptions (sphere, cylinder, axis, visual acuity each), a free-text Lenses line, diagnosis/treatment plan text, attachments (images/scans) — modeled directly on a real prescription pad (see §5.2). Add power was considered but dropped as unneeded (§13) |
 | Compliance | Design includes health-data safeguards (encryption, audit logging, retention/export/erasure, consent) from the start |
+| Multi-tenancy | This is a shared cloud service, not one deployment per clinic: a single backend serves many independent clinics ("tenants"), each fully isolated from the others' data. Tenants are **provisioned by the platform operator** (name, contact email, contact mobile — all mandatory), not self-serve signup, in this phase (§5.4) |
 
 ## 2. Goals / Non-goals
 
@@ -132,12 +133,32 @@ Modeled as a `role` enum on the user for now (§5); if permission needs get
 more granular later (e.g. per-patient access lists), split into `roles` +
 `permissions` + join tables without changing the rest of the schema.
 
+**`admin`/`doctor`/`front_desk` are all tenant-scoped** — every one of them
+belongs to exactly one tenant (clinic) and this table describes what they
+can do *within* it. Provisioning a new tenant (§5.4) is a different kind of
+action entirely, performed by a small, separate set of **platform-operator**
+accounts that don't belong to any tenant and aren't part of this role enum
+at all — mixing "runs the SaaS" authority into the same table as "runs one
+clinic's front desk" would force every tenant-scoped table's `tenant_id` to
+tolerate a "belongs to no tenant" exception just for this one rare, high-trust
+action. The same "never trust the client" rule extends to tenant scoping:
+every API query is scoped by the **session's** `tenant_id`, resolved
+server-side from the authenticated user — there is no client-supplied
+tenant parameter anywhere in §6. Getting this wrong is a worse failure mode
+than a permissions bug: it leaks one clinic's data into another's.
+
 ## 5. Data model
 
 ### 5.1 Entity overview
 
 ```mermaid
 erDiagram
+    TENANTS ||--o{ USERS : has
+    TENANTS ||--o{ PATIENTS : has
+    TENANTS ||--o{ PATIENT_GROUPS : has
+    TENANTS ||--o{ APPOINTMENTS : has
+    TENANTS ||--o{ AUDIT_LOG : has
+    TENANTS ||--|| APP_SETTINGS : has
     USERS ||--o{ SESSIONS : has
     USERS ||--o| USER_PREFERENCES : has
     USERS ||--o{ AUDIT_LOG : "acts in"
@@ -151,18 +172,37 @@ erDiagram
     EYE_VISITS ||--o{ EYE_REFRACTIONS : has
     EYE_VISITS ||--o{ ATTACHMENTS : has
 
-    USERS {
+    TENANTS {
+        text id PK
+        text name
+        text contact_email
+        text contact_mobile
+        text status "'active' | 'suspended', §5.4"
+        text created_at
+        text updated_at
+    }
+    PLATFORM_ADMINS {
         text id PK
         text email
         text password_hash
+        text created_at
+    }
+    USERS {
+        text id PK
+        text tenant_id FK
+        text email "unique across ALL tenants, §5.4"
+        text password_hash "null until an invite is accepted, §5.4"
         text full_name
         text role
         int active
+        text invite_token "§5.4"
+        text invite_expires_at "§5.4"
         text created_at
     }
     PATIENT_GROUPS {
         text id PK
-        text name
+        text tenant_id FK
+        text name "unique per tenant, §5.4"
         text created_by FK
         text created_at
         text updated_at
@@ -170,7 +210,8 @@ erDiagram
     }
     PATIENTS {
         text id PK
-        text patient_number
+        text tenant_id FK
+        text patient_number "unique per tenant, §5.4"
         text name
         text dob
         int manual_age
@@ -225,6 +266,7 @@ erDiagram
     }
     AUDIT_LOG {
         text id PK
+        text tenant_id FK
         text actor_user_id FK
         text actor_name "snapshotted at write time, §5.2"
         text action
@@ -250,6 +292,7 @@ erDiagram
     }
     APPOINTMENTS {
         text id PK
+        text tenant_id FK
         text date
         text time "nullable — a day-only booking is valid"
         text patient_id FK "nullable — set once linked to a real patient"
@@ -262,12 +305,22 @@ erDiagram
         text updated_at
     }
     APP_SETTINGS {
-        int id PK "singleton row, always 1"
+        text tenant_id PK "one row per tenant, §5.4 — not a global singleton anymore"
         int auto_delete_old_appointments
         int auto_delete_after_days
         text updated_at
     }
 ```
+
+`EYE_VISITS`/`EYE_REFRACTIONS`/`ATTACHMENTS`/`CONSENTS`/`SESSIONS`/
+`USER_PREFERENCES` deliberately have **no direct `tenant_id`** — none of
+them has its own tenant-wide list/search endpoint (§6); every access path
+already goes through an FK to a row whose tenant was checked first
+(`patient_id` → `patients.tenant_id`, `visit_id` → via `patients`, `user_id`
+→ `users.tenant_id`), so a duplicated column would only add a value that
+could theoretically drift from its parent's instead of a real scoping need.
+`patient_number_counters` (§5.3) is the one exception worth calling out:
+it isn't a child of anything, so it carries `tenant_id` directly.
 
 ### 5.2 Field notes / definitions
 
@@ -279,7 +332,9 @@ erDiagram
   multi-group membership turns out to be needed later, that's an additive
   `patient_group_members` join table without touching anything else here
   (flagged as an open question, §13).
-  - `patient_groups.name` is `UNIQUE NOT NULL`.
+  - `patient_groups.name` is `NOT NULL` and unique **per tenant**
+    (`UNIQUE (tenant_id, name)`, §5.4) — two different clinics can both have
+    a "VIP" group without colliding.
   - Soft-deleted the same way as `patients` (`deleted_at`) rather than hard
     deleted — so a patient's historical group assignment still resolves to
     a name even after a group is retired, but retired groups drop out of
@@ -299,19 +354,29 @@ erDiagram
     no need to parse it or join to `created_at` to get chronological order.
   - **Generation**: assigned once at creation, immutable after. Computed
     atomically via a small counters table (`patient_number_counters`, §5.3)
-    keyed by date, incremented with a single `UPDATE ... RETURNING` inside
-    the same transaction as the `INSERT INTO patients`, so two concurrent
-    registrations on the same day never collide — no read-then-write race.
-  - **Capacity**: 4 digits supports 9,999 new registrations/day, far beyond
-    a small clinic's volume (§11); widen to 5+ digits if that changes.
-  - `UNIQUE NOT NULL` — enforced at the DB level as a backstop even though
-    generation is already collision-free by construction.
+    keyed by **tenant and date** (§5.4 — each clinic has its own daily
+    sequence, not a shared one), incremented with a single
+    `UPDATE ... RETURNING` inside the same transaction as the
+    `INSERT INTO patients`, so two concurrent registrations at the same
+    clinic on the same day never collide — no read-then-write race.
+  - **Capacity**: 4 digits supports 9,999 new registrations/day per clinic,
+    far beyond a small clinic's volume (§11); widen to 5+ digits if that
+    changes.
+  - `NOT NULL` and unique **per tenant** (`UNIQUE (tenant_id,
+    patient_number)`, §5.4), not globally — enforced at the DB level as a
+    backstop even though generation is already collision-free by
+    construction. Two different clinics both have a `P-20260705-0001`; that's
+    expected, not a collision, since a `patient_number` is only ever shown
+    within the context of the clinic that issued it.
   - **Search**: `GET /patients?search=` (§6) matches name or `patient_number`
-    in one query:
+    in one query, scoped to the caller's own tenant (§5.4 — every query in
+    this document implicitly carries `AND tenant_id = :session_tenant_id`,
+    omitted below for readability):
     ```sql
     SELECT id, patient_number, name, dob, manual_age, gender
     FROM patients
-    WHERE deleted_at IS NULL
+    WHERE tenant_id = :session_tenant_id
+      AND deleted_at IS NULL
       AND (name LIKE '%' || :q || '%' COLLATE NOCASE
            OR patient_number LIKE '%' || :q || '%')
     ORDER BY created_at DESC;
@@ -487,16 +552,48 @@ erDiagram
 ```sql
 PRAGMA foreign_keys = ON;
 
-CREATE TABLE users (
-    id            TEXT PRIMARY KEY,             -- uuid, generated by application
-    email         TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,                -- argon2id/bcrypt hash, never plaintext
-    full_name     TEXT NOT NULL,
-    role          TEXT NOT NULL CHECK (role IN ('admin', 'doctor', 'front_desk')),
-    active        INTEGER NOT NULL DEFAULT 1,   -- boolean
-    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-    last_login_at TEXT
+-- One row per clinic. The top-level tenancy boundary everything else below
+-- scopes under (§5.4).
+CREATE TABLE tenants (
+    id             TEXT PRIMARY KEY,
+    name           TEXT NOT NULL,
+    contact_email  TEXT NOT NULL,
+    contact_mobile TEXT NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- The people who run this SaaS, not any clinic's staff — provisions tenants
+-- (§5.4, §6) and nothing else. Deliberately tiny: no role/permission system
+-- of its own, entirely separate from `users`/`sessions` below.
+CREATE TABLE platform_admins (
+    id            TEXT PRIMARY KEY,
+    email         TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE platform_sessions (
+    id         TEXT PRIMARY KEY,
+    admin_id   TEXT NOT NULL REFERENCES platform_admins(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE users (
+    id                TEXT PRIMARY KEY,             -- uuid, generated by application
+    tenant_id         TEXT NOT NULL REFERENCES tenants(id),
+    email             TEXT NOT NULL UNIQUE,         -- unique across ALL tenants, not just this one (§5.4)
+    password_hash     TEXT,                         -- null until the invite is accepted (§5.4/§6)
+    full_name         TEXT NOT NULL,
+    role              TEXT NOT NULL CHECK (role IN ('admin', 'doctor', 'front_desk')),
+    active            INTEGER NOT NULL DEFAULT 1,   -- boolean; also doubles as "invite not yet accepted" (0) for a freshly-provisioned admin (§5.4)
+    invite_token      TEXT,                         -- set on provisioning, cleared once accepted (§5.4/§6)
+    invite_expires_at TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    last_login_at     TEXT
+);
+CREATE INDEX idx_users_tenant ON users(tenant_id);
 
 CREATE TABLE sessions (
     id         TEXT PRIMARY KEY,                -- opaque random token, hashed before storage
@@ -506,26 +603,32 @@ CREATE TABLE sessions (
 );
 CREATE INDEX idx_sessions_user ON sessions(user_id);
 
--- Backs atomic generation of patients.patient_number (one row per calendar day).
+-- Backs atomic generation of patients.patient_number — one row per
+-- (tenant, calendar day), since each clinic has its own daily sequence (§5.2/§5.4).
 CREATE TABLE patient_number_counters (
-    date_key TEXT PRIMARY KEY,                  -- 'YYYYMMDD'
-    next_seq INTEGER NOT NULL DEFAULT 1
+    tenant_id TEXT NOT NULL REFERENCES tenants(id),
+    date_key  TEXT NOT NULL,                    -- 'YYYYMMDD'
+    next_seq  INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (tenant_id, date_key)
 );
 
 -- Admin-managed categories (e.g. "Friends", "Family"); one per patient (§5.2).
 CREATE TABLE patient_groups (
     id         TEXT PRIMARY KEY,
-    name       TEXT NOT NULL UNIQUE,
+    tenant_id  TEXT NOT NULL REFERENCES tenants(id),
+    name       TEXT NOT NULL,
     created_by TEXT REFERENCES users(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    deleted_at TEXT                              -- soft delete; null = active
+    deleted_at TEXT,                             -- soft delete; null = active
+    UNIQUE (tenant_id, name)
 );
-CREATE INDEX idx_patient_groups_name ON patient_groups(name);
+CREATE INDEX idx_patient_groups_tenant ON patient_groups(tenant_id);
 
 CREATE TABLE patients (
     id             TEXT PRIMARY KEY,             -- opaque UUID; internal FK target only
-    patient_number TEXT NOT NULL UNIQUE,         -- e.g. "P-20260705-0007"; human-facing ID (§5.2)
+    tenant_id      TEXT NOT NULL REFERENCES tenants(id),
+    patient_number TEXT NOT NULL,                -- e.g. "P-20260705-0007"; human-facing ID (§5.2), unique per tenant not globally
     name           TEXT NOT NULL,
     dob            TEXT,                         -- ISO date (YYYY-MM-DD); null if unknown
     manual_age     INTEGER,                      -- null unless there's no dob, or it's a deliberate override of the dob-computed age
@@ -536,13 +639,17 @@ CREATE TABLE patients (
     created_by     TEXT REFERENCES users(id),
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
-    deleted_at     TEXT                          -- soft delete; null = active
+    deleted_at     TEXT,                         -- soft delete; null = active
+    UNIQUE (tenant_id, patient_number)
 );
-CREATE INDEX idx_patients_name ON patients(name);
-CREATE INDEX idx_patients_deleted_at ON patients(deleted_at);
-CREATE INDEX idx_patients_created_at ON patients(created_at DESC);  -- supports default sort (§6)
-CREATE INDEX idx_patients_group ON patients(group_id);              -- supports filter by group (§6)
+CREATE INDEX idx_patients_tenant ON patients(tenant_id);
+CREATE INDEX idx_patients_name ON patients(tenant_id, name);
+CREATE INDEX idx_patients_deleted_at ON patients(tenant_id, deleted_at);
+CREATE INDEX idx_patients_created_at ON patients(tenant_id, created_at DESC);  -- supports default sort (§6)
+CREATE INDEX idx_patients_group ON patients(tenant_id, group_id);              -- supports filter by group (§6)
 
+-- No direct tenant_id: every access path goes through patient_id, whose
+-- tenant is already checked (§5.1).
 CREATE TABLE eye_visits (
     id             TEXT PRIMARY KEY,
     patient_id     TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
@@ -598,6 +705,7 @@ CREATE INDEX idx_consents_patient ON consents(patient_id);
 
 CREATE TABLE audit_log (
     id             TEXT PRIMARY KEY,
+    tenant_id      TEXT NOT NULL REFERENCES tenants(id),
     actor_user_id  TEXT REFERENCES users(id),
     actor_name     TEXT NOT NULL,               -- snapshotted at write time (§5.2)
     action         TEXT NOT NULL CHECK (action IN ('create', 'update', 'delete', 'export')),
@@ -609,8 +717,9 @@ CREATE TABLE audit_log (
     ip_address     TEXT,
     created_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX idx_audit_entity ON audit_log(entity_type, entity_id);
-CREATE INDEX idx_audit_actor ON audit_log(actor_user_id, created_at);
+CREATE INDEX idx_audit_tenant ON audit_log(tenant_id, created_at DESC);  -- supports default sort + tenant scoping (§6)
+CREATE INDEX idx_audit_entity ON audit_log(tenant_id, entity_type, entity_id);
+CREATE INDEX idx_audit_actor ON audit_log(tenant_id, actor_user_id, created_at);
 
 -- One row per user, created lazily on first write (not on user creation).
 CREATE TABLE user_preferences (
@@ -622,6 +731,7 @@ CREATE TABLE user_preferences (
 
 CREATE TABLE appointments (
     id          TEXT PRIMARY KEY,
+    tenant_id   TEXT NOT NULL REFERENCES tenants(id),
     date        TEXT NOT NULL,                  -- ISO date (YYYY-MM-DD)
     time        TEXT,                           -- HH:MM, 24h; null = day-only booking (§5.2)
     patient_id  TEXT REFERENCES patients(id) ON DELETE SET NULL,  -- null = prospective patient (§5.2)
@@ -633,11 +743,11 @@ CREATE TABLE appointments (
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX idx_appointments_date ON appointments(date, time);  -- supports default sort + date-range filter (§6)
+CREATE INDEX idx_appointments_tenant_date ON appointments(tenant_id, date, time);  -- supports default sort + date-range filter + tenant scoping (§6)
 
--- Singleton row (§5.2) — app-wide settings, not per-user.
+-- One row per tenant (§5.4) — not a global singleton anymore.
 CREATE TABLE app_settings (
-    id                            INTEGER PRIMARY KEY CHECK (id = 1),
+    tenant_id                     TEXT PRIMARY KEY REFERENCES tenants(id),
     auto_delete_old_appointments  INTEGER NOT NULL DEFAULT 1,
     auto_delete_after_days        INTEGER NOT NULL DEFAULT 2,
     updated_at                    TEXT NOT NULL DEFAULT (datetime('now'))
@@ -649,31 +759,119 @@ CREATE TABLE app_settings (
 `INTEGER` booleans → native `BOOLEAN`; `CHECK (... IN (...))` → native `ENUM` types.
 
 **Generating `patient_number` (example)** — run inside the same transaction
-as the `INSERT INTO patients`:
+as the `INSERT INTO patients`, scoped to the caller's tenant:
 
 ```sql
-INSERT INTO patient_number_counters (date_key, next_seq)
-VALUES (:date_key, 2)
-ON CONFLICT (date_key) DO UPDATE SET next_seq = next_seq + 1
+INSERT INTO patient_number_counters (tenant_id, date_key, next_seq)
+VALUES (:tenant_id, :date_key, 2)
+ON CONFLICT (tenant_id, date_key) DO UPDATE SET next_seq = next_seq + 1
 RETURNING next_seq - 1 AS seq;
 -- :date_key = strftime('%Y%m%d', 'now'); patient_number = 'P-' || :date_key || '-' || printf('%04d', seq)
 ```
 
-This is a single atomic upsert-and-return — two concurrent registrations on
-the same day each get a distinct `seq` with no read-then-write gap to race on.
+This is a single atomic upsert-and-return — two concurrent registrations at
+the same clinic on the same day each get a distinct `seq` with no
+read-then-write gap to race on. Two *different* clinics registering
+simultaneously don't even share a row to contend on, since `tenant_id` is
+part of the key.
 
 **On Postgres**, the equivalent is a `SEQUENCE` per day (or a single
 `BIGSERIAL` with the date formatted separately) — either works; the emphasis
 here is "atomic increment, not read-max-then-add-one", which both engines
 support.
 
+### 5.4 Multi-tenancy
+
+This is a shared cloud service, not one deployment per clinic — a single
+backend and a single D1 database serve every clinic ("tenant"), row-scoped
+rather than one-database-per-tenant. One-DB-per-tenant is the operationally
+heavier pattern (per-tenant migrations, connection/binding management) and
+isn't warranted at this scale; row scoping keeps the same D1/Workers setup
+already chosen in §3.3.
+
+- **Provisioning**: a new tenant is created by a **platform operator**
+  (§4) — not self-serve signup in this phase — supplying **name**, **contact
+  email**, and **contact mobile**, all mandatory. `POST /platform/tenants`
+  (§6) does three things in one transaction:
+  1. Inserts the `tenants` row (`status = 'active'`).
+  2. Inserts the first `users` row for it: `role = 'admin'`,
+     `email = contact_email`, `full_name = name` (the tenant's name is used
+     as a placeholder for the first admin's display name — there's no
+     separate "contact person" field among the three mandatory ones; the
+     admin can't yet self-edit their own `full_name` since no such screen
+     exists today, so this is a real gap worth a follow-up, not a fully
+     solved edge). `active = 0` and an `invite_token`/`invite_expires_at`
+     are set — there's no password yet.
+  3. Inserts a default `app_settings` row for the tenant (§5.1/§5.3), so
+     `GET /settings` always has a row to return without the lazy-create
+     special case `user_preferences` has.
+
+  An invite email is sent out-of-band containing a link with the token;
+  `POST /auth/accept-invite` (§6) — public, no session — verifies it, sets
+  `password_hash`, flips `active` to `1`, and clears the invite fields. The
+  invite token is never returned in any API response body, only delivered
+  by email.
+- **Tenant status**: `active` | `suspended` — a soft-disable lever (an
+  admin/operator can suspend a delinquent or offboarded clinic without
+  deleting its data), matching the soft-delete pattern already used for
+  patients/groups elsewhere in this schema. There's no hard-delete-a-whole-
+  tenant workflow specified yet (§13).
+- **Email is unique globally, not per tenant** (`users.email`, §5.3) — one
+  email is exactly one account at exactly one clinic. This keeps
+  `POST /auth/login` a plain email+password check with no separate tenant
+  lookup step: the matched `users` row already carries its `tenant_id`. The
+  trade-off is a real person can't hold accounts at two different clinics
+  under the same email — acceptable here since clinic staff work at one
+  clinic in practice; if that ever changes, it's a `user_tenant_memberships`
+  join table without touching anything else in §5.
+- **Tenant routing**: a single shared login page/URL for every clinic —
+  there's no per-tenant subdomain or picker to route through. The API
+  resolves the tenant from the authenticated user, same as it resolves the
+  role. Per-tenant subdomains (cleaner isolation, lets each clinic install a
+  distinctly-branded PWA) are a plausible later upgrade but need
+  wildcard-subdomain infrastructure not built yet (§13).
+- **What gets `tenant_id` directly vs. inherits it transitively**: added
+  directly to every table with its own tenant-wide list/search endpoint in
+  §6 (`users`, `patients`, `patient_groups`, `appointments`, `audit_log`,
+  plus `app_settings` and `patient_number_counters`, which aren't lists but
+  have no other FK to inherit through). Left off `eye_visits`,
+  `eye_refractions`, `attachments`, `consents`, `sessions`, and
+  `user_preferences` — every access path to these already goes through a
+  parent FK whose tenant was checked first (`patient_id` →
+  `patients.tenant_id`, `visit_id` → via `patients`, `user_id` →
+  `users.tenant_id`), so a duplicated column would only be a value that
+  could drift from its parent's, not a real scoping need.
+- **Enforcement**: every tenant-scoped query in §6 is implicitly filtered by
+  `tenant_id = :session_tenant_id`, resolved server-side from the
+  authenticated session — there is no client-supplied tenant parameter
+  anywhere in the API. This is the same "never trust the client" principle
+  §4/§10 already states for roles, extended to tenant scoping — and getting
+  it wrong is worse than a permissions bug, since a missed filter leaks one
+  clinic's data into another's rather than just over- or under-granting
+  within one clinic.
+- **Not addressed by this phase** (see also §13): billing/plan tiers,
+  self-serve tenant signup, per-tenant subdomains/branded PWAs, and
+  generalizing `mobile` validation beyond the India-specific 10-digit format
+  already baked into `patients.mobile`/`appointments.mobile` (§5.2) — fine
+  while every tenant is assumed to be an India-based clinic, but worth
+  revisiting if this service ever serves clinics outside India.
+
 ## 6. API surface (v1)
 
-All endpoints under `/api`, JSON in/out, session cookie required except `/auth/login`.
-Every mutating endpoint writes an `audit_log` row server-side. Every endpoint
-that returns a list has a fixed **default sort order** (noted per row below);
-callers can override with an explicit `?sort=` param later if ever needed,
-but the unsorted default is never "whatever order the DB happened to return."
+All endpoints under `/api`, JSON in/out, session cookie required except
+`/auth/login` and `/auth/accept-invite`. Every mutating endpoint writes an
+`audit_log` row server-side. Every endpoint that returns a list has a fixed
+**default sort order** (noted per row below); callers can override with an
+explicit `?sort=` param later if ever needed, but the unsorted default is
+never "whatever order the DB happened to return."
+
+**Every endpoint below except the `/platform/*` and `/auth/*` ones is
+implicitly scoped to the caller's own tenant** (`tenant_id`, resolved
+server-side from the session — §4/§5.4) — there is no `tenant_id` query
+param or request-body field anywhere in this table, by design. `/platform/*`
+endpoints require a separate **platform-operator** session (§4/§5.4), not a
+regular tenant `users` session, and operate across tenants by nature (that's
+their whole purpose).
 
 Every list endpoint that can grow unbounded (patients, visits, audit log,
 staff accounts) is paginated with `page` (0-indexed, default `0`) and
@@ -693,9 +891,13 @@ UI at all — only the data-fetching layer.
 
 | Method & path | Role required | Purpose | Default sort |
 |---|---|---|---|
-| `POST /auth/login` | — | Authenticate, set session cookie | — |
+| `POST /platform/tenants` | platform operator | Provision a tenant — `name`/`contact_email`/`contact_mobile`, all mandatory (§5.4). Creates the tenant, a default `app_settings` row, and an inactive first `admin` user with an invite token; sends the invite email. Response is the created tenant — never the invite token | — |
+| `GET /platform/tenants?status=&page=&limit=` | platform operator | List tenants across the whole service | `created_at` desc |
+| `PATCH /platform/tenants/:id` | platform operator | Update `status` (`active`/`suspended`, §5.4) | — |
+| `POST /auth/accept-invite` | — (public, token in body) | Accept a provisioning invite — `token` + new `password` — sets the password, activates the user, clears the invite fields, and signs them in (§5.4) | — |
+| `POST /auth/login` | — | Authenticate, set session cookie. Resolves both the user *and* their tenant from `email` — globally unique (§5.4) — no separate tenant-selection step | — |
 | `POST /auth/logout` | any | Invalidate session | — |
-| `GET /auth/me` | any | Current user + role | — |
+| `GET /auth/me` | any | Current user + role + tenant name (for client branding, §7) | — |
 | `GET /me/preferences` | any | Current user's own theme + list page size (§5.2). Not gated by role — every account manages its own | — |
 | `PATCH /me/preferences` | any | Update either/both fields; creates the row on first write if it doesn't exist yet | — |
 | `GET /users?page=&limit=` | admin | List staff accounts | `full_name` asc |
@@ -738,6 +940,15 @@ UI at all — only the data-fetching layer.
   doctor, but the delete button on a visit/refraction/attachment is hidden
   (not just disabled) for anyone but `admin`. Attachment upload/view is
   hidden entirely for `front_desk`.
+- **App branding becomes per-tenant.** "Ortho and Vision Care" is currently
+  a hardcoded string in `AppHeader`; once the backend serves multiple
+  differently-named clinics (§5.4), the header renders the tenant's `name`
+  from `GET /auth/me` instead. No client-side tenant *switching* UI is
+  needed — a user belongs to exactly one tenant (§5.4), so there's nothing
+  to switch between, just one name to display.
+- **A new "Accept invite" screen** (§8.1) for a freshly-provisioned admin's
+  first login — a set-password form reached via the emailed invite link's
+  token, not part of the normal login flow.
 - Rework `EyeRecordForm`/`EyeRecordHistory` around the Distance/Reading ×
   Left/Right grid (§5.2) instead of the current single sphere/cylinder/
   distance-per-eye fields — plus diagnosis/treatment plan, lenses, and
@@ -924,10 +1135,17 @@ this is the concrete shape §7's bullets describe in the abstract.
 
 ### 8.1 Login (new — doesn't exist in the current MVP)
 
-Email + password. On success, `GET /auth/me` resolves the session's role
-(`admin` / `doctor` / `front_desk`), held in an auth context that every other
-screen reads from. There is no "guest"/unauthenticated view of any patient
-data.
+Email + password — a single shared login page for every clinic, no tenant
+picker (§5.4). On success, `GET /auth/me` resolves the session's role
+(`admin` / `doctor` / `front_desk`) and tenant name, held in an auth context
+that every other screen reads from. There is no "guest"/unauthenticated view
+of any patient data.
+
+**Accept invite** (new, §5.4/§6): the link in a freshly-provisioned tenant's
+invite email opens a set-password form (token from the URL, not typed in) —
+on submit, the account activates and the user lands signed in, same as a
+normal login. Not reachable from the login screen itself; only via the
+emailed link.
 
 ### 8.2 Navigation (hamburger menu)
 
@@ -1256,6 +1474,13 @@ build them if multi-device offline editing turns out to be a real need.
   storage in `sessions`, short expiry with sliding renewal.
 - **Authorization**: enforced per-request server-side from `users.role`
   (§4) — never inferred from client state.
+- **Tenant isolation**: every query is scoped to the session's `tenant_id`,
+  resolved server-side — never a client-supplied value (§4/§5.4/§6). This is
+  the single highest-severity failure mode in a multi-tenant system: a
+  missed filter doesn't just over/under-grant within one clinic, it leaks
+  one clinic's data into another's. Worth a shared query-scoping
+  helper/middleware in the API layer rather than trusting every handler to
+  remember the filter individually.
 - **Audit trail**: every create/update/delete/export is logged to
   `audit_log` with actor, before/after snapshot, and timestamp (§5.3).
   Read-access logging (who *viewed* a chart, not just who changed it) is
@@ -1321,9 +1546,36 @@ build them if multi-device offline editing turns out to be a real need.
   should ever belong to more than one group at once, swap in a
   `patient_group_members(patient_id, group_id)` join table; nothing else in
   §5/§6/§8 needs to change.
-- Multi-clinic / multi-location support is not modeled (no `clinic_id`
-  anywhere) — add a `clinics` table and scope everything to it if/when a
-  second location is added.
+- ~~Multi-clinic support is not modeled (no `clinic_id` anywhere)~~ —
+  **resolved: specified in §5.4 (`tenants`), §5.1/§5.3 (`tenant_id`
+  propagation), §6 (`/platform/tenants`, `/auth/accept-invite`), and §8.1
+  (Accept Invite screen).** This models multi-*tenant* (separate clinic
+  customers of this service, fully isolated) rather than multi-*location*
+  (one clinic operating several branches) — the latter is still open: if a
+  single tenant ever needs several physical locations sharing one patient
+  base, that's an additive `locations` table nested under a tenant, not a
+  rework of the isolation model here.
+- **Tenant provisioning is platform-operator-only, not self-serve signup**
+  (§5.4) — a clinic can't sign itself up through a public form yet; someone
+  running the service creates the tenant. Revisit if/when a self-serve
+  onboarding flow is wanted.
+- **No per-tenant subdomain/branded PWA** (§5.4/§7) — every clinic shares one
+  login URL and app shell (with the tenant's name shown in the header, §7).
+  Per-tenant subdomains would allow a more distinctly-branded, separately
+  installable PWA per clinic, but need wildcard-subdomain infrastructure not
+  built yet.
+- **No whole-tenant hard-delete/offboarding workflow** — a suspended tenant
+  (§5.4) keeps its data indefinitely; there's no equivalent of the
+  per-patient hard-delete/erasure workflow (§10) scoped to an entire tenant.
+  Add one if a clinic ever needs to fully exit and have their data purged.
+- **`mobile` validation is India-specific** (10-digit, `[6-9][0-9]{9}`,
+  §5.2) on both `patients.mobile`/`appointments.mobile` and the new
+  `tenants.contact_mobile` — a reasonable assumption while every tenant is
+  an India-based clinic, but would need generalizing (country code, format
+  per locale) if this service ever serves clinics outside India.
+- **Billing/plan tiers are out of scope** for tenant provisioning, same as
+  the rest of this document (§2) — `tenants` has no plan/quota/billing
+  fields; add them additively if monetization is ever built out.
 - ~~Appointment scheduling~~ — **resolved: specified in §5 (`appointments`,
   `app_settings`), §6 (`/appointments`, `/settings`), and §8.11.** Billing
   remains out of scope; an `invoices` table would be additive the same way,
