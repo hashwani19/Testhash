@@ -16,7 +16,7 @@ These were confirmed before writing this doc and drive every section below:
 | User accounts | Multiple staff accounts with distinct logins, roles, and an audit trail |
 | Clinical fields | Per eye, **Distance** and **Reading** prescriptions (sphere, cylinder, axis, visual acuity each), a free-text Lenses line, diagnosis/treatment plan text, attachments (images/scans) — modeled directly on a real prescription pad (see §5.2). Add power was considered but dropped as unneeded (§13) |
 | Compliance | Design includes health-data safeguards (encryption, audit logging, retention/export/erasure, consent) from the start |
-| Multi-tenancy | This is a shared cloud service, not one deployment per clinic: a single backend serves many independent clinics ("tenants"), each fully isolated from the others' data. Tenants are **provisioned by the platform operator** (name, contact email, contact mobile — all mandatory), not self-serve signup, in this phase (§5.4) |
+| Multi-tenancy | This is a shared cloud service, not one deployment per clinic: a single backend serves many independent clinics ("tenants"), each fully isolated from the others' data. Tenants are **provisioned by a `super_user`** (name, contact email, contact mobile — all mandatory) — a dedicated role that operates the service (provision/revoke tenants, service config) but has no access to any tenant's clinical data — not self-serve signup, in this phase (§4.1/§5.4) |
 
 ## 2. Goals / Non-goals
 
@@ -134,18 +134,38 @@ more granular later (e.g. per-patient access lists), split into `roles` +
 `permissions` + join tables without changing the rest of the schema.
 
 **`admin`/`doctor`/`front_desk` are all tenant-scoped** — every one of them
-belongs to exactly one tenant (clinic) and this table describes what they
-can do *within* it. Provisioning a new tenant (§5.4) is a different kind of
-action entirely, performed by a small, separate set of **platform-operator**
-accounts that don't belong to any tenant and aren't part of this role enum
-at all — mixing "runs the SaaS" authority into the same table as "runs one
-clinic's front desk" would force every tenant-scoped table's `tenant_id` to
-tolerate a "belongs to no tenant" exception just for this one rare, high-trust
-action. The same "never trust the client" rule extends to tenant scoping:
-every API query is scoped by the **session's** `tenant_id`, resolved
-server-side from the authenticated user — there is no client-supplied
-tenant parameter anywhere in §6. Getting this wrong is a worse failure mode
-than a permissions bug: it leaks one clinic's data into another's.
+belongs to exactly one *real* tenant (clinic) and this table describes what
+they can do *within* it. None of them can provision, suspend, or otherwise
+operate on tenants as a whole; that's a distinct authority, described next.
+
+### 4.1 `super_user` — operates the service, not a clinic
+
+A fourth role, **`super_user`**, sits above the per-clinic table: it
+provisions tenants, revokes (suspends/reactivates) them, and manages
+service-wide configuration (§5.4/§5.5) — it does **not** get any of the
+per-clinic capabilities in the table above, and by default has **no access
+to any tenant's patient/clinical data at all** (least privilege — "super"
+refers to operating the service, not seeing everything in it; revisit
+explicitly if a support/read-only cross-tenant view is ever wanted, §13).
+
+Structurally, a `super_user` is still an ordinary row in `users` — same
+table, same `sessions`, same login flow as every other role — which avoids
+building a second parallel auth system just for this. The
+`tenant_id NOT NULL` constraint (§5.1/§5.3) stays intact by giving
+`super_user` accounts a home in one **reserved, non-clinic tenant**
+(`tenants.is_platform = 1` — exactly one such row, seeded at deploy time,
+§5.4) rather than special-casing a nullable `tenant_id` everywhere else.
+That reserved tenant is never a real clinic: it's excluded from
+`GET /platform/tenants`, and every ordinary clinic-facing endpoint
+(`/patients`, `/visits`, `/appointments`, …) explicitly rejects a
+`super_user` caller rather than resolving to "the platform tenant's
+(nonexistent) patients."
+
+The same "never trust the client" rule extends to tenant scoping: every API
+query is scoped by the **session's** `tenant_id`, resolved server-side from
+the authenticated user — there is no client-supplied tenant parameter
+anywhere in §6. Getting this wrong is a worse failure mode than a
+permissions bug: it leaks one clinic's data into another's.
 
 ## 5. Data model
 
@@ -178,22 +198,17 @@ erDiagram
         text contact_email
         text contact_mobile
         text status "'active' | 'suspended', §5.4"
+        int is_platform "exactly one row; home for super_user accounts, §4.1"
         text created_at
         text updated_at
     }
-    PLATFORM_ADMINS {
-        text id PK
-        text email
-        text password_hash
-        text created_at
-    }
     USERS {
         text id PK
-        text tenant_id FK
+        text tenant_id FK "the reserved platform tenant, for role=super_user, §4.1"
         text email "unique across ALL tenants, §5.4"
         text password_hash "null until an invite is accepted, §5.4"
         text full_name
-        text role
+        text role "'super_user' | 'admin' | 'doctor' | 'front_desk', §4.1"
         int active
         text invite_token "§5.4"
         text invite_expires_at "§5.4"
@@ -308,6 +323,10 @@ erDiagram
         text tenant_id PK "one row per tenant, §5.4 — not a global singleton anymore"
         int auto_delete_old_appointments
         int auto_delete_after_days
+        text updated_at
+    }
+    PLATFORM_SETTINGS {
+        int id PK "singleton row, always 1 — service-wide, not per-tenant, §4.1/§5.4"
         text updated_at
     }
 ```
@@ -552,41 +571,31 @@ it isn't a child of anything, so it carries `tenant_id` directly.
 ```sql
 PRAGMA foreign_keys = ON;
 
--- One row per clinic. The top-level tenancy boundary everything else below
--- scopes under (§5.4).
+-- One row per clinic, plus exactly one reserved non-clinic row
+-- (is_platform = 1) that's home to super_user accounts (§4.1/§5.4). The
+-- top-level tenancy boundary everything else below scopes under.
 CREATE TABLE tenants (
     id             TEXT PRIMARY KEY,
     name           TEXT NOT NULL,
     contact_email  TEXT NOT NULL,
     contact_mobile TEXT NOT NULL,
     status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
+    is_platform    INTEGER NOT NULL DEFAULT 0,   -- boolean; exactly one row has this set (§4.1)
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
-
--- The people who run this SaaS, not any clinic's staff — provisions tenants
--- (§5.4, §6) and nothing else. Deliberately tiny: no role/permission system
--- of its own, entirely separate from `users`/`sessions` below.
-CREATE TABLE platform_admins (
-    id            TEXT PRIMARY KEY,
-    email         TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE TABLE platform_sessions (
-    id         TEXT PRIMARY KEY,
-    admin_id   TEXT NOT NULL REFERENCES platform_admins(id) ON DELETE CASCADE,
-    expires_at TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
+-- Enforce "exactly one platform tenant" the same way SQLite enforces a
+-- singleton elsewhere in this schema (app_settings used to, §5.3 history):
+-- a partial unique index on the boolean.
+CREATE UNIQUE INDEX idx_tenants_one_platform ON tenants(is_platform) WHERE is_platform = 1;
 
 CREATE TABLE users (
     id                TEXT PRIMARY KEY,             -- uuid, generated by application
-    tenant_id         TEXT NOT NULL REFERENCES tenants(id),
+    tenant_id         TEXT NOT NULL REFERENCES tenants(id),  -- the reserved platform tenant, for role='super_user' (§4.1)
     email             TEXT NOT NULL UNIQUE,         -- unique across ALL tenants, not just this one (§5.4)
     password_hash     TEXT,                         -- null until the invite is accepted (§5.4/§6)
     full_name         TEXT NOT NULL,
-    role              TEXT NOT NULL CHECK (role IN ('admin', 'doctor', 'front_desk')),
+    role              TEXT NOT NULL CHECK (role IN ('super_user', 'admin', 'doctor', 'front_desk')),
     active            INTEGER NOT NULL DEFAULT 1,   -- boolean; also doubles as "invite not yet accepted" (0) for a freshly-provisioned admin (§5.4)
     invite_token      TEXT,                         -- set on provisioning, cleared once accepted (§5.4/§6)
     invite_expires_at TEXT,
@@ -752,6 +761,15 @@ CREATE TABLE app_settings (
     auto_delete_after_days        INTEGER NOT NULL DEFAULT 2,
     updated_at                    TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Service-wide configuration, managed by super_user (§4.1) — distinct from
+-- app_settings above, which is per-tenant. Singleton row, same pattern
+-- app_settings itself used before it became per-tenant. Exact fields are
+-- genuinely TBD (§13) — this is a placeholder shape, not a finished list.
+CREATE TABLE platform_settings (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 ```
 
 **Porting to Postgres later**: `TEXT` timestamp/date columns → `TIMESTAMPTZ`/`DATE`;
@@ -789,11 +807,11 @@ heavier pattern (per-tenant migrations, connection/binding management) and
 isn't warranted at this scale; row scoping keeps the same D1/Workers setup
 already chosen in §3.3.
 
-- **Provisioning**: a new tenant is created by a **platform operator**
-  (§4) — not self-serve signup in this phase — supplying **name**, **contact
+- **Provisioning**: a new tenant is created by a **`super_user`** (§4.1) —
+  not self-serve signup in this phase — supplying **name**, **contact
   email**, and **contact mobile**, all mandatory. `POST /platform/tenants`
   (§6) does three things in one transaction:
-  1. Inserts the `tenants` row (`status = 'active'`).
+  1. Inserts the `tenants` row (`status = 'active'`, `is_platform = 0`).
   2. Inserts the first `users` row for it: `role = 'admin'`,
      `email = contact_email`, `full_name = name` (the tenant's name is used
      as a placeholder for the first admin's display name — there's no
@@ -811,11 +829,40 @@ already chosen in §3.3.
   `password_hash`, flips `active` to `1`, and clears the invite fields. The
   invite token is never returned in any API response body, only delivered
   by email.
-- **Tenant status**: `active` | `suspended` — a soft-disable lever (an
-  admin/operator can suspend a delinquent or offboarded clinic without
-  deleting its data), matching the soft-delete pattern already used for
-  patients/groups elsewhere in this schema. There's no hard-delete-a-whole-
-  tenant workflow specified yet (§13).
+- **Revoking a tenant**: `PATCH /platform/tenants/:id` with
+  `status: 'suspended'` (§6) is a soft-disable lever (a `super_user` can
+  suspend a delinquent or offboarded clinic without deleting its data),
+  matching the soft-delete pattern already used for patients/groups
+  elsewhere in this schema. Two things beyond just flipping the column,
+  since a suspension needs to actually take effect immediately rather than
+  just block *future* logins:
+  1. Every row in `sessions` belonging to that tenant's users is deleted in
+     the same transaction — staff already logged in are signed out right
+     away, not merely unable to log back in.
+  2. Every authenticated request re-checks `tenants.status = 'active'` for
+     the caller's tenant (not just `users.active`), not only at login time —
+     otherwise a session created moments before suspension would keep
+     working until it naturally expires (§10).
+
+  Reactivating (`status: 'active'`) reverses only the status flag — it does
+  not restore the killed sessions; staff log in again normally. There's no
+  hard-delete-a-whole-tenant workflow specified yet (§13).
+- **Bootstrapping**: the reserved platform tenant (`is_platform = 1`) and
+  its first `super_user` account are seeded directly by a deploy-time
+  migration/bootstrap script, not through the API — there's an unavoidable
+  chicken-and-egg problem otherwise (provisioning requires a `super_user`
+  session, and the first one can't log in before it exists). Every
+  `super_user` after that first one is created the ordinary way, through the
+  existing `POST /users` endpoint (§6) — already restricted to a clinic's
+  `admin` creating their own tenant's staff — extended so that a
+  `super_user` caller may additionally set `role: 'super_user'` on a new
+  user under the platform tenant; no other caller may ever set that role.
+- **Service-wide configuration**: `platform_settings` (§5.1/§5.3) is a
+  singleton row a `super_user` manages via `GET`/`PATCH /platform/settings`
+  (§6) — distinct from the per-tenant `app_settings`. What actually belongs
+  in it wasn't specified beyond "service specific configurations, etc."; the
+  schema above is a deliberate placeholder (just `id`/`updated_at`) rather
+  than a guessed-at list of fields (§13).
 - **Email is unique globally, not per tenant** (`users.email`, §5.3) — one
   email is exactly one account at exactly one clinic. This keeps
   `POST /auth/login` a plain email+password check with no separate tenant
@@ -867,11 +914,14 @@ never "whatever order the DB happened to return."
 
 **Every endpoint below except the `/platform/*` and `/auth/*` ones is
 implicitly scoped to the caller's own tenant** (`tenant_id`, resolved
-server-side from the session — §4/§5.4) — there is no `tenant_id` query
+server-side from the session — §4.1/§5.4) — there is no `tenant_id` query
 param or request-body field anywhere in this table, by design. `/platform/*`
-endpoints require a separate **platform-operator** session (§4/§5.4), not a
-regular tenant `users` session, and operate across tenants by nature (that's
-their whole purpose).
+endpoints require `role = 'super_user'` (§4.1) and operate across tenants by
+nature (that's their whole purpose); a **"Role required" of `any` below
+means any of the three clinic roles (`admin`/`doctor`/`front_desk`) — a
+`super_user` is explicitly rejected from every clinic-facing endpoint in
+this table, since it has no clinical work to do and no tenant of its own to
+scope against (§4.1).
 
 Every list endpoint that can grow unbounded (patients, visits, audit log,
 staff accounts) is paginated with `page` (0-indexed, default `0`) and
@@ -891,17 +941,19 @@ UI at all — only the data-fetching layer.
 
 | Method & path | Role required | Purpose | Default sort |
 |---|---|---|---|
-| `POST /platform/tenants` | platform operator | Provision a tenant — `name`/`contact_email`/`contact_mobile`, all mandatory (§5.4). Creates the tenant, a default `app_settings` row, and an inactive first `admin` user with an invite token; sends the invite email. Response is the created tenant — never the invite token | — |
-| `GET /platform/tenants?status=&page=&limit=` | platform operator | List tenants across the whole service | `created_at` desc |
-| `PATCH /platform/tenants/:id` | platform operator | Update `status` (`active`/`suspended`, §5.4) | — |
+| `POST /platform/tenants` | super_user | Provision a tenant — `name`/`contact_email`/`contact_mobile`, all mandatory (§5.4). Creates the tenant, a default `app_settings` row, and an inactive first `admin` user with an invite token; sends the invite email. Response is the created tenant — never the invite token | — |
+| `GET /platform/tenants?status=&page=&limit=` | super_user | List tenants across the whole service (excludes the reserved platform tenant, §4.1) | `created_at` desc |
+| `PATCH /platform/tenants/:id` | super_user | Update `status` (`active`/`suspended`) — suspending also kills that tenant's live sessions immediately (§5.4/§10) | — |
+| `GET /platform/settings` | super_user | Service-wide configuration (§5.4) — distinct from the per-tenant `GET /settings` below | — |
+| `PATCH /platform/settings` | super_user | Update service-wide configuration | — |
 | `POST /auth/accept-invite` | — (public, token in body) | Accept a provisioning invite — `token` + new `password` — sets the password, activates the user, clears the invite fields, and signs them in (§5.4) | — |
 | `POST /auth/login` | — | Authenticate, set session cookie. Resolves both the user *and* their tenant from `email` — globally unique (§5.4) — no separate tenant-selection step | — |
 | `POST /auth/logout` | any | Invalidate session | — |
 | `GET /auth/me` | any | Current user + role + tenant name (for client branding, §7) | — |
 | `GET /me/preferences` | any | Current user's own theme + list page size (§5.2). Not gated by role — every account manages its own | — |
 | `PATCH /me/preferences` | any | Update either/both fields; creates the row on first write if it doesn't exist yet | — |
-| `GET /users?page=&limit=` | admin | List staff accounts | `full_name` asc |
-| `POST /users` | admin | Create staff account | — |
+| `GET /users?page=&limit=` | admin | List staff accounts (own tenant only) | `full_name` asc |
+| `POST /users` | admin, super_user | Create a staff account. `admin` creates `doctor`/`front_desk`/`admin` under their own tenant; a `super_user` may additionally set `role: 'super_user'` on a new user under the reserved platform tenant (§4.1/§5.4) — no other caller may ever set that role | — |
 | `PATCH /users/:id` | admin | Update role/active status | — |
 | `GET /patients?search=&group_id=&sort=&page=&limit=` | any | List/search patients. `search` matches **name** (substring, case-insensitive) **or** `patient_number` (substring, so a partial number or date prefix like `P-20260705` also works) — ≥3 characters or omitted, shorter values → `400` (§5.2). Optional `group_id` filters to one group. Optional `sort` overrides the default: `group` (group name asc, then `created_at` desc within a group), `name_asc`/`name_desc` (patient name, case-insensitive) — omit for the plain default below. Summary rows only (`patient_number`/name/age/gender/group); full clinical detail lives on the visit endpoints below | `created_at` **desc** (newest-registered first) |
 | `POST /patients` | admin, doctor, front_desk | Create patient (demographics only, optionally including `group_id` — request body may not include clinical fields). Response includes the generated `patient_number` | — |
@@ -949,6 +1001,14 @@ UI at all — only the data-fetching layer.
 - **A new "Accept invite" screen** (§8.1) for a freshly-provisioned admin's
   first login — a set-password form reached via the emailed invite link's
   token, not part of the normal login flow.
+- **A separate, small "Platform" screen for `super_user`** (§4.1/§8.1) — a
+  `super_user` logging in sees none of the clinic UI (patients, visits,
+  appointments, …; there's no tenant of its own to show any of that for) and
+  instead lands on a tenant list/provisioning screen (`GET`/`POST
+  /platform/tenants`) plus service settings (`GET`/`PATCH
+  /platform/settings`). `App.tsx`'s top-level view switch branches on
+  `role === 'super_user'` into this separate screen tree rather than
+  threading a `super_user` case through every existing clinic screen.
 - Rework `EyeRecordForm`/`EyeRecordHistory` around the Distance/Reading ×
   Left/Right grid (§5.2) instead of the current single sphere/cylinder/
   distance-per-eye fields — plus diagnosis/treatment plan, lenses, and
@@ -1135,11 +1195,13 @@ this is the concrete shape §7's bullets describe in the abstract.
 
 ### 8.1 Login (new — doesn't exist in the current MVP)
 
-Email + password — a single shared login page for every clinic, no tenant
-picker (§5.4). On success, `GET /auth/me` resolves the session's role
-(`admin` / `doctor` / `front_desk`) and tenant name, held in an auth context
-that every other screen reads from. There is no "guest"/unauthenticated view
-of any patient data.
+Email + password — a single shared login page for every clinic (and for
+`super_user`, §4.1), no tenant picker (§5.4). On success, `GET /auth/me`
+resolves the session's role (`super_user` / `admin` / `doctor` /
+`front_desk`) and tenant name, held in an auth context that every other
+screen reads from. A `super_user` session renders the separate Platform
+screen (§7) instead of any clinic UI. There is no "guest"/unauthenticated
+view of any patient data.
 
 **Accept invite** (new, §5.4/§6): the link in a freshly-provisioned tenant's
 invite email opens a set-password form (token from the URL, not typed in) —
@@ -1475,12 +1537,18 @@ build them if multi-device offline editing turns out to be a real need.
 - **Authorization**: enforced per-request server-side from `users.role`
   (§4) — never inferred from client state.
 - **Tenant isolation**: every query is scoped to the session's `tenant_id`,
-  resolved server-side — never a client-supplied value (§4/§5.4/§6). This is
-  the single highest-severity failure mode in a multi-tenant system: a
+  resolved server-side — never a client-supplied value (§4.1/§5.4/§6). This
+  is the single highest-severity failure mode in a multi-tenant system: a
   missed filter doesn't just over/under-grant within one clinic, it leaks
   one clinic's data into another's. Worth a shared query-scoping
   helper/middleware in the API layer rather than trusting every handler to
   remember the filter individually.
+- **Suspension takes effect immediately, not just for future logins**: a
+  `super_user` revoking a tenant (§5.4) deletes all of that tenant's
+  `sessions` rows in the same transaction, and every authenticated request
+  re-checks `tenants.status = 'active'` for the caller's tenant — not only
+  at login. Otherwise a staff member already signed in at a just-suspended
+  clinic would keep working until their session's natural expiry.
 - **Audit trail**: every create/update/delete/export is logged to
   `audit_log` with actor, before/after snapshot, and timestamp (§5.3).
   Read-access logging (who *viewed* a chart, not just who changed it) is
@@ -1555,10 +1623,19 @@ build them if multi-device offline editing turns out to be a real need.
   single tenant ever needs several physical locations sharing one patient
   base, that's an additive `locations` table nested under a tenant, not a
   rework of the isolation model here.
-- **Tenant provisioning is platform-operator-only, not self-serve signup**
-  (§5.4) — a clinic can't sign itself up through a public form yet; someone
-  running the service creates the tenant. Revisit if/when a self-serve
-  onboarding flow is wanted.
+- **Tenant provisioning is `super_user`-only, not self-serve signup** (§4.1/
+  §5.4) — a clinic can't sign itself up through a public form yet; someone
+  running the service, holding the `super_user` role, creates the tenant.
+  Revisit if/when a self-serve onboarding flow is wanted.
+- **`super_user` has no cross-tenant clinical-data access** (§4.1) — a
+  deliberate least-privilege choice: provisioning/revoking tenants and
+  managing service config doesn't require reading any clinic's patient
+  records. Revisit explicitly (don't just fall into it) if a support/
+  debugging use case ever needs a read-only cross-tenant view.
+- **`platform_settings`'s actual fields are unspecified** (§5.1/§5.3/§5.4) —
+  provisioned as an empty placeholder singleton since "service specific
+  configurations, etc." wasn't itemized. Fill in real columns as concrete
+  needs come up rather than guessing at a schema now.
 - **No per-tenant subdomain/branded PWA** (§5.4/§7) — every clinic shares one
   login URL and app shell (with the tenant's name shown in the header, §7).
   Per-tenant subdomains would allow a more distinctly-branded, separately
