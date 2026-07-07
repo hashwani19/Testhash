@@ -1160,6 +1160,76 @@ with configurable content — not a custom HTML/layout template**:
     change listener, and `visibilitychange` (the most reliable on mobile,
     since the native UI backgrounds the page either way it's dismissed).
 
+### 5.7 Analytics
+
+**Implemented directly in this local-storage build** rather than designed
+against the future multi-tenant backend first — unlike prescription
+printing (§5.6), there's no real aggregate-query backend concept to design
+around yet (§6/§13); the data already lives in `patients`/`eyeVisits`
+arrays in memory, so "analytics" here is a handful of pure client-side
+functions computing counts over those same arrays, not a new API surface.
+
+- **New Analytics screen, admin + doctor only** (not front_desk) —
+  clinic-wide aggregate data treated as a clinical/operational concern, not
+  a front-desk one. `NavMenu`'s per-item gating generalized from a plain
+  `adminOnly?: boolean` to `roles?: Role[]` to express this (`groups`/
+  `activity` became `roles: ['admin']` with no behavior change).
+- **Five charts**, computed by `src/utils/analyticsQuery.ts` (pure
+  functions, same convention as `patientQuery.ts`/`appointmentQuery.ts`):
+  - **New patients** and **visits (new vs. returning)** over time, sharing
+    one Day/Month granularity toggle. A visit counts as "new" if it's the
+    earliest visit on record for its patient, "returning" otherwise.
+  - **Gender** and **age distribution** (age via the existing
+    `getPatientAge`, bucketed into decades, 90+ folded into one bucket) —
+    snapshots of the current patient base, no time toggle.
+  - Day granularity shows a **rolling last-30-days window**; month
+    granularity shows the **last 12 months** — deliberately not the same
+    window at both zoom levels, since ~365 daily bars won't render legibly
+    on a mobile-width chart. Every period in both windows is zero-filled
+    (a day/month with no data is a real bar at zero, not a skipped one) so
+    the trend reads correctly.
+- **Recharts** — the one real new dependency this feature adds (chosen
+  over hand-rolled SVG charts specifically to get correct-by-default
+  tooltips/responsive sizing quickly; adds ~100KB gzipped, roughly doubling
+  this app's total bundle size, an explicit, known tradeoff for a test
+  build rather than an oversight).
+- **Chart type choices**: bar/stacked-bar throughout, never a donut/pie —
+  even for gender's part-to-whole read, a bar gives exact comparable
+  counts, which a donut doesn't past a glance. Categorical color only
+  where series identity is the point (new-vs-returning, gender); single-hue
+  (`--accent`) everywhere there's just one series, so it doesn't imply a
+  category that isn't there.
+- **A fixed categorical chart palette** — `--chart-1`..`--chart-4` (blue /
+  aqua / yellow / green), added to `index.css` alongside the existing
+  runtime theme tokens, one hue order used everywhere a category needs a
+  color (never reassigned per dataset, e.g. "female" is always
+  `--chart-1`). Values and ordering come from a general accessibility
+  method (colorblind-safe hue separation, contrast bands), validated with
+  its own script against *this app's own* light/dark card surfaces rather
+  than generic ones — two of the four hues (aqua, yellow) fall under 3:1
+  contrast on the light surface, which is why every categorical chart
+  ships direct value labels rather than relying on the color alone.
+- **A real dark-mode bug, found and fixed during verification**: Recharts
+  renders bar fills as a plain SVG `fill="var(--accent)"` attribute. Every
+  *other* themed value in the app (backgrounds, text, borders) is a
+  regular CSS property and repaints live for free when the OS flips
+  `prefers-color-scheme` in 'auto' mode — that's the whole point of
+  index.css's runtime tokens (§8.10). Verified empirically that chart bar
+  fills don't: the underlying CSS variable does update, but an
+  already-painted bar's `fill` attribute doesn't get invalidated for it,
+  leaving every bar rendered black (SVG's fallback for an unresolvable
+  presentation-attribute value) until something else forces a repaint. A
+  fresh page load in dark mode rendered correctly — this only broke a live
+  OS-level theme flip *while the Analytics screen was already open*, which
+  is exactly the scenario 'auto' mode exists for. Fixed with a new
+  `useChartColors` hook (`src/hooks/useChartColors.ts`) that resolves the
+  chart CSS variables to concrete color strings via `getComputedStyle`,
+  re-resolving on both a `matchMedia('(prefers-color-scheme: dark)')`
+  change listener (OS-level, 'auto' mode) and a `MutationObserver` on the
+  `data-theme` attribute (explicit light/dark mode) — trading the passive
+  CSS repaint Recharts doesn't reliably do for an explicit React
+  state update that forces one.
+
 ## 6. API surface (v1)
 
 **Canonical machine-readable spec: [`docs/openapi.yaml`](./openapi.yaml)**

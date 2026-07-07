@@ -3,13 +3,14 @@ import { Button } from './common/Button'
 import { Dropdown } from './common/Dropdown'
 import { cx } from '../styles'
 
-export type NavTarget = 'patients' | 'groups' | 'activity' | 'appointments'
+export type NavTarget = 'patients' | 'groups' | 'activity' | 'appointments' | 'analytics'
 
-const NAV_ITEMS: Array<{ target: NavTarget; label: string; adminOnly?: boolean }> = [
+const NAV_ITEMS: Array<{ target: NavTarget; label: string; roles?: Role[] }> = [
   { target: 'patients', label: 'Patients' },
-  { target: 'groups', label: 'Groups', adminOnly: true },
-  { target: 'activity', label: 'Activity', adminOnly: true },
+  { target: 'groups', label: 'Groups', roles: ['admin'] },
+  { target: 'activity', label: 'Activity', roles: ['admin'] },
   { target: 'appointments', label: 'Appointments' },
+  { target: 'analytics', label: 'Analytics', roles: ['admin', 'doctor'] },
 ]
 
 interface Props {
@@ -20,7 +21,7 @@ interface Props {
 }
 
 export function NavMenu({ role, active, onNavigate, onSignOut }: Props) {
-  const items = NAV_ITEMS.filter((item) => !item.adminOnly || role === 'admin')
+  const items = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role))
 
   return (
     <Dropdown

@@ -22,6 +22,7 @@ import { ActivityScreen } from './components/ActivityScreen'
 import { PreferencesScreen } from './components/PreferencesScreen'
 import { AppointmentsScreen } from './components/AppointmentsScreen'
 import { AppointmentForm } from './components/AppointmentForm'
+import { AnalyticsScreen } from './components/AnalyticsScreen'
 import { AppHeader } from './components/AppHeader'
 import type { NavTarget } from './components/NavMenu'
 import { ConfirmModal } from './components/ConfirmModal'
@@ -43,6 +44,7 @@ type View =
   | 'appointments'
   | 'newAppointment'
   | 'editAppointment'
+  | 'analytics'
   | 'preferences'
 
 const VIEW_TO_NAV_TARGET: Partial<Record<View, NavTarget>> = {
@@ -51,12 +53,13 @@ const VIEW_TO_NAV_TARGET: Partial<Record<View, NavTarget>> = {
   appointments: 'appointments',
   newAppointment: 'appointments',
   editAppointment: 'appointments',
+  analytics: 'analytics',
 }
 
 function AppShell() {
   const { user, users, logout } = useAuth()
   const { patients, addPatient, updatePatient, deletePatient } = usePatients()
-  const { addVisit, updateVisit, deleteVisit, deleteVisitsForPatient, getVisitsForPatient } =
+  const { visits, addVisit, updateVisit, deleteVisit, deleteVisitsForPatient, getVisitsForPatient } =
     useEyeVisits(patients)
   const { groups, addGroup, renameGroup, deleteGroup } = usePatientGroups()
   const {
@@ -89,6 +92,8 @@ function AppShell() {
   const isAdmin = user.role === 'admin'
   // Attachments aren't rendered at all for front_desk (§8.4/§8.5 of docs/design.md).
   const canManageAttachments = user.role !== 'front_desk'
+  // Analytics is clinic-wide, aggregate data — admin + doctor, not front_desk (§5.7).
+  const canViewAnalytics = isAdmin || user.role === 'doctor'
   const selectedPatient = patients.find((p) => p.id === selectedPatientId) ?? null
 
   const goToList = () => {
@@ -107,6 +112,7 @@ function AppShell() {
     else if (target === 'groups') setView('manageGroups')
     else if (target === 'activity') setView('activity')
     else if (target === 'appointments') setView('appointments')
+    else if (target === 'analytics') setView('analytics')
   }
 
   const requestSignOut = () => setConfirmingSignOut(true)
@@ -348,6 +354,10 @@ function AppShell() {
               setView('appointments')
             }}
           />
+        )}
+
+        {view === 'analytics' && canViewAnalytics && (
+          <AnalyticsScreen patients={patients} visits={visits} onBack={goToList} />
         )}
 
         {view === 'preferences' && <PreferencesScreen onBack={goToList} />}

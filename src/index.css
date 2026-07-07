@@ -11,6 +11,14 @@
   --medium: #f59e0b;
   --high: #ef4444;
   --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.04);
+  /* Categorical chart palette (docs/design.md §5.7) — fixed hue order, never
+     cycled or reassigned per-dataset. Validated for CVD separation and
+     contrast against this app's own light/dark card surfaces, not just the
+     generic reference surfaces — see the dataviz skill's validate_palette.js. */
+  --chart-1: #2a78d6;
+  --chart-2: #1baf7a;
+  --chart-3: #eda100;
+  --chart-4: #008300;
 
   color-scheme: light dark;
   font-synthesis: none;
@@ -29,6 +37,10 @@
     --accent: #818cf8;
     --accent-contrast: #0f172a;
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.25);
+    --chart-1: #3987e5;
+    --chart-2: #199e70;
+    --chart-3: #c98500;
+    --chart-4: #008300;
   }
 }
 
@@ -49,6 +61,10 @@
   --medium: #f59e0b;
   --high: #ef4444;
   --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.04);
+  --chart-1: #2a78d6;
+  --chart-2: #1baf7a;
+  --chart-3: #eda100;
+  --chart-4: #008300;
 }
 
 :root[data-theme='dark'] {
@@ -60,6 +76,10 @@
   --accent: #818cf8;
   --accent-contrast: #0f172a;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.25);
+  --chart-1: #3987e5;
+  --chart-2: #199e70;
+  --chart-3: #c98500;
+  --chart-4: #008300;
 }
 
 /* Maps the runtime-overridable design tokens above onto Tailwind's theme so
