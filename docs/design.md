@@ -1159,6 +1159,52 @@ with configurable content — not a custom HTML/layout template**:
     (doesn't reliably fire on every platform), a `matchMedia('print')`
     change listener, and `visibilitychange` (the most reliable on mobile,
     since the native UI backgrounds the page either way it's dismissed).
+  - **Two more real bugs, found and fixed from an Android report** ("blank
+    screen, no way to cancel and get back to the app") — both root causes
+    verified directly (DOM measurement, a matchMedia stub standing in for
+    Chromium's own unreliable `display-mode` test-emulation), not guessed:
+    - Chrome on Android has a known, version-dependent bug where
+      `window.print()` inside an installed, standalone-display PWA (no
+      address bar, no browser back button — this app's manifest sets
+      `display: 'standalone'`) can render a blank print preview with no way
+      to dismiss it, since standalone mode strips the browser chrome the
+      print UI normally relies on. The auto-triggered `window.print()` on
+      mount is now skipped for that one specific combination
+      (`navigator.userAgent` matching `Android` **and**
+      `matchMedia('(display-mode: standalone)').matches`) — the user lands
+      on this overlay's own Close-able UI first, with a visible warning and
+      the "Print" button still there as an opt-in try, instead of being
+      thrown straight into a print preview that might not be dismissable.
+    - Independent of that: the printed-page `<div>` is in normal document
+      flow (not `fixed`), and `#root` — normally hidden only during actual
+      printing, via index.css's `@media print` rule — stays in flow with
+      its own `min-height: 100svh` for the entire time this overlay is
+      merely *displayed on screen*, before print even triggers. That pushes
+      the printed page down by a full viewport height of dead space every
+      time. Verified directly via `getBoundingClientRect()`: on a
+      412×915 viewport the printed page started at y≈947, entirely below
+      the fold, while the fixed dimmed backdrop and Print/Close controls —
+      being `fixed`, unaffected by flow — stayed visible regardless of
+      scroll position. The result was indistinguishable from a genuinely
+      blank screen: a dimmed overlay with controls but no visible content
+      unless the user happened to scroll down. Fixed by hiding `#root` for
+      as long as `PrescriptionPrint` is mounted, not only during the print
+      media query — the same idea index.css already applies for printing,
+      just extended to cover the on-screen preview state too.
+    - Also added: a `history.pushState`/`popstate` pair so a hardware or
+      gesture back button closes this overlay — this app has no URL-based
+      routing at all (`App.tsx` is one big `useState<View>`), so without an
+      explicit history entry, Android's back button previously had no way
+      to know this overlay existed. Consumed via `history.back()` in the
+      effect's cleanup on every *other* close path too (Close button,
+      backdrop tap, print auto-close above), so it never leaves a dead
+      history entry behind. Both this effect and the print-dismissal one
+      above read `onClose`/`onPrinted` through a ref rather than depending
+      on them directly — `EyeRecordHistory` passes `onClose` as a fresh
+      inline arrow function on every render, and an effect with a real
+      side effect in its cleanup (`history.back()`) re-running on every
+      unrelated parent render was closing the overlay moments after it
+      opened during verification, not just in theory.
 
 ### 5.7 Analytics
 

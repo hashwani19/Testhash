@@ -21,6 +21,16 @@ interface Props {
 // three are a separate, unimplemented "tenant branding" concept (§5.5).
 const DEFAULT_CLINIC_NAME = 'Ortho and Vision Care'
 
+// Chrome on Android has a known, version-dependent bug where window.print()
+// inside an installed, standalone-display PWA (no address bar, no browser
+// back button) renders a blank print preview with no way to dismiss it —
+// standalone mode strips the browser chrome the print UI normally relies
+// on. Detected so the auto-triggered print below can be skipped for this
+// one combination — see the isAndroidStandalone usage further down.
+function isAndroidStandaloneDisplay(): boolean {
+  return /Android/i.test(navigator.userAgent) && window.matchMedia('(display-mode: standalone)').matches
+}
+
 function formatSigned(value?: number): string {
   if (value == null) return ''
   return value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2)
@@ -90,19 +100,84 @@ function DetailLine({ label, value }: { label: string; value: string }) {
  */
 export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted }: Props) {
   const hasPrinted = useRef(false)
+  const skipAutoPrint = useRef(isAndroidStandaloneDisplay()).current
+  // EyeRecordHistory passes onClose as a fresh inline arrow function on
+  // every render — a ref keeps the effects below reading the latest
+  // version without needing onClose in their dependency arrays, which
+  // matters more here than it looks: an effect that re-runs on every
+  // parent render is harmless when its cleanup only removes event
+  // listeners, but the history effect just below calls history.back() in
+  // its cleanup, and a spurious teardown from an unrelated parent
+  // re-render would fire that for real, closing the overlay almost as
+  // soon as it opened.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') onCloseRef.current()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+  }, [])
+
+  useEffect(() => {
+    // A hardware/gesture back button doesn't otherwise know about this
+    // overlay — this app has no URL-based routing (App.tsx is one big
+    // useState<View>), so without a history entry of our own, Android's
+    // back button falls through past this screen entirely instead of
+    // closing it. Consumed on any other close path too (Close button,
+    // backdrop tap, print auto-close below) so it doesn't leave a dead
+    // entry the user would otherwise have to press back through later.
+    // Runs once on mount only — see the onCloseRef comment above.
+    let closedViaPopState = false
+    history.pushState({ prescriptionPrintOverlay: true }, '')
+    const onPopState = () => {
+      closedViaPopState = true
+      onCloseRef.current()
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => {
+      window.removeEventListener('popstate', onPopState)
+      if (!closedViaPopState && history.state?.prescriptionPrintOverlay) history.back()
+    }
+  }, [])
+
+  useEffect(() => {
+    // #root normally only gets hidden during actual printing (index.css's
+    // @media print rule) — but it stays in normal document flow the whole
+    // time this overlay is on screen, and index.css gives it a
+    // `min-height: 100svh`. That pushes this component's own (non-fixed)
+    // printed-page div below one full viewport height of empty flow space
+    // every time, off the bottom of the screen — verified via a real
+    // getBoundingClientRect check, not assumed: the card started at
+    // y≈947px on a 915px-tall viewport. The fixed backdrop and controls
+    // stay visible regardless of scroll, so the on-screen result was
+    // exactly a blank-looking dimmed screen with no visible content unless
+    // the user happened to scroll down. Hiding #root for as long as this
+    // overlay is mounted — not just during the print media query — removes
+    // that dead space so the printed page renders at the top where it's
+    // actually seen.
+    const root = document.getElementById('root')
+    if (!root) return
+    const previousDisplay = root.style.display
+    root.style.display = 'none'
+    return () => {
+      root.style.display = previousDisplay
+    }
+  }, [])
 
   useEffect(() => {
     if (hasPrinted.current) return
     hasPrinted.current = true
     onPrinted()
+    // Skipped for an installed, standalone-display PWA on Android (see
+    // isAndroidStandaloneDisplay above) — instead of throwing the user
+    // straight into a print preview that may render blank with no way out,
+    // they land on this overlay's own Close-able UI first, and the visible
+    // "Print" button (still present, still tappable) is an opt-in try
+    // rather than something sprung on them.
+    if (skipAutoPrint) return
     const id = requestAnimationFrame(() => window.print())
     return () => cancelAnimationFrame(id)
     // Runs once on mount only — onPrinted/onClose identity changes shouldn't re-trigger a print.
@@ -129,7 +204,7 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     const handlePrintUiClosed = () => {
       if (dismissed) return
       dismissed = true
-      onClose()
+      onCloseRef.current()
     }
 
     window.addEventListener('afterprint', handlePrintUiClosed)
@@ -150,7 +225,8 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
       mediaQueryList.removeEventListener('change', onMediaChange)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [onClose])
+    // Runs once on mount only — see the onCloseRef comment above.
+  }, [])
 
   const age = getPatientAge(patient)
   const topMarginMm = 15 + Math.max(template.topMarginMm, 0)
@@ -266,18 +342,27 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
         )}
       </div>
 
-      <div className="fixed right-4 top-4 z-50 flex gap-2 print:hidden">
-        <Button variant="secondary" onClick={() => window.print()}>
-          Print
-        </Button>
-        <Button
-          variant="icon"
-          aria-label="Close"
-          className="h-9 w-9 rounded-full bg-surface/90 text-xl leading-none"
-          onClick={onClose}
-        >
-          ×
-        </Button>
+      <div className="fixed inset-x-0 top-0 z-50 flex flex-col items-end gap-2 p-4 print:hidden">
+        {skipAutoPrint && (
+          <p className="w-full rounded-lg bg-medium px-3 py-2 text-left text-[13px] text-black shadow-card">
+            Printing can show a blank screen on some Android devices when the app is installed to your
+            home screen. If that happens, use your device's back button, then try printing again from
+            this app in Chrome instead of the installed icon.
+          </p>
+        )}
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => window.print()}>
+            Print
+          </Button>
+          <Button
+            variant="icon"
+            aria-label="Close"
+            className="h-9 w-9 rounded-full bg-surface/90 text-xl leading-none"
+            onClick={onClose}
+          >
+            ×
+          </Button>
+        </div>
       </div>
     </>,
     document.body,
