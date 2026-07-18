@@ -101,15 +101,12 @@ function DetailLine({ label, value }: { label: string; value: string }) {
 export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted }: Props) {
   const hasPrinted = useRef(false)
   const skipAutoPrint = useRef(isAndroidStandaloneDisplay()).current
+  const printedPageRef = useRef<HTMLDivElement>(null)
   // EyeRecordHistory passes onClose as a fresh inline arrow function on
   // every render — a ref keeps the effects below reading the latest
-  // version without needing onClose in their dependency arrays, which
-  // matters more here than it looks: an effect that re-runs on every
-  // parent render is harmless when its cleanup only removes event
-  // listeners, but the history effect just below calls history.back() in
-  // its cleanup, and a spurious teardown from an unrelated parent
-  // re-render would fire that for real, closing the overlay almost as
-  // soon as it opened.
+  // version without needing onClose in their dependency arrays, so they
+  // only need to run once on mount rather than tearing down and
+  // re-registering their listeners on every unrelated parent re-render.
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
 
@@ -122,49 +119,21 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
   }, [])
 
   useEffect(() => {
-    // A hardware/gesture back button doesn't otherwise know about this
-    // overlay — this app has no URL-based routing (App.tsx is one big
-    // useState<View>), so without a history entry of our own, Android's
-    // back button falls through past this screen entirely instead of
-    // closing it. Consumed on any other close path too (Close button,
-    // backdrop tap, print auto-close below) so it doesn't leave a dead
-    // entry the user would otherwise have to press back through later.
-    // Runs once on mount only — see the onCloseRef comment above.
-    let closedViaPopState = false
-    history.pushState({ prescriptionPrintOverlay: true }, '')
-    const onPopState = () => {
-      closedViaPopState = true
-      onCloseRef.current()
-    }
-    window.addEventListener('popstate', onPopState)
-    return () => {
-      window.removeEventListener('popstate', onPopState)
-      if (!closedViaPopState && history.state?.prescriptionPrintOverlay) history.back()
-    }
-  }, [])
-
-  useEffect(() => {
-    // #root normally only gets hidden during actual printing (index.css's
-    // @media print rule) — but it stays in normal document flow the whole
-    // time this overlay is on screen, and index.css gives it a
-    // `min-height: 100svh`. That pushes this component's own (non-fixed)
-    // printed-page div below one full viewport height of empty flow space
-    // every time, off the bottom of the screen — verified via a real
-    // getBoundingClientRect check, not assumed: the card started at
-    // y≈947px on a 915px-tall viewport. The fixed backdrop and controls
-    // stay visible regardless of scroll, so the on-screen result was
-    // exactly a blank-looking dimmed screen with no visible content unless
-    // the user happened to scroll down. Hiding #root for as long as this
-    // overlay is mounted — not just during the print media query — removes
-    // that dead space so the printed page renders at the top where it's
-    // actually seen.
-    const root = document.getElementById('root')
-    if (!root) return
-    const previousDisplay = root.style.display
-    root.style.display = 'none'
-    return () => {
-      root.style.display = previousDisplay
-    }
+    // Scrolls the printed page into view on mount — the printed-page div is
+    // in normal document flow (not fixed), and #root above it has a
+    // min-height: 100svh (index.css), so without this the printed page
+    // renders a full viewport-height below the fold on-screen, leaving only
+    // the fixed dimmed backdrop and controls visible (verified via
+    // getBoundingClientRect: the card started at y≈947 on a 915px-tall
+    // viewport). An earlier attempt fixed this by setting #root's display
+    // to none for as long as this overlay stayed mounted, alongside a
+    // history.pushState/popstate pair for hardware back-button support —
+    // both reverted after a report that print stopped working on iOS and
+    // Android alike, since both touch real browser print/navigation
+    // machinery in ways that can't be verified without physical devices,
+    // and getting printing itself working again outranks either of those.
+    // A plain scrollIntoView doesn't touch #root or history at all.
+    printedPageRef.current?.scrollIntoView({ block: 'start' })
   }, [])
 
   useEffect(() => {
@@ -237,7 +206,10 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
 
       <div className={`fixed inset-0 z-50 overflow-y-auto print:hidden ${dimmedBackdrop}`} onClick={onClose} />
 
-      <div className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
+      <div
+        ref={printedPageRef}
+        className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none"
+      >
         {template.logoDataUrl && (
           // Absolutely positioned and first in DOM order so every later
           // (normal-flow) sibling below paints on top of it automatically —
