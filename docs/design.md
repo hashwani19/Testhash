@@ -1534,26 +1534,15 @@ this is the concrete shape §7's bullets describe in the abstract.
 
 ### 8.0 Responsive layout
 
-**Implemented in this local-storage build**, on top of the phone-first
-screens below — the same screens adapt to three width tiers (Tailwind's
-default breakpoints, no custom config) rather than getting separate
-tablet/desktop designs:
-
-- **Phone (< `md`, 768px)**: unchanged — hamburger menu (§8.2), one screen
-  at a time, content fills the width.
-- **Tablet portrait (`md`–`lg`, 768–1023px)**: the hamburger is replaced by
-  a persistent left nav rail (always-visible destinations, no drawer);
-  single-form/flat-list screens (Preferences, Manage Groups, the patient
-  and appointment forms) cap their content column at a comfortable reading
-  width instead of stretching edge-to-edge; still one screen at a time.
-- **Tablet landscape and laptop (≥ `lg`, 1024px)**: same nav rail; screens
-  with genuine multi-column content (Analytics' chart grid) lay out two
-  columns instead of one. Patient/appointment master-detail split views are
-  planned but not yet built (tracked as follow-up work, not part of this
-  pass).
-
-Orientation lock (`portrait` in the PWA manifest) and a true master-detail
-list+detail layout are known gaps, left for a later pass.
+**Implemented in this local-storage build.** The screens below are
+phone-first but adapt to tablet and laptop widths (Tailwind's default
+breakpoints, no custom config): a persistent nav rail replaces the
+hamburger menu once there's room, single-form/flat-list screens cap their
+content width instead of stretching edge-to-edge, and screens with genuine
+multi-column content (Analytics' chart grid) lay out multiple columns. On
+phone widths the experience is unchanged — one screen at a time, full
+width. Orientation lock (`portrait` in the PWA manifest) and a true
+master-detail list+detail layout are known gaps, left for a later pass.
 
 ### 8.1 Login (new — doesn't exist in the current MVP)
 
