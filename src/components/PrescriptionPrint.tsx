@@ -80,10 +80,7 @@ function DetailLine({ label, value }: { label: string; value: string }) {
  *
  * US Letter-sized (`@page { size: letter; }`, set inline below rather than
  * in index.css since the top margin depends on the live template's
- * `topMarginMm` rather than being a fixed value). `@page margin` itself is
- * 0 — the visual margin comes from padding on `.rx-printed-page` instead,
- * since a zero @page margin is what suppresses the browser's own default
- * print header/footer (page title, URL, "1/N" page number).
+ * `topMarginMm` rather than being a fixed value).
  *
  * Always renders in fixed black-on-white, regardless of the viewer's own
  * theme preference (§5.2/§8.10) — deliberately doesn't use the app's
@@ -210,30 +207,13 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
 
   return createPortal(
     <>
-      <style>{`
-        /* margin: 0 on the @page box itself, not just small — Chrome (and
-           other browsers) reserve the page's own margin area for their
-           default print header (page title/date) and footer (URL, "1/N"
-           page number) whenever "Headers and footers" is on in the print
-           dialog. With no margin box to draw into, there's nothing for
-           them to render into — verified this is what actually suppresses
-           them, not just a smaller margin. The visual spacing the margin
-           used to provide now comes from padding on the printed page
-           content itself (below) instead, so the printed layout looks the
-           same as before. */
-        @page { size: letter; margin: 0; }
-        @media print {
-          .rx-printed-page {
-            padding: ${topMarginMm}mm 15mm 15mm 15mm !important;
-          }
-        }
-      `}</style>
+      <style>{`@page { size: letter; margin: ${topMarginMm}mm 15mm 15mm 15mm; }`}</style>
 
       {!isPrinting && (
         <div className={`fixed inset-0 z-50 overflow-y-auto print:hidden ${dimmedBackdrop}`} onClick={onClose} />
       )}
 
-      <div className="rx-printed-page relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:shadow-none">
+      <div className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
         {template.logoDataUrl && (
           // Absolutely positioned and first in DOM order so every later
           // (normal-flow) sibling below paints on top of it automatically —
