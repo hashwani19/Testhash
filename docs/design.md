@@ -1127,15 +1127,6 @@ with configurable content — not a custom HTML/layout template**:
     signals — `afterprint`, a `matchMedia('print')` change listener, and
     `visibilitychange` (the most reliable on mobile) — since no single one
     fires reliably across every platform.
-  - **Printing requires an explicit tap of the overlay's Print button**,
-    deviating from §7's "calls `window.print()` once mounted" — an
-    auto-triggered print, fired a frame after the overlay mounted, was the
-    original design here too, but mobile print previews kept coming back
-    blank regardless of what the auto-trigger waited on first (image
-    decode, removing `position: fixed` chrome from the DOM, ...). Requiring
-    a tap means the overlay's first paint is long settled before
-    `window.print()` ever runs, removing that race entirely rather than
-    continuing to chase its timing.
 
 ### 5.7 Analytics
 

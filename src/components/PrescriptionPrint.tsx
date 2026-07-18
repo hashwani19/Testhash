@@ -10,10 +10,8 @@ interface Props {
   visit: EyeVisit
   template: PrescriptionTemplate
   onClose: () => void
-  /** Called each time Print is tapped, right before the print dialog opens
-   *  — the caller logs this as an export-class audit entry (docs/design.md
-   *  §5.6/§10). Printing twice in one session logs twice, matching two
-   *  real print actions. */
+  /** Called once, right before the print dialog opens — the caller logs
+   *  this as an export-class audit entry (docs/design.md §5.6/§10). */
   onPrinted: () => void
 }
 
@@ -91,6 +89,7 @@ function DetailLine({ label, value }: { label: string; value: string }) {
  * a staff member's personal dark-mode setting is.
  */
 export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted }: Props) {
+  const hasPrinted = useRef(false)
   const logoRef = useRef<HTMLImageElement>(null)
   // [checkpoint B] `position: fixed` elements have long-standing,
   // documented WebKit/Chromium print bugs — `display: none` under
@@ -107,28 +106,9 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
   // `flushSync`, so the removal is guaranteed to commit before
   // `window.print()` actually runs) instead of just hiding them.
   const [isPrinting, setIsPrinting] = useState(false)
-  // Print only fires from the visible on-screen preview below, on an
-  // explicit tap of the Print button — never automatically on mount. An
-  // auto-triggered print was the prior design (open the overlay, fire
-  // window.print() a frame later); mobile print previews kept coming back
-  // blank regardless of every fix tried around *when* that auto-trigger
-  // fired (image decode timing, position:fixed removal, ...), which points
-  // at the auto-trigger itself racing the overlay's first paint on some
-  // mobile browsers, not any one of those individual causes.
   const printNow = () => {
-    onPrinted()
-    const doPrint = () => {
-      flushSync(() => setIsPrinting(true))
-      window.print()
-    }
-    // A data: URI image still needs to be decoded before it can be
-    // painted — belt-and-suspenders since the logo has already been
-    // visible on screen for the user to have found and tapped Print.
-    if (template.logoDataUrl && logoRef.current) {
-      logoRef.current.decode().then(doPrint, doPrint)
-    } else {
-      doPrint()
-    }
+    flushSync(() => setIsPrinting(true))
+    window.print()
   }
 
   useEffect(() => {
@@ -138,6 +118,46 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
+
+  useEffect(() => {
+    if (hasPrinted.current) return
+    hasPrinted.current = true
+    onPrinted()
+
+    let cancelled = false
+    const triggerPrint = () => {
+      if (!cancelled) printNow()
+    }
+
+    // A data: URI image still needs to be decoded before it can be
+    // painted — that's not instant just because there's no network fetch.
+    // Printing used to fire unconditionally one animation frame after
+    // mount, which is early enough that a logo can still be mid-decode
+    // when iOS takes its print/share-sheet snapshot — plausibly why every
+    // report of a blank print preview involved a logo. `decode()` waits
+    // for the image to actually be paintable; a 1s timeout keeps a broken
+    // or slow image from blocking printing forever.
+    if (template.logoDataUrl && logoRef.current) {
+      const timeoutId = window.setTimeout(triggerPrint, 1000)
+      const proceed = () => {
+        window.clearTimeout(timeoutId)
+        triggerPrint()
+      }
+      logoRef.current.decode().then(proceed, proceed)
+      return () => {
+        cancelled = true
+        window.clearTimeout(timeoutId)
+      }
+    }
+
+    const id = requestAnimationFrame(triggerPrint)
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(id)
+    }
+    // Runs once on mount only — onPrinted/onClose identity changes shouldn't re-trigger a print.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     // Two earlier attempts tried to manage *focus* on this overlay after the
