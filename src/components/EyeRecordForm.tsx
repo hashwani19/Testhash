@@ -211,6 +211,22 @@ export function EyeRecordForm({
     attachments.length === 0 &&
     pendingAttachments.length === 0
 
+  // Whether cancelling would actually lose something. For a new record
+  // that's the same as "not empty" — but when editing, the form starts
+  // pre-filled from `initial`, so isEmpty is never true; the right question
+  // there is whether anything differs from what was loaded (§ AppointmentForm
+  // isDirty, same idea).
+  const hasUnsavedChanges = initial
+    ? visitAt !== toLocalInputValue(new Date(initial.visitAt)) ||
+      JSON.stringify(grid) !== JSON.stringify(gridToState(initial.refractions)) ||
+      lenses !== (initial.lenses ?? '') ||
+      diagnosis !== (initial.diagnosis ?? '') ||
+      treatmentPlan !== (initial.treatmentPlan ?? '') ||
+      followUpDate !== (initial.followUpDate ?? '') ||
+      notes !== (initial.notes ?? '') ||
+      pendingAttachments.length > 0
+    : !isEmpty
+
   const handleFilesSelected = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : []
     e.target.value = ''
@@ -229,11 +245,10 @@ export function EyeRecordForm({
   }
 
   // Cancelling (the header × or the footer button) discards silently only
-  // when there's nothing to lose — otherwise it confirms first, same bar as
-  // Save uses (isEmpty) to decide whether there's real content in the form.
+  // when there's nothing to lose — otherwise it confirms first.
   const requestCancel = () => {
-    if (isEmpty) onCancel()
-    else setConfirmingCancel(true)
+    if (hasUnsavedChanges) setConfirmingCancel(true)
+    else onCancel()
   }
 
   const submit = (e: FormEvent) => {
