@@ -1,17 +1,9 @@
 import type { Role } from '../types'
+import type { NavTarget } from '../nav'
+import { NAV_ITEMS } from '../nav'
 import { Button } from './common/Button'
 import { Dropdown } from './common/Dropdown'
 import { cx } from '../styles'
-
-export type NavTarget = 'patients' | 'groups' | 'activity' | 'appointments' | 'analytics'
-
-const NAV_ITEMS: Array<{ target: NavTarget; label: string; roles?: Role[] }> = [
-  { target: 'patients', label: 'Patients' },
-  { target: 'groups', label: 'Groups', roles: ['admin'] },
-  { target: 'activity', label: 'Activity', roles: ['admin'] },
-  { target: 'appointments', label: 'Appointments' },
-  { target: 'analytics', label: 'Analytics', roles: ['admin', 'doctor'] },
-]
 
 interface Props {
   role: Role

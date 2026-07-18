@@ -8,7 +8,7 @@ import { todayDateOnly } from '../utils/date'
 import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
 import { Badge } from './common/Badge'
-import { card, fieldLabel, fieldLabelText } from '../styles'
+import { card, narrowContent, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   patients: Patient[]
@@ -123,7 +123,7 @@ export function AppointmentForm({ patients, initial, onSubmit, onCancel }: Props
   }
 
   return (
-    <form className={`${card} flex flex-col gap-3.5`} onSubmit={submit}>
+    <form className={`${card} flex flex-col gap-3.5 ${narrowContent}`} onSubmit={submit}>
       {selectedPatient ? (
         <div className="flex items-center justify-between rounded-xl border border-border bg-bg px-3 py-2.5">
           <div>

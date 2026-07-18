@@ -1532,6 +1532,29 @@ UI at all — only the data-fetching layer.
 Screen-by-screen breakdown implied by §4 (roles), §5 (schema), and §6 (API) —
 this is the concrete shape §7's bullets describe in the abstract.
 
+### 8.0 Responsive layout
+
+**Implemented in this local-storage build**, on top of the phone-first
+screens below — the same screens adapt to three width tiers (Tailwind's
+default breakpoints, no custom config) rather than getting separate
+tablet/desktop designs:
+
+- **Phone (< `md`, 768px)**: unchanged — hamburger menu (§8.2), one screen
+  at a time, content fills the width.
+- **Tablet portrait (`md`–`lg`, 768–1023px)**: the hamburger is replaced by
+  a persistent left nav rail (always-visible destinations, no drawer);
+  single-form/flat-list screens (Preferences, Manage Groups, the patient
+  and appointment forms) cap their content column at a comfortable reading
+  width instead of stretching edge-to-edge; still one screen at a time.
+- **Tablet landscape and laptop (≥ `lg`, 1024px)**: same nav rail; screens
+  with genuine multi-column content (Analytics' chart grid) lay out two
+  columns instead of one. Patient/appointment master-detail split views are
+  planned but not yet built (tracked as follow-up work, not part of this
+  pass).
+
+Orientation lock (`portrait` in the PWA manifest) and a true master-detail
+list+detail layout are known gaps, left for a later pass.
+
 ### 8.1 Login (new — doesn't exist in the current MVP)
 
 Email + password — a single shared login page for every clinic (and for

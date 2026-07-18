@@ -7,7 +7,7 @@ import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
 import { Select } from './common/Select'
 import { Textarea } from './common/Textarea'
-import { card, fieldLabel, fieldLabelText } from '../styles'
+import { card, narrowContent, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   /** A full Patient (editing) or a partial prefill (e.g. from an
@@ -72,30 +72,32 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
   }
 
   return (
-    <form className={`${card} flex flex-col gap-3.5`} onSubmit={submit}>
-      <label className={fieldLabel}>
-        <span className={fieldLabelText}>Name</span>
-        <TextInput
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Full name"
-          required
-        />
-      </label>
+    <form className={`${card} flex flex-col gap-3.5 ${narrowContent}`} onSubmit={submit}>
+      <div className="flex flex-col gap-3.5 md:flex-row md:gap-2.5">
+        <label className={fieldLabel}>
+          <span className={fieldLabelText}>Name</span>
+          <TextInput
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Full name"
+            required
+          />
+        </label>
 
-      <label className={fieldLabel}>
-        <span className={fieldLabelText}>Mobile number</span>
-        <TextInput
-          type="tel"
-          inputMode="numeric"
-          value={mobile}
-          onChange={(e) => setMobile(e.target.value)}
-          placeholder="10-digit mobile number"
-          pattern="[6-9][0-9]{9}"
-          title="10-digit Indian mobile number"
-        />
-      </label>
+        <label className={fieldLabel}>
+          <span className={fieldLabelText}>Mobile number</span>
+          <TextInput
+            type="tel"
+            inputMode="numeric"
+            value={mobile}
+            onChange={(e) => setMobile(e.target.value)}
+            placeholder="10-digit mobile number"
+            pattern="[6-9][0-9]{9}"
+            title="10-digit Indian mobile number"
+          />
+        </label>
+      </div>
 
       <div className="flex flex-wrap gap-2.5">
         <label className={`${fieldLabel} min-w-[90px]`}>
@@ -123,28 +125,30 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
         </label>
       </div>
 
-      <label className={fieldLabel}>
-        <span className={fieldLabelText}>Gender</span>
-        <Select value={gender} onChange={(e) => setGender(e.target.value as Gender)}>
-          {GENDER_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </Select>
-      </label>
+      <div className="flex flex-col gap-3.5 md:flex-row md:gap-2.5">
+        <label className={fieldLabel}>
+          <span className={fieldLabelText}>Gender</span>
+          <Select value={gender} onChange={(e) => setGender(e.target.value as Gender)}>
+            {GENDER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </Select>
+        </label>
 
-      <label className={fieldLabel}>
-        <span className={fieldLabelText}>Group</span>
-        <Select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-          <option value="">No group</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </Select>
-      </label>
+        <label className={fieldLabel}>
+          <span className={fieldLabelText}>Group</span>
+          <Select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+            <option value="">No group</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </Select>
+        </label>
+      </div>
 
       <label className={fieldLabel}>
         <span className={fieldLabelText}>Address</span>

@@ -12,7 +12,7 @@ import { Textarea } from './common/Textarea'
 import { Select } from './common/Select'
 import { Button } from './common/Button'
 import { Breadcrumb } from './common/Breadcrumb'
-import { card, screenHeading, fieldLabel, fieldLabelText } from '../styles'
+import { card, narrowContent, screenHeading, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   onBack: () => void
@@ -45,7 +45,7 @@ export function PreferencesScreen({ onBack }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className={`flex flex-col gap-4 ${narrowContent}`}>
       <Breadcrumb onClick={onBack} />
 
       <h2 className={screenHeading}>Preferences</h2>

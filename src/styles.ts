@@ -24,6 +24,15 @@ export const screenHeading = 'text-xl font-bold text-text-h'
 export const fieldLabel = 'flex flex-1 min-w-0 flex-col gap-1.5'
 export const fieldLabelText = 'text-[13px] text-text'
 
+// Caps a screen's content column at a comfortable reading width once there's
+// room to spare (md:+) — for screens that are a single form or a flat list
+// with no natural multi-column content (Preferences, Manage Groups), so
+// they don't stretch full-width and read as sparse on a laptop screen.
+// Screens with real multi-column content (Analytics' chart grid, the
+// master-detail list+detail screens) don't use this — they have their own
+// width logic instead.
+export const narrowContent = 'md:max-w-xl'
+
 export function cx(...parts: Array<string | false | undefined>): string {
   return parts.filter(Boolean).join(' ')
 }

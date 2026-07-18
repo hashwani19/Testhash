@@ -93,36 +93,40 @@ export function AnalyticsScreen({ patients, visits, onBack }: Props) {
         <GranularityToggle value={granularity} onChange={setGranularity} />
       </div>
 
-      <Card className="flex flex-col gap-2">
-        <CardHeader title="New patients" />
-        <TimeSeriesBarChart
-          data={newPatients}
-          series={[{ dataKey: 'count', label: 'New patients', color: 'var(--accent)' }]}
-        />
-      </Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="flex flex-col gap-2">
+          <CardHeader title="New patients" />
+          <TimeSeriesBarChart
+            data={newPatients}
+            series={[{ dataKey: 'count', label: 'New patients', color: 'var(--accent)' }]}
+          />
+        </Card>
 
-      <Card className="flex flex-col gap-2">
-        <CardHeader title="Visits — new vs. returning" />
-        <TimeSeriesBarChart
-          data={visitsByPeriod}
-          series={[
-            { dataKey: 'newCount', label: 'New', color: 'var(--chart-1)' },
-            { dataKey: 'returningCount', label: 'Returning', color: 'var(--chart-2)' },
-          ]}
-        />
-      </Card>
+        <Card className="flex flex-col gap-2">
+          <CardHeader title="Visits — new vs. returning" />
+          <TimeSeriesBarChart
+            data={visitsByPeriod}
+            series={[
+              { dataKey: 'newCount', label: 'New', color: 'var(--chart-1)' },
+              { dataKey: 'returningCount', label: 'Returning', color: 'var(--chart-2)' },
+            ]}
+          />
+        </Card>
+      </div>
 
       <h3 className="text-base font-bold text-text-h">Patient demographics</h3>
 
-      <Card className="flex flex-col gap-2">
-        <CardHeader title="Gender" />
-        <CategoryBarChart data={genderData} />
-      </Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="flex flex-col gap-2">
+          <CardHeader title="Gender" />
+          <CategoryBarChart data={genderData} />
+        </Card>
 
-      <Card className="flex flex-col gap-2">
-        <CardHeader title="Age" />
-        <CategoryBarChart data={ageData} />
-      </Card>
+        <Card className="flex flex-col gap-2">
+          <CardHeader title="Age" />
+          <CategoryBarChart data={ageData} />
+        </Card>
+      </div>
     </div>
   )
 }

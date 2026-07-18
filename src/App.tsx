@@ -24,7 +24,8 @@ import { AppointmentsScreen } from './components/AppointmentsScreen'
 import { AppointmentForm } from './components/AppointmentForm'
 import { AnalyticsScreen } from './components/AnalyticsScreen'
 import { AppHeader } from './components/AppHeader'
-import type { NavTarget } from './components/NavMenu'
+import { NavRail } from './components/NavRail'
+import type { NavTarget } from './nav'
 import { ConfirmModal } from './components/ConfirmModal'
 import { LoginScreen } from './components/LoginScreen'
 import { OfflineBanner } from './components/OfflineBanner'
@@ -118,34 +119,41 @@ function AppShell() {
   const requestSignOut = () => setConfirmingSignOut(true)
 
   return (
-    <div className="mx-auto flex min-h-svh max-w-[560px] flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
-      <OfflineBanner />
-      <InstallBanner />
-
-      <AppHeader
-        fullName={user.fullName}
+    <div className="mx-auto flex min-h-svh w-full max-w-[560px] flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] md:max-w-[1440px] md:flex-row">
+      <NavRail
         role={user.role}
-        activeNavTarget={VIEW_TO_NAV_TARGET[view] ?? 'patients'}
+        active={VIEW_TO_NAV_TARGET[view] ?? 'patients'}
         onNavigate={navigateTo}
-        onOpenPreferences={() => setView('preferences')}
-        onSignOut={requestSignOut}
       />
 
-      {confirmingSignOut && (
-        <ConfirmModal
-          title="Sign out?"
-          warning="You'll need to sign back in to view or edit patient records."
-          mode="yesNo"
-          confirmLabel="Sign out"
-          onConfirm={() => {
-            setConfirmingSignOut(false)
-            logout()
-          }}
-          onCancel={() => setConfirmingSignOut(false)}
-        />
-      )}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <OfflineBanner />
+        <InstallBanner />
 
-      <main className="flex flex-1 flex-col gap-4 px-5 pb-10 pt-3">
+        <AppHeader
+          fullName={user.fullName}
+          role={user.role}
+          activeNavTarget={VIEW_TO_NAV_TARGET[view] ?? 'patients'}
+          onNavigate={navigateTo}
+          onOpenPreferences={() => setView('preferences')}
+          onSignOut={requestSignOut}
+        />
+
+        {confirmingSignOut && (
+          <ConfirmModal
+            title="Sign out?"
+            warning="You'll need to sign back in to view or edit patient records."
+            mode="yesNo"
+            confirmLabel="Sign out"
+            onConfirm={() => {
+              setConfirmingSignOut(false)
+              logout()
+            }}
+            onCancel={() => setConfirmingSignOut(false)}
+          />
+        )}
+
+        <main className="flex flex-1 flex-col gap-4 px-5 pb-10 pt-3 md:px-8 lg:px-10">
         {view === 'list' && (
           <>
             <Button
@@ -361,7 +369,8 @@ function AppShell() {
         )}
 
         {view === 'preferences' && <PreferencesScreen onBack={goToList} />}
-      </main>
+        </main>
+      </div>
     </div>
   )
 }
