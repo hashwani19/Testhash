@@ -153,7 +153,7 @@ function AppShell() {
           />
         )}
 
-        <main className="flex flex-1 flex-col gap-4 px-5 pb-10 pt-3 md:px-8 lg:px-10">
+        <main className="flex flex-1 flex-col gap-4 px-5 pb-10 pt-3 md:px-8 md:pt-[26px] lg:px-10">
         {view === 'list' && (
           <>
             <Button

@@ -12,7 +12,7 @@ export function InstallBanner() {
 
   return (
     <div
-      className="flex items-center gap-2.5 border-b border-border bg-surface px-4 py-2.5 text-[13px] text-text-h"
+      className="flex items-center gap-2.5 border-b border-border bg-surface px-4 py-2.5 text-[13px] text-text-h lg:hidden"
       role="complementary"
     >
       {canPromptInstall && (

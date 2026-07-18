@@ -9,6 +9,7 @@ import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
 import { Textarea } from './common/Textarea'
 import { ImageViewer, type ViewerImage } from './common/ImageViewer'
+import { ConfirmModal } from './ConfirmModal'
 import { card, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
@@ -174,6 +175,7 @@ export function EyeRecordForm({
   const [pendingAttachments, setPendingAttachments] = useState<NewAttachmentInput[]>([])
   const [compressing, setCompressing] = useState(false)
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
+  const [confirmingCancel, setConfirmingCancel] = useState(false)
 
   const allImages: ViewerImage[] = useMemo(
     () => [
@@ -226,6 +228,14 @@ export function EyeRecordForm({
     setPendingAttachments((prev) => prev.filter((_, i) => i !== index))
   }
 
+  // Cancelling (the header × or the footer button) discards silently only
+  // when there's nothing to lose — otherwise it confirms first, same bar as
+  // Save uses (isEmpty) to decide whether there's real content in the form.
+  const requestCancel = () => {
+    if (isEmpty) onCancel()
+    else setConfirmingCancel(true)
+  }
+
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (isEmpty) return
@@ -246,6 +256,13 @@ export function EyeRecordForm({
   return (
     <>
       <form className={`${card} flex flex-col gap-3.5`} onSubmit={submit}>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-lg font-bold text-text-h">{initial ? 'Edit record' : 'Add record'}</h2>
+          <Button variant="icon" aria-label="Cancel" onClick={requestCancel}>
+            ×
+          </Button>
+        </div>
+
         <label className={fieldLabel}>
           <span className={fieldLabelText}>Visit date &amp; time</span>
           <TextInput
@@ -393,7 +410,7 @@ export function EyeRecordForm({
         )}
 
         <div className="flex justify-end gap-2.5">
-          <Button variant="secondary" onClick={onCancel}>
+          <Button variant="secondary" onClick={requestCancel}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" disabled={isEmpty}>
@@ -404,6 +421,20 @@ export function EyeRecordForm({
 
       {viewerIndex != null && (
         <ImageViewer images={allImages} initialIndex={viewerIndex} onClose={() => setViewerIndex(null)} />
+      )}
+
+      {confirmingCancel && (
+        <ConfirmModal
+          title="Discard this record?"
+          warning="The details you've entered haven't been saved and will be lost."
+          mode="yesNo"
+          confirmLabel="Discard"
+          onConfirm={() => {
+            setConfirmingCancel(false)
+            onCancel()
+          }}
+          onCancel={() => setConfirmingCancel(false)}
+        />
       )}
     </>
   )

@@ -7,8 +7,8 @@ export type NavTarget = 'patients' | 'groups' | 'activity' | 'appointments' | 'a
  *  component file so exporting it doesn't break Fast Refresh. */
 export const NAV_ITEMS: Array<{ target: NavTarget; label: string; roles?: Role[] }> = [
   { target: 'patients', label: 'Patients' },
-  { target: 'groups', label: 'Groups', roles: ['admin'] },
-  { target: 'activity', label: 'Activity', roles: ['admin'] },
   { target: 'appointments', label: 'Appointments' },
   { target: 'analytics', label: 'Analytics', roles: ['admin', 'doctor'] },
+  { target: 'activity', label: 'Activity', roles: ['admin'] },
+  { target: 'groups', label: 'Groups', roles: ['admin'] },
 ]
