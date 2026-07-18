@@ -1,13 +1,53 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as {
+  version: string
+}
+
+function shortGitHash(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim()
+  } catch {
+    return 'unknown'
+  }
+}
+
+// Computed once per config load (i.e. once per `vite build`/`vite dev`
+// invocation), not per-module, so every part of the bundle — and the
+// terminal log below — agree on the same build identity.
+const buildTime = new Date().toISOString()
+const buildVersion = `${pkg.version}+${shortGitHash()}`
+
+// Prints once a production build finishes writing output — `apply: 'build'`
+// keeps this silent during `vite dev`, where "which build is this" isn't a
+// meaningful question.
+function printBuildVersionPlugin(): Plugin {
+  return {
+    name: 'print-build-version',
+    apply: 'build',
+    closeBundle() {
+      console.log(`\nBuild version: ${buildVersion} (built ${buildTime})\n`)
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(buildVersion),
+    __BUILD_TIME__: JSON.stringify(buildTime),
+  },
   plugins: [
     react(),
     tailwindcss(),
+    printBuildVersionPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: [

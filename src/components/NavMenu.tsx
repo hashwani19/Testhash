@@ -17,10 +17,9 @@ interface Props {
   role: Role
   active: NavTarget
   onNavigate: (target: NavTarget) => void
-  onSignOut: () => void
 }
 
-export function NavMenu({ role, active, onNavigate, onSignOut }: Props) {
+export function NavMenu({ role, active, onNavigate }: Props) {
   const items = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role))
 
   return (
@@ -58,16 +57,6 @@ export function NavMenu({ role, active, onNavigate, onSignOut }: Props) {
               {item.label}
             </Button>
           ))}
-          <Button
-            variant="unstyled"
-            className="mt-1 cursor-pointer rounded-lg border-t border-border bg-transparent px-3 pb-2.5 pt-3 text-left text-[15px] font-medium text-text-h"
-            onClick={() => {
-              close()
-              onSignOut()
-            }}
-          >
-            Sign out
-          </Button>
         </>
       )}
     </Dropdown>

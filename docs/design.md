@@ -1731,6 +1731,13 @@ this is additive on top of that shell, not a rewrite of it.
   top-right, §8.2's counterpart on the right side of the header), not the
   hamburger nav — it's a "my account" setting, not a top-level navigation
   destination, and applies equally to all three roles (§8.6).
+- **Sign out lives only in the profile menu**, not the hamburger nav —
+  removed from the latter since both dropdowns had it. The profile menu
+  also shows an **App info** row just above Sign out: the running build's
+  version (`package.json` version + short git hash) and build timestamp,
+  injected at build time (`vite.config.ts`) and printed to the terminal
+  once when a production build finishes, so a given build is identifiable
+  both in the UI and in CI/deploy logs.
 - **Theme**: `light` / `dark` / `auto` (§5.2). `auto` — the default —
   matches the OS/browser's `prefers-color-scheme`, exactly like the app's
   behavior before this screen existed; picking `light` or `dark` overrides
