@@ -125,44 +125,6 @@ export function PreferencesScreen({ onBack }: Props) {
             </label>
 
             <label className={fieldLabel}>
-              <span className={fieldLabelText}>Clinic name</span>
-              <TextInput
-                value={template.clinicName ?? ''}
-                onChange={(e) => updateTemplate({ clinicName: e.target.value || undefined })}
-                placeholder="Ortho and Vision Care (default)"
-              />
-            </label>
-
-            <label className={fieldLabel}>
-              <span className={fieldLabelText}>Clinic address (optional)</span>
-              <Textarea
-                value={template.clinicAddress ?? ''}
-                onChange={(e) => updateTemplate({ clinicAddress: e.target.value || undefined })}
-                rows={2}
-                placeholder="Printed under the clinic name in the header"
-              />
-            </label>
-
-            <label className={fieldLabel}>
-              <span className={fieldLabelText}>Doctor's name (optional)</span>
-              <TextInput
-                value={template.doctorName ?? ''}
-                onChange={(e) => updateTemplate({ doctorName: e.target.value || undefined })}
-                placeholder="e.g. Dr. Priya Sharma"
-              />
-            </label>
-
-            <label className={fieldLabel}>
-              <span className={fieldLabelText}>Doctor's credentials (optional)</span>
-              <Textarea
-                value={template.doctorCredentials ?? ''}
-                onChange={(e) => updateTemplate({ doctorCredentials: e.target.value || undefined })}
-                rows={2}
-                placeholder={'e.g. M.B.B.S., M.S.\nF.C.L.I., F.I.A.C.L.E. (Aust.)'}
-              />
-            </label>
-
-            <label className={fieldLabel}>
               <span className={fieldLabelText}>
                 Extra top margin (mm){' '}
                 {!template.showLetterhead && '— for pre-printed letterhead paper'}
@@ -188,7 +150,7 @@ export function PreferencesScreen({ onBack }: Props) {
             </label>
 
             <div className="flex flex-col gap-2">
-              <span className={fieldLabelText}>Logo (optional)</span>
+              <span className={fieldLabelText}>Logo watermark (optional)</span>
               {template.logoDataUrl && (
                 <img
                   src={template.logoDataUrl}
@@ -217,8 +179,7 @@ export function PreferencesScreen({ onBack }: Props) {
                 )}
               </div>
               <p className="text-[13px] text-text">
-                Printed faint and centered behind the prescription content, and as a small icon in
-                the letterhead header.
+                Printed faint and centered behind the prescription content, not in the header.
               </p>
             </div>
           </div>

@@ -15,22 +15,6 @@ interface Props {
   onPrinted: () => void
 }
 
-// Matches the string every other hardcoded "Ortho and Vision Care" surface
-// still uses (LoginScreen, AppHeader, index.html) — this is the only one of
-// the four that became admin-editable (docs/design.md §5.6); the other
-// three are a separate, unimplemented "tenant branding" concept (§5.5).
-const DEFAULT_CLINIC_NAME = 'Ortho and Vision Care'
-
-// Chrome on Android has a known, version-dependent bug where window.print()
-// inside an installed, standalone-display PWA (no address bar, no browser
-// back button) renders a blank print preview with no way to dismiss it —
-// standalone mode strips the browser chrome the print UI normally relies
-// on. Detected so the auto-triggered print below can be skipped for this
-// one combination — see the isAndroidStandalone usage further down.
-function isAndroidStandaloneDisplay(): boolean {
-  return /Android/i.test(navigator.userAgent) && window.matchMedia('(display-mode: standalone)').matches
-}
-
 function formatSigned(value?: number): string {
   if (value == null) return ''
   return value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2)
@@ -100,53 +84,19 @@ function DetailLine({ label, value }: { label: string; value: string }) {
  */
 export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted }: Props) {
   const hasPrinted = useRef(false)
-  const skipAutoPrint = useRef(isAndroidStandaloneDisplay()).current
-  const printedPageRef = useRef<HTMLDivElement>(null)
-  // EyeRecordHistory passes onClose as a fresh inline arrow function on
-  // every render — a ref keeps the effects below reading the latest
-  // version without needing onClose in their dependency arrays, so they
-  // only need to run once on mount rather than tearing down and
-  // re-registering their listeners on every unrelated parent re-render.
-  const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCloseRef.current()
+      if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
-
-  useEffect(() => {
-    // Scrolls the printed page into view on mount — the printed-page div is
-    // in normal document flow (not fixed), and #root above it has a
-    // min-height: 100svh (index.css), so without this the printed page
-    // renders a full viewport-height below the fold on-screen, leaving only
-    // the fixed dimmed backdrop and controls visible (verified via
-    // getBoundingClientRect: the card started at y≈947 on a 915px-tall
-    // viewport). An earlier attempt fixed this by setting #root's display
-    // to none for as long as this overlay stayed mounted, alongside a
-    // history.pushState/popstate pair for hardware back-button support —
-    // both reverted after a report that print stopped working on iOS and
-    // Android alike, since both touch real browser print/navigation
-    // machinery in ways that can't be verified without physical devices,
-    // and getting printing itself working again outranks either of those.
-    // A plain scrollIntoView doesn't touch #root or history at all.
-    printedPageRef.current?.scrollIntoView({ block: 'start' })
-  }, [])
+  }, [onClose])
 
   useEffect(() => {
     if (hasPrinted.current) return
     hasPrinted.current = true
     onPrinted()
-    // Skipped for an installed, standalone-display PWA on Android (see
-    // isAndroidStandaloneDisplay above) — instead of throwing the user
-    // straight into a print preview that may render blank with no way out,
-    // they land on this overlay's own Close-able UI first, and the visible
-    // "Print" button (still present, still tappable) is an opt-in try
-    // rather than something sprung on them.
-    if (skipAutoPrint) return
     const id = requestAnimationFrame(() => window.print())
     return () => cancelAnimationFrame(id)
     // Runs once on mount only — onPrinted/onClose identity changes shouldn't re-trigger a print.
@@ -173,7 +123,7 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     const handlePrintUiClosed = () => {
       if (dismissed) return
       dismissed = true
-      onCloseRef.current()
+      onClose()
     }
 
     window.addEventListener('afterprint', handlePrintUiClosed)
@@ -194,8 +144,7 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
       mediaQueryList.removeEventListener('change', onMediaChange)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-    // Runs once on mount only — see the onCloseRef comment above.
-  }, [])
+  }, [onClose])
 
   const age = getPatientAge(patient)
   const topMarginMm = 15 + Math.max(template.topMarginMm, 0)
@@ -206,10 +155,7 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
 
       <div className={`fixed inset-0 z-50 overflow-y-auto print:hidden ${dimmedBackdrop}`} onClick={onClose} />
 
-      <div
-        ref={printedPageRef}
-        className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none"
-      >
+      <div className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
         {template.logoDataUrl && (
           // Absolutely positioned and first in DOM order so every later
           // (normal-flow) sibling below paints on top of it automatically —
@@ -223,27 +169,8 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
         )}
 
         {template.showLetterhead && (
-          <header className="mb-4 flex items-start justify-between gap-4 border-b-2 border-black pb-3">
-            <div className="flex items-start gap-3">
-              {template.logoDataUrl && (
-                <img src={template.logoDataUrl} alt="" className="h-14 w-14 shrink-0 object-contain" />
-              )}
-              <div>
-                <h1 className="text-2xl font-bold">{template.clinicName?.trim() || DEFAULT_CLINIC_NAME}</h1>
-                {template.clinicAddress && (
-                  <p className="whitespace-pre-line text-xs">{template.clinicAddress}</p>
-                )}
-              </div>
-            </div>
-
-            {(template.doctorName || template.doctorCredentials) && (
-              <div className="shrink-0 text-right">
-                {template.doctorName && <p className="font-semibold">{template.doctorName}</p>}
-                {template.doctorCredentials && (
-                  <p className="whitespace-pre-line text-xs">{template.doctorCredentials}</p>
-                )}
-              </div>
-            )}
+          <header className="mb-4 border-b-2 border-black pb-3 text-center">
+            <h1 className="text-2xl font-bold">Ortho and Vision Care</h1>
           </header>
         )}
 
@@ -314,27 +241,18 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
         )}
       </div>
 
-      <div className="fixed inset-x-0 top-0 z-50 flex flex-col items-end gap-2 p-4 print:hidden">
-        {skipAutoPrint && (
-          <p className="w-full rounded-lg bg-medium px-3 py-2 text-left text-[13px] text-black shadow-card">
-            Printing can show a blank screen on some Android devices when the app is installed to your
-            home screen. If that happens, use your device's back button, then try printing again from
-            this app in Chrome instead of the installed icon.
-          </p>
-        )}
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => window.print()}>
-            Print
-          </Button>
-          <Button
-            variant="icon"
-            aria-label="Close"
-            className="h-9 w-9 rounded-full bg-surface/90 text-xl leading-none"
-            onClick={onClose}
-          >
-            ×
-          </Button>
-        </div>
+      <div className="fixed right-4 top-4 z-50 flex gap-2 print:hidden">
+        <Button variant="secondary" onClick={() => window.print()}>
+          Print
+        </Button>
+        <Button
+          variant="icon"
+          aria-label="Close"
+          className="h-9 w-9 rounded-full bg-surface/90 text-xl leading-none"
+          onClick={onClose}
+        >
+          ×
+        </Button>
       </div>
     </>,
     document.body,

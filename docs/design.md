@@ -1083,8 +1083,7 @@ with configurable content — not a custom HTML/layout template**:
   designed — adapted for the current single-implicit-clinic architecture
   rather than the multi-tenant one above:
   - `PrescriptionTemplateProvider` holds one instance-wide
-    `PrescriptionTemplate` (`showLetterhead`/`topMarginMm`/`clinicName`/
-    `clinicAddress`/`doctorName`/`doctorCredentials`/`footerNote`),
+    `PrescriptionTemplate` (`showLetterhead`/`topMarginMm`/`footerNote`),
     same load-or-seed-then-persist-on-change shape as
     `GlobalSettingsProvider` — there's no `tenant_id` to key it by yet, so
     it's a single value, not a per-tenant table. Editable from a new
@@ -1101,39 +1100,22 @@ with configurable content — not a custom HTML/layout template**:
     page's US Letter sizing/top-margin are set through a `<style>` tag it
     renders itself (`@page { size: letter; margin: ... }`), since the margin
     depends on the live template value.
-  - **The letterhead header became a two-column block** when
-    `showLetterhead` is on: clinic identity (logo thumbnail, `clinicName`,
-    `clinicAddress`) on the left, `doctorName`/`doctorCredentials`
-    right-aligned — closer to a real prescription pad's layout than the
-    original single centered title line. `clinicName` falls back to the
-    previous hardcoded "Ortho and Vision Care" when unset, so templates
-    saved before this field existed keep printing unchanged. This is
-    deliberately narrower than real per-tenant branding (§5.5): only the
-    *printed letterhead's* clinic name is admin-editable here — the
-    app-wide title (login screen, in-app header, browser tab) stays
-    hardcoded, since that's still the bigger, unimplemented tenant-branding
-    concept, not this local, print-only field.
-  - **`doctorName`/`doctorCredentials` are a static per-template field**,
-    not per-visit — a deliberate, pragmatic deviation from this build's own
-    stated design further up (§5.6: "doctor attribution comes from the
-    visit itself, `eye_visits.examiner_id`, not a static per-tenant
-    signature field"). No `examiner_id`/doctor-attribution field exists on
-    this build's `EyeVisit` at all (unlike the real schema, §5.3), and
-    adding one is a form change beyond this feature's scope — so a static
-    template-level doctor name/credentials is what's actually printed,
-    same as every other template field.
+  - The header uses the app's existing hardcoded "Ortho and Vision Care"
+    title when `showLetterhead` is on — real per-tenant branding (§5.5)
+    isn't implemented in this build yet either, so there's nothing to pull
+    a dynamic title from. Swap in `branding.title` here once that lands.
+  - No `examiner_id`/doctor-attribution field exists on this build's
+    `EyeVisit` at all (unlike the real schema, §5.3), so the printed page
+    doesn't attempt a "seen by" line — adding one is a form change beyond
+    this feature's scope, not a print-view change.
   - `AuditAction` gained an `'export'` value (`'create' | 'update' |
     'delete' | 'export'`) purely for this — printing logs one entry the same
     way every other mutation already does, via `logEntry` from
     `useAuditLog`, even though nothing is actually mutated.
-  - **A logo, uploaded once in the same Preferences section, renders in two
-    places from the same stored `logoDataUrl`**: a faint centered watermark
-    behind the prescription content, and a small icon next to the clinic
-    name in the letterhead header — one upload, no separate "header logo"
-    field, since this build has only one clinic identity to represent
-    (§5.5's real, multi-purpose tenant-branding logo is still not
-    implemented). `PrescriptionTemplate.logoDataUrl`, compressed client-side
-    via a new
+  - **A logo, uploaded once in the same Preferences section, renders as a
+    faint centered watermark behind the prescription content** (not in the
+    header — this build has no real letterhead logo either, §5.5) —
+    `PrescriptionTemplate.logoDataUrl`, compressed client-side via a new
     `compressLogoFile` (same `browser-image-compression` approach as
     attachments/§7, but tuned smaller — 800px/~0.15MB, since a watermark
     only ever needs to look right at low opacity, not full resolution — and
@@ -1159,69 +1141,29 @@ with configurable content — not a custom HTML/layout template**:
     (doesn't reliably fire on every platform), a `matchMedia('print')`
     change listener, and `visibilitychange` (the most reliable on mobile,
     since the native UI backgrounds the page either way it's dismissed).
-  - **An Android report** ("blank screen, no way to cancel and get back to
-    the app") led to two fixes, one of which was then partially reverted
-    after a follow-up report that printing had stopped working on *both*
-    iOS and Android — worth recording both what shipped and what didn't,
-    since the reverted approach is a real trap worth not retrying blind:
-    - **Kept**: Chrome on Android has a known, version-dependent bug where
-      `window.print()` inside an installed, standalone-display PWA (no
-      address bar, no browser back button — this app's manifest sets
-      `display: 'standalone'`) can render a blank print preview with no way
-      to dismiss it, since standalone mode strips the browser chrome the
-      print UI normally relies on. The auto-triggered `window.print()` on
-      mount is skipped for that one specific combination
-      (`navigator.userAgent` matching `Android` **and**
-      `matchMedia('(display-mode: standalone)').matches`, verified via a
-      matchMedia stub standing in for Chromium's own unreliable
-      `display-mode` test-emulation) — the user lands on this overlay's own
-      Close-able UI first, with a visible warning and the "Print" button
-      still there as an opt-in try, instead of being thrown straight into a
-      print preview that might not be dismissable.
-    - **Kept, in a safer form**: the printed-page `<div>` is in normal
-      document flow (not `fixed`), and `#root` — normally hidden only
-      during actual printing, via index.css's `@media print` rule — stays
-      in flow with its own `min-height: 100svh` for the entire time this
-      overlay is merely *displayed on screen*, before print even triggers.
-      That pushes the printed page down, off the bottom of the screen —
-      verified directly via `getBoundingClientRect()` (on a 412×915
-      viewport the printed page started at y≈947), while the fixed dimmed
-      backdrop and Print/Close controls stayed visible regardless of
-      scroll, reading as a blank screen. The first fix set `#root`'s
-      `display` to `none` via inline style for the overlay's whole mounted
-      lifetime, not just during the print media query — this is the part
-      that got reverted (see below). It's now a plain `scrollIntoView()` on
-      the printed-page div on mount instead, which doesn't touch `#root` or
-      its rendering at all — a real improvement over the original bug, but
-      not a full fix: since `#root` still occupies its full viewport height
-      in the document, the browser can't always scroll far enough to bring
-      the printed page flush to the top, so a dead gray gap above it can
-      remain depending on content height. Trading full correctness for not
-      touching `#root`'s rendering state was the deliberate choice here.
-    - **Reverted entirely**: a `history.pushState`/`popstate` pair so a
-      hardware or gesture back button would close this overlay (this app
-      has no URL-based routing at all — `App.tsx` is one big
-      `useState<View>` — so there was no history entry for a back button to
-      act on). Removed after a report that printing stopped working on
-      *both* iOS and Android following the commit that added it alongside
-      the `#root`-hiding change above. The exact interaction couldn't be
-      confirmed without physical devices, but `history.pushState()` firing
-      in close proximity to `window.print()` (one `requestAnimationFrame`
-      later) is a plausible, previously-documented conflict between the
-      History API and a pending print job — and this was the more novel,
-      untested piece added in that commit. Reverting it and the `#root`
-      inline-style change together, in favor of the plain `scrollIntoView`
-      approach above, was the conservative call once two real platforms
-      that were previously confirmed working both broke at once: restoring
-      a known-good state outranked a partially-verified enhancement.
-      Hardware back-button support for this overlay is not implemented.
-    - Both remaining effects (print-dismissal above, and the `Escape` key
-      handler) read `onClose`/`onPrinted` through a ref rather than
-      depending on them directly, independent of the history revert —
-      `EyeRecordHistory` passes `onClose` as a fresh inline arrow function
-      on every render, and effects re-running their setup/teardown on every
-      unrelated parent render is worth avoiding on its own even without a
-      destructive cleanup action to trigger by accident.
+  - **This is the last confirmed-working state on iOS**, deliberately kept
+    as the current baseline. Two follow-on efforts built on top of it and
+    were both reverted in full: a letterhead redesign (admin-editable
+    clinic name/address, doctor name/credentials, a second logo rendering
+    in the header alongside the existing watermark) and a set of
+    Android-specific print fixes (skipping auto-print for installed
+    standalone PWAs, a `history.pushState`/`popstate` back-button handler,
+    hiding `#root` while the overlay is mounted). The Android work was
+    itself already a partial revert of an earlier attempt when a report
+    came in that Apple's native print preview — dialog opens, printer
+    selected, but the paper preview itself renders blank — happens every
+    time on a template with a logo configured. That symptom traces to
+    content the letterhead redesign added (most likely the second,
+    full-opacity `<img>` rendering of the same logo in the header,
+    alongside the original absolutely-positioned watermark `<img>` above),
+    not to anything in this baseline, which was working before either the
+    letterhead redesign or the Android fixes existed. Rather than layer a
+    third fix onto two already-reverted ones, both were rolled back
+    wholesale — `PrescriptionPrint.tsx`, the `PrescriptionTemplate` fields
+    in `types.ts`, and the admin fields in `PreferencesScreen.tsx` — back
+    to this exact state, to restart the letterhead work (and any future
+    Android-specific fix) from a known-good baseline instead of debugging
+    forward through compounding changes.
 
 ### 5.7 Analytics
 
