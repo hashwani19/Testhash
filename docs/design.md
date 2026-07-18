@@ -1100,7 +1100,13 @@ with configurable content — not a custom HTML/layout template**:
     threading a "no-print" class through every screen individually. The
     page's US Letter sizing/top-margin are set through a `<style>` tag it
     renders itself (`@page { size: letter; margin: ... }`), since the margin
-    depends on the live template value.
+    depends on the live template value. One consequence of portaling outside
+    `#root`: it doesn't inherit the app shell's own
+    `pt-[env(safe-area-inset-top)]` etc. (App.tsx), so its one fixed
+    interactive control (the Print/Close buttons) adds that same safe-area
+    inset back in directly — otherwise, on an iPhone, plain `top-4`/`right-4`
+    land under the notch/Dynamic Island or Safari's floating chrome, where
+    taps don't register.
   - When `showLetterhead` is on, the header is a two-column letterhead:
     clinic name/address (falling back to a hardcoded default name when
     unset) and logo on the left, `doctorName`/`doctorCredentials`

@@ -306,7 +306,16 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
       </div>
 
       {!isPrinting && (
-        <div className="fixed right-4 top-4 z-50 flex gap-2 print:hidden">
+        // This overlay portals straight onto document.body, outside the app
+        // shell's own root div — so it doesn't inherit that root's
+        // `pt-[env(safe-area-inset-top)]` etc. (App.tsx). Plain `top-4`/
+        // `right-4` land 16px from the true edge of the screen, which on an
+        // iPhone falls under the notch/Dynamic Island or Safari's own
+        // floating chrome — exactly where touches don't reach. Adding the
+        // safe-area inset back in here (this overlay's one and only fixed
+        // interactive control) keeps Print reachable everywhere the app
+        // shell already accounts for.
+        <div className="fixed top-[calc(1rem_+_env(safe-area-inset-top))] right-[calc(1rem_+_env(safe-area-inset-right))] z-50 flex gap-2 print:hidden">
           <Button variant="secondary" onClick={printNow}>
             Print
           </Button>
