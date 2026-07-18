@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal, flushSync } from 'react-dom'
 import type { EyeRefraction, EyeVisit, Patient, PrescriptionTemplate } from '../types'
 import { getPatientAge } from '../utils/age'
 import { Button } from './common/Button'
@@ -91,6 +91,25 @@ function DetailLine({ label, value }: { label: string; value: string }) {
 export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted }: Props) {
   const hasPrinted = useRef(false)
   const logoRef = useRef<HTMLImageElement>(null)
+  // [checkpoint B] `position: fixed` elements have long-standing,
+  // documented WebKit/Chromium print bugs — `display: none` under
+  // `@media print` (this file's `print:hidden` class) isn't reliably
+  // respected on them the way it is on normal-flow elements, because the
+  // print pagination engine gives fixed-position boxes special handling
+  // (there's no well-defined "which printed page" for something anchored
+  // to the viewport). #root, a normal block element, has hidden reliably
+  // under print since this feature existed; the backdrop and the
+  // Print/Close controls below are both `fixed`, unlike #root — the
+  // leading suspect for a blank print preview that reproduces on mobile
+  // but not desktop Chrome/Safari, with or without a logo. Rather than
+  // trust the CSS, `printNow` physically removes both from the DOM (via
+  // `flushSync`, so the removal is guaranteed to commit before
+  // `window.print()` actually runs) instead of just hiding them.
+  const [isPrinting, setIsPrinting] = useState(false)
+  const printNow = () => {
+    flushSync(() => setIsPrinting(true))
+    window.print()
+  }
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -107,7 +126,7 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
 
     let cancelled = false
     const triggerPrint = () => {
-      if (!cancelled) window.print()
+      if (!cancelled) printNow()
     }
 
     // A data: URI image still needs to be decoded before it can be
@@ -190,7 +209,9 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     <>
       <style>{`@page { size: letter; margin: ${topMarginMm}mm 15mm 15mm 15mm; }`}</style>
 
-      <div className={`fixed inset-0 z-50 overflow-y-auto print:hidden ${dimmedBackdrop}`} onClick={onClose} />
+      {!isPrinting && (
+        <div className={`fixed inset-0 z-50 overflow-y-auto print:hidden ${dimmedBackdrop}`} onClick={onClose} />
+      )}
 
       <div className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
         {template.logoDataUrl && (
@@ -304,19 +325,21 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
         )}
       </div>
 
-      <div className="fixed right-4 top-4 z-50 flex gap-2 print:hidden">
-        <Button variant="secondary" onClick={() => window.print()}>
-          Print
-        </Button>
-        <Button
-          variant="icon"
-          aria-label="Close"
-          className="h-9 w-9 rounded-full bg-surface/90 text-xl leading-none"
-          onClick={onClose}
-        >
-          ×
-        </Button>
-      </div>
+      {!isPrinting && (
+        <div className="fixed right-4 top-4 z-50 flex gap-2 print:hidden">
+          <Button variant="secondary" onClick={printNow}>
+            Print
+          </Button>
+          <Button
+            variant="icon"
+            aria-label="Close"
+            className="h-9 w-9 rounded-full bg-surface/90 text-xl leading-none"
+            onClick={onClose}
+          >
+            ×
+          </Button>
+        </div>
+      )}
     </>,
     document.body,
   )
