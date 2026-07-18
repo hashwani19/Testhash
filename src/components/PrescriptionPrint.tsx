@@ -90,6 +90,7 @@ function DetailLine({ label, value }: { label: string; value: string }) {
  */
 export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted }: Props) {
   const hasPrinted = useRef(false)
+  const logoRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -103,8 +104,38 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     if (hasPrinted.current) return
     hasPrinted.current = true
     onPrinted()
-    const id = requestAnimationFrame(() => window.print())
-    return () => cancelAnimationFrame(id)
+
+    let cancelled = false
+    const triggerPrint = () => {
+      if (!cancelled) window.print()
+    }
+
+    // A data: URI image still needs to be decoded before it can be
+    // painted — that's not instant just because there's no network fetch.
+    // Printing used to fire unconditionally one animation frame after
+    // mount, which is early enough that a logo can still be mid-decode
+    // when iOS takes its print/share-sheet snapshot — plausibly why every
+    // report of a blank print preview involved a logo. `decode()` waits
+    // for the image to actually be paintable; a 1s timeout keeps a broken
+    // or slow image from blocking printing forever.
+    if (template.logoDataUrl && logoRef.current) {
+      const timeoutId = window.setTimeout(triggerPrint, 1000)
+      const proceed = () => {
+        window.clearTimeout(timeoutId)
+        triggerPrint()
+      }
+      logoRef.current.decode().then(proceed, proceed)
+      return () => {
+        cancelled = true
+        window.clearTimeout(timeoutId)
+      }
+    }
+
+    const id = requestAnimationFrame(triggerPrint)
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(id)
+    }
     // Runs once on mount only — onPrinted/onClose identity changes shouldn't re-trigger a print.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -166,7 +197,12 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
           <header className="mb-4 flex items-start justify-between gap-4 border-b-2 border-black pb-3">
             <div className="flex items-start gap-3">
               {template.logoDataUrl && (
-                <img src={template.logoDataUrl} alt="" className="h-14 w-14 shrink-0 object-contain" />
+                <img
+                  ref={logoRef}
+                  src={template.logoDataUrl}
+                  alt=""
+                  className="h-14 w-14 shrink-0 object-contain"
+                />
               )}
               <div>
                 <h1 className="text-2xl font-bold">{template.clinicName?.trim() || DEFAULT_CLINIC_NAME}</h1>
