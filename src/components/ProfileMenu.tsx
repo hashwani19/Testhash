@@ -51,10 +51,6 @@ export function ProfileMenu({ fullName, role, onOpenPreferences, onSignOut }: Pr
           >
             Preferences
           </Button>
-          <div className="mt-1 border-t border-border px-3 pt-1.5 pb-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-text">App info</p>
-            <p className="text-[13px] text-text-h">{formatBuildVersion()}</p>
-          </div>
           <Button
             variant="unstyled"
             className="cursor-pointer rounded-lg bg-transparent px-3 pt-1.5 pb-2.5 text-left text-[15px] font-medium text-text-h"
@@ -65,6 +61,9 @@ export function ProfileMenu({ fullName, role, onOpenPreferences, onSignOut }: Pr
           >
             Sign out
           </Button>
+          <p className="border-t border-border px-3 pt-1.5 pb-1 text-[11px] text-text">
+            {formatBuildVersion()}
+          </p>
         </>
       )}
     </Dropdown>
