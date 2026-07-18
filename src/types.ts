@@ -85,11 +85,26 @@ export interface PrescriptionTemplate {
   /** Extra blank space reserved at the top of the printed page, mainly
    *  meaningful alongside `showLetterhead: false`. */
   topMarginMm: number
+  /** Clinic name printed in the letterhead header. Optional — an unset
+   *  value falls back to the app's default clinic name at print time, so
+   *  templates saved before this field existed keep printing unchanged. */
+  clinicName?: string
+  /** Clinic address printed under the clinic name in the header. Free
+   *  text, may contain line breaks. Optional — omitted when unset. */
+  clinicAddress?: string
+  /** Doctor's name printed on the opposite side of the header from the
+   *  clinic name/address. Optional — omitted from the header when unset. */
+  doctorName?: string
+  /** Doctor's credentials (e.g. "M.B.B.S., M.S., F.C.L.I."), printed under
+   *  the doctor's name. Free text, may contain line breaks. Optional. */
+  doctorCredentials?: string
   /** Free text printed at the bottom of every prescription. */
   footerNote?: string
-  /** Compressed logo image as a data URL, rendered faint and centered
-   *  behind the prescription content as a watermark. Optional — no logo
-   *  means no watermark, not a placeholder. */
+  /** Compressed logo image as a data URL, printed as a small icon next to
+   *  the clinic name in the letterhead header. Optional — no logo means no
+   *  icon, not a placeholder. Rendered once, in the header only — not also
+   *  as a full-page watermark (an earlier version doubled it up as both,
+   *  which is suspected of causing a blank iOS print-preview bug). */
   logoDataUrl?: string
 }
 

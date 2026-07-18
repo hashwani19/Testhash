@@ -1083,8 +1083,9 @@ with configurable content — not a custom HTML/layout template**:
   designed — adapted for the current single-implicit-clinic architecture
   rather than the multi-tenant one above:
   - `PrescriptionTemplateProvider` holds one instance-wide
-    `PrescriptionTemplate` (`showLetterhead`/`topMarginMm`/`footerNote`),
-    same load-or-seed-then-persist-on-change shape as
+    `PrescriptionTemplate` (`showLetterhead`/`topMarginMm`/`clinicName`/
+    `clinicAddress`/`doctorName`/`doctorCredentials`/`footerNote`/
+    `logoDataUrl`), same load-or-seed-then-persist-on-change shape as
     `GlobalSettingsProvider` — there's no `tenant_id` to key it by yet, so
     it's a single value, not a per-tenant table. Editable from a new
     "Prescription template (admin only)" section in `PreferencesScreen`,
@@ -1100,32 +1101,27 @@ with configurable content — not a custom HTML/layout template**:
     page's US Letter sizing/top-margin are set through a `<style>` tag it
     renders itself (`@page { size: letter; margin: ... }`), since the margin
     depends on the live template value.
-  - The header uses the app's existing hardcoded "Ortho and Vision Care"
-    title when `showLetterhead` is on — real per-tenant branding (§5.5)
-    isn't implemented in this build yet either, so there's nothing to pull
-    a dynamic title from. Swap in `branding.title` here once that lands.
-  - No `examiner_id`/doctor-attribution field exists on this build's
-    `EyeVisit` at all (unlike the real schema, §5.3), so the printed page
-    doesn't attempt a "seen by" line — adding one is a form change beyond
-    this feature's scope, not a print-view change.
+  - When `showLetterhead` is on, the header is a two-column letterhead:
+    clinic name/address (falling back to a hardcoded default name when
+    unset) and logo on the left, `doctorName`/`doctorCredentials`
+    right-aligned. This is narrower than real per-tenant branding (§5.5) —
+    only the print letterhead's clinic name is admin-editable, not the
+    app-wide title (login screen, in-app header, browser tab).
+  - `doctorName`/`doctorCredentials` are a static per-template field, not
+    per-visit — this build's `EyeVisit` has no `examiner_id` at all (unlike
+    the real schema, §5.3), so there's nothing to pull a per-visit "seen
+    by" line from.
   - `AuditAction` gained an `'export'` value (`'create' | 'update' |
     'delete' | 'export'`) purely for this — printing logs one entry the same
     way every other mutation already does, via `logEntry` from
     `useAuditLog`, even though nothing is actually mutated.
-  - **A logo, uploaded once in the same Preferences section, renders as a
-    faint centered watermark behind the prescription content** (not in the
-    header — this build has no real letterhead logo either, §5.5) —
-    `PrescriptionTemplate.logoDataUrl`, compressed client-side via a new
-    `compressLogoFile` (same `browser-image-compression` approach as
-    attachments/§7, but tuned smaller — 800px/~0.15MB, since a watermark
-    only ever needs to look right at low opacity, not full resolution — and
-    kept as PNG rather than re-encoded to JPEG, since a logo is commonly a
-    transparent-background graphic and flattening that to JPEG would turn
-    the transparent area into a visible opaque box once rendered faint).
-    Positioned via a single absolutely-positioned `<img>` placed *first* in
-    the printed page's DOM order, so every later (normal-flow) element
-    paints over it automatically — no `z-index` needed to keep it behind
-    the text.
+  - A logo, uploaded once in the same Preferences section
+    (`PrescriptionTemplate.logoDataUrl`, compressed client-side via
+    `compressLogoFile` — same `browser-image-compression` approach as
+    attachments/§7, tuned smaller at 800px/~0.15MB, kept as PNG rather than
+    JPEG since a logo is commonly a transparent-background graphic), prints
+    as a small icon next to the clinic name in the header. Rendered once,
+    in the header only — not also as a separate full-page watermark image.
   - **The overlay auto-closes once the print/share UI is dismissed**
     (printed or cancelled, either way), detected via three overlapping
     signals — `afterprint`, a `matchMedia('print')` change listener, and

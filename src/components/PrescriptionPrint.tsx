@@ -15,6 +15,12 @@ interface Props {
   onPrinted: () => void
 }
 
+// Matches the string every other hardcoded "Ortho and Vision Care" surface
+// still uses (LoginScreen, AppHeader, index.html) — this is the only one of
+// the four that became admin-editable (docs/design.md §5.6); the other
+// three are a separate, unimplemented "tenant branding" concept (§5.5).
+const DEFAULT_CLINIC_NAME = 'Ortho and Vision Care'
+
 function formatSigned(value?: number): string {
   if (value == null) return ''
   return value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2)
@@ -156,21 +162,28 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
       <div className={`fixed inset-0 z-50 overflow-y-auto print:hidden ${dimmedBackdrop}`} onClick={onClose} />
 
       <div className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
-        {template.logoDataUrl && (
-          // Absolutely positioned and first in DOM order so every later
-          // (normal-flow) sibling below paints on top of it automatically —
-          // no z-index juggling needed to keep the watermark behind the text.
-          <img
-            src={template.logoDataUrl}
-            alt=""
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 m-auto h-2/3 w-2/3 object-contain opacity-10"
-          />
-        )}
-
         {template.showLetterhead && (
-          <header className="mb-4 border-b-2 border-black pb-3 text-center">
-            <h1 className="text-2xl font-bold">Ortho and Vision Care</h1>
+          <header className="mb-4 flex items-start justify-between gap-4 border-b-2 border-black pb-3">
+            <div className="flex items-start gap-3">
+              {template.logoDataUrl && (
+                <img src={template.logoDataUrl} alt="" className="h-14 w-14 shrink-0 object-contain" />
+              )}
+              <div>
+                <h1 className="text-2xl font-bold">{template.clinicName?.trim() || DEFAULT_CLINIC_NAME}</h1>
+                {template.clinicAddress && (
+                  <p className="whitespace-pre-line text-xs">{template.clinicAddress}</p>
+                )}
+              </div>
+            </div>
+
+            {(template.doctorName || template.doctorCredentials) && (
+              <div className="shrink-0 text-right">
+                {template.doctorName && <p className="font-semibold">{template.doctorName}</p>}
+                {template.doctorCredentials && (
+                  <p className="whitespace-pre-line text-xs">{template.doctorCredentials}</p>
+                )}
+              </div>
+            )}
           </header>
         )}
 
