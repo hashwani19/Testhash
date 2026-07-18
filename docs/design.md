@@ -1127,6 +1127,17 @@ with configurable content — not a custom HTML/layout template**:
     signals — `afterprint`, a `matchMedia('print')` change listener, and
     `visibilitychange` (the most reliable on mobile) — since no single one
     fires reliably across every platform.
+  - **The printable content is pinned into the viewport the instant the
+    overlay opens**, inside its own `fixed inset-0` scrollable wrapper,
+    rather than sitting whichever normal-flow position it would fall in
+    after the whole app tree in `document.body` (i.e. below the entire
+    current screen, needing a scroll to actually reach it on screen). A
+    persistently blank mobile print preview traced to exactly that: content
+    that had never actually appeared within the visible viewport before
+    `window.print()` fired. Reverts to plain normal flow the instant
+    printing actually starts (same `isPrinting`-gated DOM swap as the
+    backdrop/controls above), so it still paginates like ordinary page
+    content once `#root` is hidden for print.
 
 ### 5.7 Analytics
 

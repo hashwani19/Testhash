@@ -209,120 +209,139 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     <>
       <style>{`@page { size: letter; margin: ${topMarginMm}mm 15mm 15mm 15mm; }`}</style>
 
+      {/* Purely the dim color layer now — no scroll, no click handling of
+       * its own. Previously this was the only fixed/scrollable element, and
+       * the actual printable content below was a normal-flow sibling that
+       * rendered whenever it happened to fall in document order — after
+       * #root, i.e. below the entire rest of the app, requiring a scroll
+       * past the current screen to even see it. Reported as the prescription
+       * only appearing "below the patient record," with the mobile print
+       * dialog then showing a blank page: on-screen content sitting outside
+       * the actual viewport when print fires is the leading suspect now,
+       * not anything about *when* printing was triggered (checkpoint C
+       * tried delaying the trigger — requiring an explicit Print tap — and
+       * that alone didn't fix it). The scrollable wrapper below now pins the
+       * content to the current viewport immediately, instead of wherever it
+       * lands in document flow. */}
       {!isPrinting && (
-        <div className={`fixed inset-0 z-50 overflow-y-auto print:hidden ${dimmedBackdrop}`} onClick={onClose} />
+        <div className={`fixed inset-0 z-50 print:hidden ${dimmedBackdrop}`} />
       )}
 
-      <div className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
-        {template.logoDataUrl && (
-          // Absolutely positioned and first in DOM order so every later
-          // (normal-flow) sibling below paints on top of it automatically —
-          // no z-index juggling needed to keep the watermark behind the
-          // text. Re-added after confirming the blank mobile print preview
-          // happens with or without a logo — it was never the cause.
-          <img
-            src={template.logoDataUrl}
-            alt=""
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 m-auto h-2/3 w-2/3 object-contain opacity-10"
-          />
-        )}
+      <div
+        className={isPrinting ? undefined : 'fixed inset-0 z-50 overflow-y-auto'}
+        onClick={isPrinting ? undefined : (e) => e.target === e.currentTarget && onClose()}
+      >
+        <div className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
+          {template.logoDataUrl && (
+            // Absolutely positioned and first in DOM order so every later
+            // (normal-flow) sibling below paints on top of it automatically —
+            // no z-index juggling needed to keep the watermark behind the
+            // text. Re-added after confirming the blank mobile print preview
+            // happens with or without a logo — it was never the cause.
+            <img
+              src={template.logoDataUrl}
+              alt=""
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 m-auto h-2/3 w-2/3 object-contain opacity-10"
+            />
+          )}
 
-        {template.showLetterhead && (
-          <header className="mb-4 flex items-start justify-between gap-4 border-b-2 border-black pb-3">
-            <div className="flex items-start gap-3">
-              {template.logoDataUrl && (
-                <img
-                  ref={logoRef}
-                  src={template.logoDataUrl}
-                  alt=""
-                  className="h-14 w-14 shrink-0 object-contain"
-                />
+          {template.showLetterhead && (
+            <header className="mb-4 flex items-start justify-between gap-4 border-b-2 border-black pb-3">
+              <div className="flex items-start gap-3">
+                {template.logoDataUrl && (
+                  <img
+                    ref={logoRef}
+                    src={template.logoDataUrl}
+                    alt=""
+                    className="h-14 w-14 shrink-0 object-contain"
+                  />
+                )}
+                <div>
+                  <h1 className="text-2xl font-bold">{template.clinicName?.trim() || DEFAULT_CLINIC_NAME}</h1>
+                  {template.clinicAddress && (
+                    <p className="whitespace-pre-line text-xs">{template.clinicAddress}</p>
+                  )}
+                </div>
+              </div>
+
+              {(template.doctorName || template.doctorCredentials) && (
+                <div className="shrink-0 text-right">
+                  {template.doctorName && <p className="font-semibold">{template.doctorName}</p>}
+                  {template.doctorCredentials && (
+                    <p className="whitespace-pre-line text-xs">{template.doctorCredentials}</p>
+                  )}
+                </div>
               )}
-              <div>
-                <h1 className="text-2xl font-bold">{template.clinicName?.trim() || DEFAULT_CLINIC_NAME}</h1>
-                {template.clinicAddress && (
-                  <p className="whitespace-pre-line text-xs">{template.clinicAddress}</p>
-                )}
-              </div>
+            </header>
+          )}
+
+          <div className="mb-4 flex flex-wrap justify-between gap-2">
+            <div>
+              <p className="font-semibold">
+                {patient.name} <span className="font-normal">({patient.patientNumber})</span>
+              </p>
+              <p>
+                Age: {age != null ? `${age} years` : '—'} · Gender:{' '}
+                {patient.gender === 'unspecified' ? '—' : patient.gender}
+              </p>
             </div>
-
-            {(template.doctorName || template.doctorCredentials) && (
-              <div className="shrink-0 text-right">
-                {template.doctorName && <p className="font-semibold">{template.doctorName}</p>}
-                {template.doctorCredentials && (
-                  <p className="whitespace-pre-line text-xs">{template.doctorCredentials}</p>
-                )}
-              </div>
-            )}
-          </header>
-        )}
-
-        <div className="mb-4 flex flex-wrap justify-between gap-2">
-          <div>
-            <p className="font-semibold">
-              {patient.name} <span className="font-normal">({patient.patientNumber})</span>
-            </p>
-            <p>
-              Age: {age != null ? `${age} years` : '—'} · Gender:{' '}
-              {patient.gender === 'unspecified' ? '—' : patient.gender}
-            </p>
+            <p>Visit: {formatVisitDateTime(visit.visitAt)}</p>
           </div>
-          <p>Visit: {formatVisitDateTime(visit.visitAt)}</p>
+
+          <table className="mb-4 w-full border-collapse">
+            <thead>
+              <tr>
+                <th className="border border-black/30 px-2 py-1"></th>
+                <th className="border border-black/30 px-2 py-1" colSpan={4}>
+                  Right eye
+                </th>
+                <th className="border border-black/30 px-2 py-1" colSpan={4}>
+                  Left eye
+                </th>
+              </tr>
+              <tr>
+                <th className="border border-black/30 px-2 py-1"></th>
+                <th className="border border-black/30 px-2 py-1">Sph</th>
+                <th className="border border-black/30 px-2 py-1">Cyl</th>
+                <th className="border border-black/30 px-2 py-1">Axis</th>
+                <th className="border border-black/30 px-2 py-1">V.A.</th>
+                <th className="border border-black/30 px-2 py-1">Sph</th>
+                <th className="border border-black/30 px-2 py-1">Cyl</th>
+                <th className="border border-black/30 px-2 py-1">Axis</th>
+                <th className="border border-black/30 px-2 py-1">V.A.</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th className="border border-black/30 px-2 py-1 text-left font-normal">Distance</th>
+                <RefractionCells refraction={visit.refractions.right.distance} />
+                <RefractionCells refraction={visit.refractions.left.distance} />
+              </tr>
+              <tr>
+                <th className="border border-black/30 px-2 py-1 text-left font-normal">Reading</th>
+                <RefractionCells refraction={visit.refractions.right.reading} />
+                <RefractionCells refraction={visit.refractions.left.reading} />
+              </tr>
+            </tbody>
+          </table>
+
+          <div className="mb-4 flex flex-col gap-1.5">
+            <DetailLine label="Lenses" value={visit.lenses ?? ''} />
+            <DetailLine label="Diagnosis" value={visit.diagnosis ?? ''} />
+            <DetailLine label="Treatment plan" value={visit.treatmentPlan ?? ''} />
+            <DetailLine label="Follow-up" value={visit.followUpDate ? formatDateOnly(visit.followUpDate) : ''} />
+            <DetailLine label="Notes" value={visit.notes ?? ''} />
+          </div>
+
+          <div className="mt-6 flex justify-end">
+            <div className="w-48 border-t border-black pt-1 text-center">Signature</div>
+          </div>
+
+          {template.footerNote && (
+            <p className="mt-8 border-t border-black/30 pt-2 text-center text-xs">{template.footerNote}</p>
+          )}
         </div>
-
-        <table className="mb-4 w-full border-collapse">
-          <thead>
-            <tr>
-              <th className="border border-black/30 px-2 py-1"></th>
-              <th className="border border-black/30 px-2 py-1" colSpan={4}>
-                Right eye
-              </th>
-              <th className="border border-black/30 px-2 py-1" colSpan={4}>
-                Left eye
-              </th>
-            </tr>
-            <tr>
-              <th className="border border-black/30 px-2 py-1"></th>
-              <th className="border border-black/30 px-2 py-1">Sph</th>
-              <th className="border border-black/30 px-2 py-1">Cyl</th>
-              <th className="border border-black/30 px-2 py-1">Axis</th>
-              <th className="border border-black/30 px-2 py-1">V.A.</th>
-              <th className="border border-black/30 px-2 py-1">Sph</th>
-              <th className="border border-black/30 px-2 py-1">Cyl</th>
-              <th className="border border-black/30 px-2 py-1">Axis</th>
-              <th className="border border-black/30 px-2 py-1">V.A.</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th className="border border-black/30 px-2 py-1 text-left font-normal">Distance</th>
-              <RefractionCells refraction={visit.refractions.right.distance} />
-              <RefractionCells refraction={visit.refractions.left.distance} />
-            </tr>
-            <tr>
-              <th className="border border-black/30 px-2 py-1 text-left font-normal">Reading</th>
-              <RefractionCells refraction={visit.refractions.right.reading} />
-              <RefractionCells refraction={visit.refractions.left.reading} />
-            </tr>
-          </tbody>
-        </table>
-
-        <div className="mb-4 flex flex-col gap-1.5">
-          <DetailLine label="Lenses" value={visit.lenses ?? ''} />
-          <DetailLine label="Diagnosis" value={visit.diagnosis ?? ''} />
-          <DetailLine label="Treatment plan" value={visit.treatmentPlan ?? ''} />
-          <DetailLine label="Follow-up" value={visit.followUpDate ? formatDateOnly(visit.followUpDate) : ''} />
-          <DetailLine label="Notes" value={visit.notes ?? ''} />
-        </div>
-
-        <div className="mt-6 flex justify-end">
-          <div className="w-48 border-t border-black pt-1 text-center">Signature</div>
-        </div>
-
-        {template.footerNote && (
-          <p className="mt-8 border-t border-black/30 pt-2 text-center text-xs">{template.footerNote}</p>
-        )}
       </div>
 
       {!isPrinting && (
