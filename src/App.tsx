@@ -31,7 +31,6 @@ import { LoginScreen } from './components/LoginScreen'
 import { OfflineBanner } from './components/OfflineBanner'
 import { InstallBanner } from './components/InstallBanner'
 import { Button } from './components/common/Button'
-import { MasterDetail } from './components/common/MasterDetail'
 import type { Appointment, EyeVisit, Patient } from './types'
 
 type View =
@@ -57,18 +56,6 @@ const VIEW_TO_NAV_TARGET: Partial<Record<View, NavTarget>> = {
   editAppointment: 'appointments',
   analytics: 'analytics',
 }
-
-// Views reachable from the Patients nav item — grouped so they can share the
-// lg:+ master-detail split (§8.0 of docs/design.md) instead of the plain
-// one-screen-at-a-time render every other view still uses.
-const PATIENT_SECTION_VIEWS: View[] = [
-  'list',
-  'newPatient',
-  'editPatient',
-  'patientDetail',
-  'newRecord',
-  'editRecord',
-]
 
 function AppShell() {
   const { user, users, logout } = useAuth()
@@ -167,144 +154,129 @@ function AppShell() {
         )}
 
         <main className="flex flex-1 flex-col gap-4 px-5 pb-10 pt-3 md:px-8 lg:px-10">
-        {PATIENT_SECTION_VIEWS.includes(view) && (
-          <MasterDetail
-            showDetail={view !== 'list'}
-            master={
-              <>
-                <Button
-                  variant="primary"
-                  fullWidth
-                  onClick={() => {
-                    setNewPatientPrefill(null)
-                    setLinkAppointmentId(null)
-                    setView('newPatient')
-                  }}
-                >
-                  Add patient
-                </Button>
-                <PatientList
-                  patients={patients}
-                  groups={groups}
-                  onSelect={(id) => {
-                    setSelectedPatientId(id)
-                    setView('patientDetail')
-                  }}
-                />
-              </>
-            }
-            detail={
-              <>
-                {view === 'list' && (
-                  <div className="hidden flex-1 flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-border p-10 text-center text-text lg:flex">
-                    <p className="font-semibold text-text-h">No patient selected</p>
-                    <p className="text-sm">Choose a patient from the list to view their details.</p>
-                  </div>
-                )}
+        {view === 'list' && (
+          <>
+            <Button
+              variant="primary"
+              fullWidth
+              onClick={() => {
+                setNewPatientPrefill(null)
+                setLinkAppointmentId(null)
+                setView('newPatient')
+              }}
+            >
+              Add patient
+            </Button>
+            <PatientList
+              patients={patients}
+              groups={groups}
+              onSelect={(id) => {
+                setSelectedPatientId(id)
+                setView('patientDetail')
+              }}
+            />
+          </>
+        )}
 
-                {view === 'newPatient' && (
-                  <PatientForm
-                    initial={newPatientPrefill ?? undefined}
-                    groups={groups}
-                    onSubmit={(input) => {
-                      const id = addPatient(input)
-                      if (linkAppointmentId) linkAppointmentToPatient(linkAppointmentId, id)
-                      setNewPatientPrefill(null)
-                      setLinkAppointmentId(null)
-                      setSelectedPatientId(id)
-                      setView('patientDetail')
-                    }}
-                    onCancel={() => {
-                      setNewPatientPrefill(null)
-                      setLinkAppointmentId(null)
-                      goToList()
-                    }}
-                  />
-                )}
+        {view === 'newPatient' && (
+          <PatientForm
+            initial={newPatientPrefill ?? undefined}
+            groups={groups}
+            onSubmit={(input) => {
+              const id = addPatient(input)
+              if (linkAppointmentId) linkAppointmentToPatient(linkAppointmentId, id)
+              setNewPatientPrefill(null)
+              setLinkAppointmentId(null)
+              setSelectedPatientId(id)
+              setView('patientDetail')
+            }}
+            onCancel={() => {
+              setNewPatientPrefill(null)
+              setLinkAppointmentId(null)
+              goToList()
+            }}
+          />
+        )}
 
-                {view === 'editPatient' && selectedPatient && (
-                  <PatientForm
-                    initial={selectedPatient}
-                    groups={groups}
-                    onSubmit={(input) => {
-                      updatePatient(selectedPatient.id, input)
-                      setView('patientDetail')
-                    }}
-                    onCancel={() => setView('patientDetail')}
-                  />
-                )}
+        {view === 'editPatient' && selectedPatient && (
+          <PatientForm
+            initial={selectedPatient}
+            groups={groups}
+            onSubmit={(input) => {
+              updatePatient(selectedPatient.id, input)
+              setView('patientDetail')
+            }}
+            onCancel={() => setView('patientDetail')}
+          />
+        )}
 
-                {view === 'patientDetail' && selectedPatient && (
-                  <PatientDetail
-                    patient={selectedPatient}
-                    groups={groups}
-                    visits={getVisitsForPatient(selectedPatient.id)}
-                    canDeleteRecords={isAdmin}
-                    canDeletePatient={isAdmin}
-                    canViewAttachments={canManageAttachments}
-                    attachments={attachments}
-                    onEdit={() => setView('editPatient')}
-                    onDelete={() => {
-                      const patientVisitIds = getVisitsForPatient(selectedPatient.id).map((v) => v.id)
-                      deleteAttachmentsForVisits(patientVisitIds)
-                      deleteVisitsForPatient(selectedPatient.id)
-                      deletePatient(selectedPatient.id)
-                      goToList()
-                    }}
-                    onAddRecord={() => setView('newRecord')}
-                    onEditRecord={(visit) => {
-                      setEditingVisit(visit)
-                      setView('editRecord')
-                    }}
-                    onDeleteRecord={(id) => {
-                      deleteAttachmentsForVisits([id])
-                      deleteVisit(id)
-                    }}
-                    onBack={goToList}
-                  />
-                )}
+        {view === 'patientDetail' && selectedPatient && (
+          <PatientDetail
+            patient={selectedPatient}
+            groups={groups}
+            visits={getVisitsForPatient(selectedPatient.id)}
+            canDeleteRecords={isAdmin}
+            canDeletePatient={isAdmin}
+            canViewAttachments={canManageAttachments}
+            attachments={attachments}
+            onEdit={() => setView('editPatient')}
+            onDelete={() => {
+              const patientVisitIds = getVisitsForPatient(selectedPatient.id).map((v) => v.id)
+              deleteAttachmentsForVisits(patientVisitIds)
+              deleteVisitsForPatient(selectedPatient.id)
+              deletePatient(selectedPatient.id)
+              goToList()
+            }}
+            onAddRecord={() => setView('newRecord')}
+            onEditRecord={(visit) => {
+              setEditingVisit(visit)
+              setView('editRecord')
+            }}
+            onDeleteRecord={(id) => {
+              deleteAttachmentsForVisits([id])
+              deleteVisit(id)
+            }}
+            onBack={goToList}
+          />
+        )}
 
-                {view === 'newRecord' && selectedPatient && (
-                  <EyeRecordForm
-                    canManageAttachments={canManageAttachments}
-                    canDeleteAttachments={isAdmin}
-                    attachments={[]}
-                    onDeleteAttachment={deleteAttachment}
-                    onSubmit={(input, newAttachments) => {
-                      const id = addVisit(selectedPatient.id, input, newAttachments.length > 0)
-                      if (id) {
-                        if (newAttachments.length > 0) addAttachments(id, newAttachments)
-                        setView('patientDetail')
-                      }
-                    }}
-                    onCancel={() => setView('patientDetail')}
-                  />
-                )}
+        {view === 'newRecord' && selectedPatient && (
+          <EyeRecordForm
+            canManageAttachments={canManageAttachments}
+            canDeleteAttachments={isAdmin}
+            attachments={[]}
+            onDeleteAttachment={deleteAttachment}
+            onSubmit={(input, newAttachments) => {
+              const id = addVisit(selectedPatient.id, input, newAttachments.length > 0)
+              if (id) {
+                if (newAttachments.length > 0) addAttachments(id, newAttachments)
+                setView('patientDetail')
+              }
+            }}
+            onCancel={() => setView('patientDetail')}
+          />
+        )}
 
-                {view === 'editRecord' && selectedPatient && editingVisit && (
-                  <EyeRecordForm
-                    initial={editingVisit}
-                    canManageAttachments={canManageAttachments}
-                    canDeleteAttachments={isAdmin}
-                    attachments={getAttachmentsForVisit(editingVisit.id)}
-                    onDeleteAttachment={deleteAttachment}
-                    onSubmit={(input, newAttachments) => {
-                      const hasAttachments =
-                        newAttachments.length > 0 || getAttachmentsForVisit(editingVisit.id).length > 0
-                      if (updateVisit(editingVisit.id, input, hasAttachments)) {
-                        if (newAttachments.length > 0) addAttachments(editingVisit.id, newAttachments)
-                        setEditingVisit(null)
-                        setView('patientDetail')
-                      }
-                    }}
-                    onCancel={() => {
-                      setEditingVisit(null)
-                      setView('patientDetail')
-                    }}
-                  />
-                )}
-              </>
-            }
+        {view === 'editRecord' && selectedPatient && editingVisit && (
+          <EyeRecordForm
+            initial={editingVisit}
+            canManageAttachments={canManageAttachments}
+            canDeleteAttachments={isAdmin}
+            attachments={getAttachmentsForVisit(editingVisit.id)}
+            onDeleteAttachment={deleteAttachment}
+            onSubmit={(input, newAttachments) => {
+              const hasAttachments =
+                newAttachments.length > 0 || getAttachmentsForVisit(editingVisit.id).length > 0
+              if (updateVisit(editingVisit.id, input, hasAttachments)) {
+                if (newAttachments.length > 0) addAttachments(editingVisit.id, newAttachments)
+                setEditingVisit(null)
+                setView('patientDetail')
+              }
+            }}
+            onCancel={() => {
+              setEditingVisit(null)
+              setView('patientDetail')
+            }}
           />
         )}
 

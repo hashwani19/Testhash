@@ -1548,14 +1548,9 @@ tablet/desktop designs:
   width instead of stretching edge-to-edge; still one screen at a time.
 - **Tablet landscape and laptop (≥ `lg`, 1024px)**: same nav rail; screens
   with genuine multi-column content (Analytics' chart grid) lay out two
-  columns instead of one. The Patients screen becomes a master-detail split
-  — the list stays visible in a fixed-width left column while the selected
-  patient (or the new/edit patient and visit forms) renders in the pane
-  beside it, via a shared `MasterDetail` layout component; picking a
-  different patient updates the right pane without losing the list. Below
-  `lg`, `MasterDetail` collapses to the same one-screen-at-a-time behavior
-  as every other view. Appointments/Activity master-detail is planned but
-  not yet built (tracked as follow-up work, not part of this pass).
+  columns instead of one. Patient/appointment master-detail split views are
+  planned but not yet built (tracked as follow-up work, not part of this
+  pass).
 
 Orientation lock (`portrait` in the PWA manifest) and a true master-detail
 list+detail layout are known gaps, left for a later pass.
