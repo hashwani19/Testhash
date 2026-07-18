@@ -1127,17 +1127,28 @@ with configurable content — not a custom HTML/layout template**:
     signals — `afterprint`, a `matchMedia('print')` change listener, and
     `visibilitychange` (the most reliable on mobile) — since no single one
     fires reliably across every platform.
-  - **The printable content is pinned into the viewport the instant the
-    overlay opens**, inside its own `fixed inset-0` scrollable wrapper,
-    rather than sitting whichever normal-flow position it would fall in
+  - **The printable content sits inside its own `fixed inset-0` scrollable
+    wrapper** so it's pinned into the viewport the instant the overlay
+    opens, rather than sitting wherever it'd fall in normal document flow
     after the whole app tree in `document.body` (i.e. below the entire
-    current screen, needing a scroll to actually reach it on screen). A
-    persistently blank mobile print preview traced to exactly that: content
-    that had never actually appeared within the visible viewport before
-    `window.print()` fired. Reverts to plain normal flow the instant
-    printing actually starts (same `isPrinting`-gated DOM swap as the
-    backdrop/controls above), so it still paginates like ordinary page
-    content once `#root` is hidden for print.
+    current screen, needing a scroll to actually reach it). Reverts to
+    plain normal flow the instant printing starts (same `isPrinting`-gated
+    DOM swap as the backdrop/controls above), so it still paginates like
+    ordinary page content once `#root` is hidden for print.
+  - **`window.print()` is only ever called synchronously from the Print
+    button's own click handler, nothing awaited first.** This is what
+    actually fixed a persistently blank mobile print preview, confirmed by
+    the browser's own wording: Chrome/Safari treat `window.print()` as
+    "automatic printing" (the same family of heuristic as popup blocking)
+    and block it — sometimes silently, sometimes with an explicit prompt —
+    whenever the call isn't traceable to a direct user gesture with nothing
+    async in between. The original design auto-triggered printing from a
+    `useEffect` a frame after the overlay mounted; every fix short of
+    removing that (image-decode waits, removing `position:fixed` chrome
+    from the DOM, the viewport-pinning above) still called `window.print()`
+    from inside an effect or a `.then()`, both of which cross an async
+    boundary and lose the gesture regardless of how soon after the tap they
+    run.
 
 ### 5.7 Analytics
 

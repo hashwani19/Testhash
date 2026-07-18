@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import type { EyeRefraction, EyeVisit, Patient, PrescriptionTemplate } from '../types'
 import { getPatientAge } from '../utils/age'
@@ -10,8 +10,10 @@ interface Props {
   visit: EyeVisit
   template: PrescriptionTemplate
   onClose: () => void
-  /** Called once, right before the print dialog opens — the caller logs
-   *  this as an export-class audit entry (docs/design.md §5.6/§10). */
+  /** Called each time Print is tapped, right before the print dialog opens
+   *  — the caller logs this as an export-class audit entry (docs/
+   *  design.md §5.6/§10). Printing twice in one session logs twice,
+   *  matching two real print actions. */
   onPrinted: () => void
 }
 
@@ -89,24 +91,34 @@ function DetailLine({ label, value }: { label: string; value: string }) {
  * a staff member's personal dark-mode setting is.
  */
 export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted }: Props) {
-  const hasPrinted = useRef(false)
-  const logoRef = useRef<HTMLImageElement>(null)
+  // [checkpoint D] The actual cause, confirmed by the browser's own words:
+  // Chrome/Safari block window.print() as "automatic printing" — the same
+  // family of heuristic as popup blocking — whenever it isn't called
+  // *synchronously* inside a direct user-gesture handler (a click/tap
+  // callback, with nothing async in between). Every earlier attempt at this
+  // bug (checkpoints A-C: image-decode waits, removing position:fixed
+  // chrome from the DOM, pinning the overlay into the viewport) called
+  // window.print() from inside a useEffect after mount, or after awaiting
+  // logoRef.current.decode() — both cross an async boundary, so the browser
+  // no longer considers the call gesture-initiated no matter how soon after
+  // the tap it happens, and silently (or with a "blocked from automatic
+  // printing" prompt) drops it. Printing now happens ONLY from `printNow`
+  // below, called directly by the Print button's onClick with nothing
+  // awaited first — that's what keeps it inside the gesture.
+  //
   // [checkpoint B] `position: fixed` elements have long-standing,
   // documented WebKit/Chromium print bugs — `display: none` under
   // `@media print` (this file's `print:hidden` class) isn't reliably
   // respected on them the way it is on normal-flow elements, because the
   // print pagination engine gives fixed-position boxes special handling
   // (there's no well-defined "which printed page" for something anchored
-  // to the viewport). #root, a normal block element, has hidden reliably
-  // under print since this feature existed; the backdrop and the
-  // Print/Close controls below are both `fixed`, unlike #root — the
-  // leading suspect for a blank print preview that reproduces on mobile
-  // but not desktop Chrome/Safari, with or without a logo. Rather than
-  // trust the CSS, `printNow` physically removes both from the DOM (via
-  // `flushSync`, so the removal is guaranteed to commit before
-  // `window.print()` actually runs) instead of just hiding them.
+  // to the viewport). Rather than trust the CSS, `printNow` physically
+  // removes the backdrop/controls from the DOM (via `flushSync`, so the
+  // removal is guaranteed to commit before `window.print()` actually runs)
+  // instead of just hiding them.
   const [isPrinting, setIsPrinting] = useState(false)
   const printNow = () => {
+    onPrinted()
     flushSync(() => setIsPrinting(true))
     window.print()
   }
@@ -118,46 +130,6 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
-
-  useEffect(() => {
-    if (hasPrinted.current) return
-    hasPrinted.current = true
-    onPrinted()
-
-    let cancelled = false
-    const triggerPrint = () => {
-      if (!cancelled) printNow()
-    }
-
-    // A data: URI image still needs to be decoded before it can be
-    // painted — that's not instant just because there's no network fetch.
-    // Printing used to fire unconditionally one animation frame after
-    // mount, which is early enough that a logo can still be mid-decode
-    // when iOS takes its print/share-sheet snapshot — plausibly why every
-    // report of a blank print preview involved a logo. `decode()` waits
-    // for the image to actually be paintable; a 1s timeout keeps a broken
-    // or slow image from blocking printing forever.
-    if (template.logoDataUrl && logoRef.current) {
-      const timeoutId = window.setTimeout(triggerPrint, 1000)
-      const proceed = () => {
-        window.clearTimeout(timeoutId)
-        triggerPrint()
-      }
-      logoRef.current.decode().then(proceed, proceed)
-      return () => {
-        cancelled = true
-        window.clearTimeout(timeoutId)
-      }
-    }
-
-    const id = requestAnimationFrame(triggerPrint)
-    return () => {
-      cancelled = true
-      cancelAnimationFrame(id)
-    }
-    // Runs once on mount only — onPrinted/onClose identity changes shouldn't re-trigger a print.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   useEffect(() => {
     // Two earlier attempts tried to manage *focus* on this overlay after the
@@ -209,20 +181,14 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     <>
       <style>{`@page { size: letter; margin: ${topMarginMm}mm 15mm 15mm 15mm; }`}</style>
 
-      {/* Purely the dim color layer now — no scroll, no click handling of
-       * its own. Previously this was the only fixed/scrollable element, and
-       * the actual printable content below was a normal-flow sibling that
-       * rendered whenever it happened to fall in document order — after
-       * #root, i.e. below the entire rest of the app, requiring a scroll
-       * past the current screen to even see it. Reported as the prescription
-       * only appearing "below the patient record," with the mobile print
-       * dialog then showing a blank page: on-screen content sitting outside
-       * the actual viewport when print fires is the leading suspect now,
-       * not anything about *when* printing was triggered (checkpoint C
-       * tried delaying the trigger — requiring an explicit Print tap — and
-       * that alone didn't fix it). The scrollable wrapper below now pins the
-       * content to the current viewport immediately, instead of wherever it
-       * lands in document flow. */}
+      {/* [checkpoint C] Purely the dim color layer — no scroll, no click
+       * handling of its own. The actual printable content below has its own
+       * fixed/scrollable wrapper so it's pinned into the viewport the
+       * instant the overlay opens, rather than sitting wherever it lands in
+       * normal document flow (after #root, i.e. below the entire rest of
+       * the app — requiring a scroll past the current screen to even reach
+       * it on screen, before this). Kept alongside the checkpoint D fix
+       * above since it's a real, independent improvement either way. */}
       {!isPrinting && (
         <div className={`fixed inset-0 z-50 print:hidden ${dimmedBackdrop}`} />
       )}
@@ -250,12 +216,7 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
             <header className="mb-4 flex items-start justify-between gap-4 border-b-2 border-black pb-3">
               <div className="flex items-start gap-3">
                 {template.logoDataUrl && (
-                  <img
-                    ref={logoRef}
-                    src={template.logoDataUrl}
-                    alt=""
-                    className="h-14 w-14 shrink-0 object-contain"
-                  />
+                  <img src={template.logoDataUrl} alt="" className="h-14 w-14 shrink-0 object-contain" />
                 )}
                 <div>
                   <h1 className="text-2xl font-bold">{template.clinicName?.trim() || DEFAULT_CLINIC_NAME}</h1>
