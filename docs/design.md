@@ -1126,44 +1126,11 @@ with configurable content — not a custom HTML/layout template**:
     the printed page's DOM order, so every later (normal-flow) element
     paints over it automatically — no `z-index` needed to keep it behind
     the text.
-  - **The overlay closes itself once the OS print/share UI is dismissed** —
-    printed or cancelled, either way. Two earlier iterations tried to fix
-    *focus* on the still-open overlay instead (first `window.focus()`,
-    then focusing the visible Close button specifically) and both missed
-    the actual problem: on iOS, which routes printing through a native
-    share-sheet rather than an in-page dialog, returning to the page left
-    this overlay's own on-screen preview sitting there with nothing to
-    mark it as this app's UI rather than leftover print-system chrome —
-    exactly what read as a stuck "print preview" needing an extra
-    dismiss tap, no matter what had focus. Closing it outright removes the
-    thing that was confusing, rather than trying to make it less confusing
-    to look at. Detected via three overlapping signals — `afterprint`
-    (doesn't reliably fire on every platform), a `matchMedia('print')`
-    change listener, and `visibilitychange` (the most reliable on mobile,
-    since the native UI backgrounds the page either way it's dismissed).
-  - **This is the last confirmed-working state on iOS**, deliberately kept
-    as the current baseline. Two follow-on efforts built on top of it and
-    were both reverted in full: a letterhead redesign (admin-editable
-    clinic name/address, doctor name/credentials, a second logo rendering
-    in the header alongside the existing watermark) and a set of
-    Android-specific print fixes (skipping auto-print for installed
-    standalone PWAs, a `history.pushState`/`popstate` back-button handler,
-    hiding `#root` while the overlay is mounted). The Android work was
-    itself already a partial revert of an earlier attempt when a report
-    came in that Apple's native print preview — dialog opens, printer
-    selected, but the paper preview itself renders blank — happens every
-    time on a template with a logo configured. That symptom traces to
-    content the letterhead redesign added (most likely the second,
-    full-opacity `<img>` rendering of the same logo in the header,
-    alongside the original absolutely-positioned watermark `<img>` above),
-    not to anything in this baseline, which was working before either the
-    letterhead redesign or the Android fixes existed. Rather than layer a
-    third fix onto two already-reverted ones, both were rolled back
-    wholesale — `PrescriptionPrint.tsx`, the `PrescriptionTemplate` fields
-    in `types.ts`, and the admin fields in `PreferencesScreen.tsx` — back
-    to this exact state, to restart the letterhead work (and any future
-    Android-specific fix) from a known-good baseline instead of debugging
-    forward through compounding changes.
+  - **The overlay auto-closes once the print/share UI is dismissed**
+    (printed or cancelled, either way), detected via three overlapping
+    signals — `afterprint`, a `matchMedia('print')` change listener, and
+    `visibilitychange` (the most reliable on mobile) — since no single one
+    fires reliably across every platform.
 
 ### 5.7 Analytics
 
@@ -1214,26 +1181,16 @@ functions computing counts over those same arrays, not a new API surface.
   than generic ones — two of the four hues (aqua, yellow) fall under 3:1
   contrast on the light surface, which is why every categorical chart
   ships direct value labels rather than relying on the color alone.
-- **A real dark-mode bug, found and fixed during verification**: Recharts
-  renders bar fills as a plain SVG `fill="var(--accent)"` attribute. Every
-  *other* themed value in the app (backgrounds, text, borders) is a
-  regular CSS property and repaints live for free when the OS flips
-  `prefers-color-scheme` in 'auto' mode — that's the whole point of
-  index.css's runtime tokens (§8.10). Verified empirically that chart bar
-  fills don't: the underlying CSS variable does update, but an
-  already-painted bar's `fill` attribute doesn't get invalidated for it,
-  leaving every bar rendered black (SVG's fallback for an unresolvable
-  presentation-attribute value) until something else forces a repaint. A
-  fresh page load in dark mode rendered correctly — this only broke a live
-  OS-level theme flip *while the Analytics screen was already open*, which
-  is exactly the scenario 'auto' mode exists for. Fixed with a new
-  `useChartColors` hook (`src/hooks/useChartColors.ts`) that resolves the
-  chart CSS variables to concrete color strings via `getComputedStyle`,
-  re-resolving on both a `matchMedia('(prefers-color-scheme: dark)')`
-  change listener (OS-level, 'auto' mode) and a `MutationObserver` on the
-  `data-theme` attribute (explicit light/dark mode) — trading the passive
-  CSS repaint Recharts doesn't reliably do for an explicit React
-  state update that forces one.
+- **Chart colors are resolved in JS, not left as CSS variables**: Recharts
+  renders bar fills as a plain SVG `fill="var(--accent)"` attribute, which
+  (unlike a regular CSS property) doesn't reliably repaint on a live
+  `prefers-color-scheme` flip in 'auto' mode. `useChartColors`
+  (`src/hooks/useChartColors.ts`) resolves the chart CSS variables to
+  concrete color strings via `getComputedStyle`, re-resolving on both a
+  `matchMedia('(prefers-color-scheme: dark)')` change listener and a
+  `MutationObserver` on the `data-theme` attribute, so chart colors update
+  through React state instead of depending on the SVG attribute to repaint
+  itself.
 
 ## 6. API surface (v1)
 
