@@ -194,7 +194,17 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
       )}
 
       <div
-        className={isPrinting ? undefined : 'fixed inset-0 z-50 overflow-y-auto'}
+        className={
+          isPrinting
+            ? undefined
+            : // Reserves space for the fixed Print/Close controls (below) so
+              // the scrolled-to-top content starts underneath them instead
+              // of the controls floating on top of — and hiding — whatever
+              // text happens to be in the page's top-right corner. Matches
+              // that control's own top offset (1rem + safe-area-inset-top)
+              // plus its rendered height and a small gap.
+              'fixed inset-0 z-50 overflow-y-auto pt-[calc(5rem_+_env(safe-area-inset-top))]'
+        }
         onClick={isPrinting ? undefined : (e) => e.target === e.currentTarget && onClose()}
       >
         <div className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
