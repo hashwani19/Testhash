@@ -60,7 +60,8 @@ function logoImageFormat(dataUrl: string): string {
  *
  * jsPDF is imported dynamically so it lands in its own lazy chunk instead
  * of the main bundle; PrescriptionPrint pre-builds the file on mount so the
- * Share tap itself stays synchronous (user-gesture safe, § checkpoint D).
+ * Share tap itself stays synchronous (navigator.share needs an active
+ * user gesture, same as window.print()).
  */
 export async function buildPrescriptionPdf(
   patient: Patient,

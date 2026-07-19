@@ -1087,106 +1087,34 @@ with configurable content — not a custom HTML/layout template**:
     `clinicAddress`/`doctorName`/`doctorCredentials`/`footerNote`/
     `logoDataUrl`), same load-or-seed-then-persist-on-change shape as
     `GlobalSettingsProvider` — there's no `tenant_id` to key it by yet, so
-    it's a single value, not a per-tenant table. Editable from a new
+    it's a single value, not a per-tenant table. Editable from a
     "Prescription template (admin only)" section in `PreferencesScreen`,
-    alongside the existing app-settings section, rather than a separate
-    nav destination — matching how the auto-delete settings are already
-    surfaced there today, not the more elaborate multi-screen nav §8.2
-    describes for the eventual real backend.
-  - `PrescriptionPrint` renders via a React portal directly onto
-    `document.body` (not nested inside `#root` like every other overlay in
-    this app) specifically so one `@media print { #root { display: none } }`
-    rule in `index.css` can hide the entire normal app during print, without
-    threading a "no-print" class through every screen individually. The
-    page's US Letter sizing/top-margin are set through a `<style>` tag it
-    renders itself (`@page { size: letter; margin: ... }`), since the margin
-    depends on the live template value. One consequence of portaling outside
-    `#root`: it doesn't inherit the app shell's own
-    `pt-[env(safe-area-inset-top)]` etc. (App.tsx), so its one fixed
-    interactive control (the Print/Close buttons) adds that same safe-area
-    inset back in directly — otherwise, on an iPhone, plain `top-4`/`right-4`
-    land under the notch/Dynamic Island or Safari's floating chrome, where
-    taps don't register.
-  - When `showLetterhead` is on, the header is a two-column letterhead:
-    clinic name/address (falling back to a hardcoded default name when
-    unset) and logo on the left, `doctorName`/`doctorCredentials`
-    right-aligned. This is narrower than real per-tenant branding (§5.5) —
-    only the print letterhead's clinic name is admin-editable, not the
-    app-wide title (login screen, in-app header, browser tab).
+    alongside the existing app-settings section, matching how the
+    auto-delete settings are already surfaced there rather than the
+    separate nav destination §8.2 describes for the eventual real backend.
   - `doctorName`/`doctorCredentials` are a static per-template field, not
-    per-visit — this build's `EyeVisit` has no `examiner_id` at all (unlike
-    the real schema, §5.3), so there's nothing to pull a per-visit "seen
-    by" line from.
-  - `AuditAction` gained an `'export'` value (`'create' | 'update' |
-    'delete' | 'export'`) purely for this — printing logs one entry the same
-    way every other mutation already does, via `logEntry` from
-    `useAuditLog`, even though nothing is actually mutated.
-  - A logo, uploaded once in the same Preferences section
-    (`PrescriptionTemplate.logoDataUrl`, compressed client-side via
-    `compressLogoFile` — same `browser-image-compression` approach as
-    attachments/§7, tuned smaller at 800px/~0.15MB, kept as PNG rather than
-    JPEG since a logo is commonly a transparent-background graphic), prints
-    as a small icon next to the clinic name in the header. Rendered once,
-    in the header only — not also as a separate full-page watermark image.
-  - **The overlay auto-closes once the print/share UI is dismissed**
-    (printed or cancelled, either way), detected via three overlapping
-    signals — `afterprint`, a `matchMedia('print')` change listener, and
-    `visibilitychange` (the most reliable on mobile) — since no single one
-    fires reliably across every platform.
-  - **The printable content sits inside its own `fixed inset-0` scrollable
-    wrapper** so it's pinned into the viewport the instant the overlay
-    opens, rather than sitting wherever it'd fall in normal document flow
-    after the whole app tree in `document.body` (i.e. below the entire
-    current screen, needing a scroll to actually reach it). Reverts to
-    plain normal flow the instant printing starts (same `isPrinting`-gated
-    DOM swap as the backdrop/controls above), so it still paginates like
-    ordinary page content once `#root` is hidden for print.
-  - **`window.print()` is only ever called synchronously from the Print
-    button's own click handler, nothing awaited first.** Chrome/Safari
-    treat `window.print()` as "automatic printing" (the same family of
-    heuristic as popup blocking) and block it — sometimes silently,
-    sometimes with an explicit prompt — whenever the call isn't traceable
-    to a direct user gesture with nothing async in between. The original
-    design auto-triggered printing from a `useEffect` a frame after the
-    overlay mounted; every fix short of removing that (image-decode waits,
-    removing `position:fixed` chrome from the DOM, the viewport-pinning
-    above) still called `window.print()` from inside an effect or a
-    `.then()`, both of which cross an async boundary and lose the gesture
-    regardless of how soon after the tap they run. Necessary but not
-    sufficient on iOS — see the PDF bullet below.
-  - **iOS and installed/standalone contexts never call `window.print()` at
-    all — they build a real PDF client-side and hand it to the native share
-    sheet instead.** A bare-bones no-CSS test page still produced a blank
-    print preview (and still tripped the "blocked from automatic printing"
-    prompt on a direct tap), which matches years-old Apple-forum reports:
-    printing from an iOS home-screen web app is broken at the platform
-    level, and no timing/CSS fix on our side can reach it. The PDF
-    (`utils/prescriptionPdf.ts`, jsPDF in its own lazy chunk) mirrors the
-    overlay's letterhead/table/detail layout; it's pre-built when the
-    overlay mounts so the Share tap stays synchronous (same user-gesture
-    rule as above), shared via `navigator.share` with a plain
-    anchor-download fallback, and the share sheet's built-in AirPrint entry
-    is what makes this a *print* path, not just an export. The tap is still
-    logged as the same export-class audit action. Desktop keeps
-    `window.print()`, which works reliably there.
-  - **The Print/Close controls are restored a beat after `window.print()`
-    is called, regardless of what happens next** — `window.print()` has no
-    callback or promise, so there's no way to know whether it actually
-    opened a print UI or was declined. The controls were being removed
-    from the DOM *before* the call (previous bullet's `position:fixed`
-    fix), on the assumption printing would succeed and one of the
-    afterprint/matchMedia/visibilitychange signals would fire and close
-    the whole overlay; when the browser declines instead, none of those
-    signals ever arrive, since no print flow actually started, leaving the
-    overlay with no in-overlay way to dismiss it. The restore is a safety
-    net, not a detector: if printing did succeed, `onClose()` already
-    unmounted the component first, making the pending restore a no-op.
-  - **The refraction table has its own horizontal scroll container** on
-    screen (`print:overflow-visible` for the actual printed page, where it
-    always fits at the design width) — its 9 columns don't shrink below
-    their content's natural width, and without this, that excess width
-    was forcing the whole preview (and page) wider than a phone screen,
-    bleeding past the right edge with no way to reach it.
+    per-visit — this build's `EyeVisit` has no `examiner_id` (unlike the
+    real schema, §5.3) to pull a per-visit "seen by" line from.
+  - `AuditAction` gained an `'export'` value purely for this — printing
+    logs one entry the same way every other mutation already does, via
+    `logEntry` from `useAuditLog`, even though nothing is mutated.
+  - A logo, uploaded once in the same Preferences section (compressed
+    client-side, same `browser-image-compression` approach as
+    attachments/§7), renders both as a small header icon next to the
+    clinic name and as a faint full-page watermark.
+  - `PrescriptionPrint` renders the on-screen preview via a React portal
+    directly onto `document.body` (not nested inside `#root`) so
+    `@media print { #root { display: none } }` in `index.css` hides the
+    rest of the app during print without threading a "no-print" class
+    through every screen. On desktop it prints via `window.print()`.
+  - **On iOS and any installed/standalone context, printing instead builds
+    a real PDF client-side** (`utils/prescriptionPdf.ts`, jsPDF in its own
+    lazy chunk, pre-built when the overlay opens) **and hands it to the
+    native share sheet**, whose built-in AirPrint entry is the actual print
+    path — `window.print()`'s preview renders blank in that context at the
+    platform level, with no code-side fix available. `navigator.share`
+    with a plain download as fallback; the tap logs the same export-class
+    audit action `window.print()` does on desktop.
 
 ### 5.7 Analytics
 
@@ -1390,13 +1318,13 @@ UI at all — only the data-fetching layer.
   blank where unset, unlike the on-screen history's "hide if empty" display
   (§5.6) — styled with `@page { size: letter; margin: <topMarginMm-aware
   value>; }` print CSS, forced to a light/high-contrast palette regardless
-  of the viewer's own theme preference (§5.2/§8.10), and calls
-  `window.print()` once mounted rather than adding any client-side routing
+  of the viewer's own theme preference (§5.2/§8.10). Triggers printing
+  (platform-dependent — §5.6) rather than adding any client-side routing
   (this app has none today — `App.tsx` is a single `view` state switch, not
   a router) just for this one screen. The rest of the app shell is hidden
   during printing via a `.no-print` class + `@media print`, so only the
   overlay's content ends up on the page. Fires `POST /visits/:id/print`
-  (§6) once the print dialog opens, for the audit trail.
+  (§6) once printing is triggered, for the audit trail.
 - **A new "Accept invite" screen** (§8.1) for a freshly-provisioned admin's
   first login — a set-password form reached via the emailed invite link's
   token, not part of the normal login flow.
@@ -2089,17 +2017,6 @@ build them if multi-device offline editing turns out to be a real need.
   (§5.4) keeps its data indefinitely; there's no equivalent of the
   per-patient hard-delete/erasure workflow (§10) scoped to an entire tenant.
   Add one if a clinic ever needs to fully exit and have their data purged.
-- ~~Blank print preview on iOS Safari~~ — **resolved: `window.print()`
-  abandoned on iOS entirely** (§5.6). Several real contributing issues were
-  found and fixed along the way (a `position:fixed` print-pagination quirk,
-  the printable content sitting outside the viewport in normal document
-  flow, `window.print()` losing its user-gesture context across an async
-  boundary), but the preview stayed blank even for a bare-bones no-CSS test
-  page — matching years-old Apple-forum reports that printing from an iOS
-  home-screen web app is broken at the platform level (dialog opens,
-  preview never renders). iOS and installed/standalone contexts now build
-  a real PDF client-side and hand it to the native share sheet instead;
-  desktop keeps `window.print()`.
 - **`mobile` validation is India-specific** (10-digit, `[6-9][0-9]{9}`,
   §5.2) on both `patients.mobile`/`appointments.mobile` and the new
   `tenants.contact_mobile` — a reasonable assumption while every tenant is

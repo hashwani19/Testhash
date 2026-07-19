@@ -11,24 +11,17 @@ interface Props {
   visit: EyeVisit
   template: PrescriptionTemplate
   onClose: () => void
-  /** Called each time Print is tapped, right before the print dialog opens
-   *  — the caller logs this as an export-class audit entry (docs/
-   *  design.md §5.6/§10). Printing twice in one session logs twice,
-   *  matching two real print actions. */
+  /** Called each time Print/Share is tapped, right before the print dialog
+   *  or share sheet opens — the caller logs this as an export-class audit
+   *  entry (docs/design.md §5.6/§10). */
   onPrinted: () => void
 }
 
-// [checkpoint F] window.print() is a dead end on iOS home-screen web apps:
-// the dialog opens, but its preview renders blank at the platform level —
-// reproduced here with a bare-bones no-CSS test page, and matching years of
-// Apple-forum reports (docs/design.md §5.6/§13). And even a direct tap gets
-// Safari's "blocked from automatic printing" prompt in that context, so
-// there's no gesture-plumbing fix left to try. On iOS (any browser — they're
-// all WebKit, and iOS Safari itself has a long history of blank print
-// previews) and in any installed/standalone display mode, printing is
-// instead: build a real PDF client-side (utils/prescriptionPdf) and hand it
-// to the native share sheet, which includes AirPrint plus save/send options.
-// Desktop keeps window.print(), which works reliably there.
+// iOS (any browser — all WebKit) and installed/standalone contexts can't use
+// window.print(): the print dialog opens but its preview renders blank, a
+// platform-level limitation. Those contexts build a PDF client-side instead
+// and hand it to the native share sheet, whose AirPrint entry is the actual
+// print path. Desktop keeps window.print(), which works there.
 function isIosDevice() {
   return (
     /iphone|ipad|ipod/i.test(window.navigator.userAgent) ||
@@ -50,7 +43,6 @@ function downloadFile(file: File) {
   a.href = url
   a.download = file.name
   a.click()
-  // Long enough for the browser to have started the download/preview.
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
@@ -122,60 +114,31 @@ function DetailLine({ label, value }: { label: string; value: string }) {
  * a staff member's personal dark-mode setting is.
  */
 export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted }: Props) {
-  // [checkpoint D] The actual cause, confirmed by the browser's own words:
-  // Chrome/Safari block window.print() as "automatic printing" — the same
-  // family of heuristic as popup blocking — whenever it isn't called
-  // *synchronously* inside a direct user-gesture handler (a click/tap
-  // callback, with nothing async in between). Every earlier attempt at this
-  // bug (checkpoints A-C: image-decode waits, removing position:fixed
-  // chrome from the DOM, pinning the overlay into the viewport) called
-  // window.print() from inside a useEffect after mount, or after awaiting
-  // logoRef.current.decode() — both cross an async boundary, so the browser
-  // no longer considers the call gesture-initiated no matter how soon after
-  // the tap it happens, and silently (or with a "blocked from automatic
-  // printing" prompt) drops it. Printing now happens ONLY from `printNow`
-  // below, called directly by the Print button's onClick with nothing
-  // awaited first — that's what keeps it inside the gesture.
-  //
-  // [checkpoint B] `position: fixed` elements have long-standing,
-  // documented WebKit/Chromium print bugs — `display: none` under
-  // `@media print` (this file's `print:hidden` class) isn't reliably
-  // respected on them the way it is on normal-flow elements, because the
-  // print pagination engine gives fixed-position boxes special handling
-  // (there's no well-defined "which printed page" for something anchored
-  // to the viewport). Rather than trust the CSS, `printNow` physically
-  // removes the backdrop/controls from the DOM (via `flushSync`, so the
-  // removal is guaranteed to commit before `window.print()` actually runs)
-  // instead of just hiding them.
+  // position: fixed elements have long-standing WebKit/Chromium print bugs —
+  // display:none under @media print isn't reliably respected on them the
+  // way it is on normal-flow elements. Rather than trust the CSS, printing
+  // physically removes the backdrop/controls from the DOM (via flushSync,
+  // so the removal commits before window.print() runs) instead of hiding
+  // them.
   const [isPrinting, setIsPrinting] = useState(false)
   const restoreTimeoutRef = useRef<number | null>(null)
   const printNow = () => {
     onPrinted()
     flushSync(() => setIsPrinting(true))
     window.print()
-    // [checkpoint E] window.print() has no callback/promise — there's no
-    // programmatic way to know whether it actually opened a print UI or
-    // was silently/interactively declined by the browser's own "blocked
-    // from automatic printing" gate (observed on iOS Safari even on a
-    // direct tap of this button, not just an auto-triggered call). When
-    // that happens, none of the afterprint/matchMedia/visibilitychange
-    // signals below ever fire, since no print flow actually started — and
-    // the backdrop/Close button were already removed above in
-    // anticipation of a successful print, leaving the overlay with no
-    // in-overlay way to dismiss it (a real report: stuck until navigating
-    // away via the app's own breadcrumb). This timeout is a safety net,
-    // not a detector: it restores the controls regardless, a beat after
-    // the call, so the overlay is never permanently stuck. If printing did
-    // succeed, onClose() already ran and unmounted this component first,
-    // making the pending restore a harmless no-op.
+    // window.print() has no callback/promise, so there's no way to know
+    // whether it actually opened a print UI. If it didn't, none of the
+    // afterprint/matchMedia/visibilitychange signals below ever fire to
+    // restore the controls removed above — this timeout is a safety net,
+    // not a detector, so the overlay is never stuck with no way to close
+    // it. A successful print already unmounts via onClose() first, making
+    // this a no-op in that case.
     restoreTimeoutRef.current = window.setTimeout(() => setIsPrinting(false), 1200)
   }
 
-  // [checkpoint F] PDF path for iOS / installed-app contexts. The file is
-  // built eagerly on mount (not on tap) so the Share tap handler stays fully
-  // synchronous — navigator.share needs the same user-gesture transient
-  // activation window.print() does (§ checkpoint D), and pre-building keeps
-  // every await out of the tap.
+  // Built on mount rather than on tap so the Share tap handler stays fully
+  // synchronous (navigator.share needs the same user-gesture activation
+  // window.print() does).
   const usePdfExport = isIosDevice() || isStandaloneDisplay()
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   useEffect(() => {
@@ -224,21 +187,9 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
   }, [onClose])
 
   useEffect(() => {
-    // Two earlier attempts tried to manage *focus* on this overlay after the
-    // native print/share UI closes (window.focus(), then focusing the Close
-    // button). Both missed the actual problem: this overlay staying open at
-    // all once the user is done with the print UI is exactly what reads as
-    // a stuck, separate "print preview" needing an extra tap to dismiss —
-    // on iOS in particular, where printing goes through a native share-
-    // sheet rather than an in-page dialog, so returning to the page leaves
-    // this on-screen preview sitting there with nothing to indicate it's
-    // this app's own UI rather than leftover print-system chrome. Instead
-    // of fixing focus on it, just close it — the same three overlapping
-    // signals as before (afterprint doesn't reliably fire on every
-    // platform; matchMedia and visibilitychange cover the gap, with
-    // visibilitychange being the most reliable on mobile since the native
-    // UI backgrounds the page either way it's dismissed), but calling
-    // onClose() instead of trying to refocus something.
+    // The overlay auto-closes once the print/share UI is dismissed
+    // (printed or cancelled, either way) — three overlapping signals since
+    // no single one fires reliably across every platform.
     let dismissed = false
     const handlePrintUiClosed = () => {
       if (dismissed) return
@@ -273,14 +224,6 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     <>
       <style>{`@page { size: letter; margin: ${topMarginMm}mm 15mm 15mm 15mm; }`}</style>
 
-      {/* [checkpoint C] Purely the dim color layer — no scroll, no click
-       * handling of its own. The actual printable content below has its own
-       * fixed/scrollable wrapper so it's pinned into the viewport the
-       * instant the overlay opens, rather than sitting wherever it lands in
-       * normal document flow (after #root, i.e. below the entire rest of
-       * the app — requiring a scroll past the current screen to even reach
-       * it on screen, before this). Kept alongside the checkpoint D fix
-       * above since it's a real, independent improvement either way. */}
       {!isPrinting && (
         <div className={`fixed inset-0 z-50 print:hidden ${dimmedBackdrop}`} />
       )}
@@ -289,12 +232,11 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
         className={
           isPrinting
             ? undefined
-            : // Reserves space for the fixed Print/Close controls (below) so
-              // the scrolled-to-top content starts underneath them instead
-              // of the controls floating on top of — and hiding — whatever
-              // text happens to be in the page's top-right corner. Matches
-              // that control's own top offset (1rem + safe-area-inset-top)
-              // plus its rendered height and a small gap.
+            : // Pins the printable content into the viewport the instant the
+              // overlay opens (rather than sitting wherever normal document
+              // flow puts it, after the whole #root app tree). Top padding
+              // reserves space for the fixed Print/Close controls below so
+              // they don't cover page content.
               'fixed inset-0 z-50 overflow-y-auto pt-[calc(5rem_+_env(safe-area-inset-top))]'
         }
         onClick={isPrinting ? undefined : (e) => e.target === e.currentTarget && onClose()}
@@ -302,10 +244,7 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
         <div className="relative z-50 mx-auto my-8 w-full max-w-[8.5in] bg-white p-8 text-[13px] text-black shadow-card print:m-0 print:w-auto print:max-w-none print:p-0 print:shadow-none">
           {template.logoDataUrl && (
             // Absolutely positioned and first in DOM order so every later
-            // (normal-flow) sibling below paints on top of it automatically —
-            // no z-index juggling needed to keep the watermark behind the
-            // text. Re-added after confirming the blank mobile print preview
-            // happens with or without a logo — it was never the cause.
+            // (normal-flow) sibling below paints on top of it automatically.
             <img
               src={template.logoDataUrl}
               alt=""
@@ -352,13 +291,10 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
             <p>Visit: {formatVisitDateTime(visit.visitAt)}</p>
           </div>
 
-          {/* This table's 9 columns don't shrink below their content's
-           * natural width — on a phone-width screen that's wider than the
-           * viewport, and without its own scroll container that excess
-           * width was forcing the whole card (and page) wider than the
-           * screen, bleeding past the right edge with no way to reach it.
-           * print:overflow-visible since at the actual printed page width
-           * (this card's design width, §5.6) the table always fits. */}
+          {/* Own horizontal scroll container: this table's 9 columns don't
+           * shrink below their content's natural width, which is wider than
+           * a phone screen. print:overflow-visible since it always fits at
+           * the actual printed page width. */}
           <div className="mb-4 overflow-x-auto print:overflow-visible">
             <table className="w-full border-collapse">
               <thead>
@@ -417,19 +353,12 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
       </div>
 
       {!isPrinting && (
-        // This overlay portals straight onto document.body, outside the app
-        // shell's own root div — so it doesn't inherit that root's
-        // `pt-[env(safe-area-inset-top)]` etc. (App.tsx). Plain `top-4`/
-        // `right-4` land 16px from the true edge of the screen, which on an
-        // iPhone falls under the notch/Dynamic Island or Safari's own
-        // floating chrome — exactly where touches don't reach. Adding the
-        // safe-area inset back in here (this overlay's one and only fixed
-        // interactive control) keeps Print reachable everywhere the app
-        // shell already accounts for.
+        // This overlay portals onto document.body, outside the app shell's
+        // root div, so it doesn't inherit the shell's safe-area padding
+        // (App.tsx) — added back in here so these controls clear the iPhone
+        // notch/Dynamic Island.
         <div className="fixed top-[calc(1rem_+_env(safe-area-inset-top))] right-[calc(1rem_+_env(safe-area-inset-right))] z-50 flex gap-2 print:hidden">
           {usePdfExport ? (
-            // iOS share sheet includes AirPrint, so this IS the print
-            // button there — plus save-to-Files/send options for free.
             <Button variant="secondary" disabled={!pdfFile} onClick={sharePdf}>
               {pdfFile ? 'Print / Share PDF' : 'Preparing PDF…'}
             </Button>
