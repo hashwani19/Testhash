@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { EyeVisit, Patient, RefractionGrid } from '../types'
 import { isEmptyVisit } from '../utils/eyeVisit'
+import { sanitizeText } from '../utils/sanitize'
 import { SEED_VISITS } from '../seedData'
 import { useAuditLog } from './useAuditLog'
 
@@ -70,11 +71,11 @@ export function useEyeVisits(patients: Patient[]) {
         patientId,
         visitAt: input.visitAt,
         refractions: input.refractions,
-        lenses: input.lenses?.trim() || undefined,
-        diagnosis: input.diagnosis?.trim() || undefined,
-        treatmentPlan: input.treatmentPlan?.trim() || undefined,
+        lenses: input.lenses ? sanitizeText(input.lenses) || undefined : undefined,
+        diagnosis: input.diagnosis ? sanitizeText(input.diagnosis) || undefined : undefined,
+        treatmentPlan: input.treatmentPlan ? sanitizeText(input.treatmentPlan) || undefined : undefined,
         followUpDate: input.followUpDate || undefined,
-        notes: input.notes?.trim() || undefined,
+        notes: input.notes ? sanitizeText(input.notes) || undefined : undefined,
         createdAt: now,
         updatedAt: now,
       }
@@ -115,11 +116,11 @@ export function useEyeVisits(patients: Patient[]) {
         ...before,
         visitAt: input.visitAt,
         refractions: input.refractions,
-        lenses: input.lenses?.trim() || undefined,
-        diagnosis: input.diagnosis?.trim() || undefined,
-        treatmentPlan: input.treatmentPlan?.trim() || undefined,
+        lenses: input.lenses ? sanitizeText(input.lenses) || undefined : undefined,
+        diagnosis: input.diagnosis ? sanitizeText(input.diagnosis) || undefined : undefined,
+        treatmentPlan: input.treatmentPlan ? sanitizeText(input.treatmentPlan) || undefined : undefined,
         followUpDate: input.followUpDate || undefined,
-        notes: input.notes?.trim() || undefined,
+        notes: input.notes ? sanitizeText(input.notes) || undefined : undefined,
         updatedAt: Date.now(),
       }
       setVisits((prev) => prev.map((v) => (v.id === id ? after : v)))

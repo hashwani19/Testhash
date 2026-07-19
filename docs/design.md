@@ -1935,6 +1935,17 @@ build them if multi-device offline editing turns out to be a real need.
   patient PHI retained in that log entry once erased).
 - **Data portability**: `GET /patients/:id/export` produces a full JSON (or
   PDF) export of everything the schema holds for that patient.
+- **XSS**: every screen renders user-provided text as JSX children, which
+  React escapes automatically — nothing in the client uses
+  `dangerouslySetInnerHTML` or raw `innerHTML`. `src/utils/sanitize.ts` adds
+  a defense-in-depth layer on top: every hook that persists free-text
+  (patient name/address, visit notes, group names, the prescription
+  letterhead fields, ...) strips non-printable characters through
+  `sanitizeText` before writing to storage, so the same guarantee holds
+  even for a future sink that doesn't go through JSX (a CSV/PDF export, an
+  emailed report). It deliberately doesn't escape/encode `<`/`>`/`&` —
+  JSX already renders those inertly, and encoding them at input time would
+  just corrupt legitimate text containing those characters.
 
 ## 11. Non-functional requirements
 

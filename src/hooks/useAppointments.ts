@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Appointment, Patient } from '../types'
 import { dateOnlyDaysAgo } from '../utils/date'
 import { resolveAppointmentName } from '../utils/appointmentQuery'
+import { sanitizeText } from '../utils/sanitize'
 import { useGlobalSettings } from './useGlobalSettings'
 import { useAuditLog } from './useAuditLog'
 import { SEED_APPOINTMENTS } from '../seedData'
@@ -70,14 +71,14 @@ export function useAppointments(patients: Patient[]) {
         date: input.date,
         time: input.time || undefined,
         patientId: input.patientId,
-        name: input.newPatient?.name.trim(),
+        name: input.newPatient?.name ? sanitizeText(input.newPatient.name) : undefined,
         dob: input.newPatient?.dob || undefined,
         // The form itself decides whether this is a genuine override (only
         // sending a value when it diverges from the dob-computed age) — the
         // hook just persists whatever it's given (§ getPatientAge).
         manualAge: input.newPatient?.manualAge,
-        mobile: input.newPatient?.mobile?.trim() || undefined,
-        address: input.newPatient?.address?.trim() || undefined,
+        mobile: input.newPatient?.mobile ? sanitizeText(input.newPatient.mobile) || undefined : undefined,
+        address: input.newPatient?.address ? sanitizeText(input.newPatient.address) || undefined : undefined,
         createdAt: now,
         updatedAt: now,
       }
@@ -122,14 +123,14 @@ export function useAppointments(patients: Patient[]) {
         date: input.date,
         time: input.time || undefined,
         patientId: input.patientId,
-        name: input.newPatient?.name.trim(),
+        name: input.newPatient?.name ? sanitizeText(input.newPatient.name) : undefined,
         dob: input.newPatient?.dob || undefined,
         // The form itself decides whether this is a genuine override (only
         // sending a value when it diverges from the dob-computed age) — the
         // hook just persists whatever it's given (§ getPatientAge).
         manualAge: input.newPatient?.manualAge,
-        mobile: input.newPatient?.mobile?.trim() || undefined,
-        address: input.newPatient?.address?.trim() || undefined,
+        mobile: input.newPatient?.mobile ? sanitizeText(input.newPatient.mobile) || undefined : undefined,
+        address: input.newPatient?.address ? sanitizeText(input.newPatient.address) || undefined : undefined,
         updatedAt: Date.now(),
       }
       setAppointments((prev) => prev.map((a) => (a.id === id ? after : a)))

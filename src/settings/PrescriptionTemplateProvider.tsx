@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PrescriptionTemplate } from '../types'
+import { sanitizeText } from '../utils/sanitize'
 import { PrescriptionTemplateContext } from './prescriptionTemplateContext'
 
 const STORAGE_KEY = 'testhash.prescriptionTemplate.v1'
@@ -9,6 +10,12 @@ const DEFAULT_TEMPLATE: PrescriptionTemplate = {
   showLetterhead: true,
   topMarginMm: 0,
 }
+
+// The only free-text fields — logoDataUrl is a data: URL, not typed text,
+// and must never run through sanitizeText (it would be a no-op today since
+// base64 has no control characters, but the field isn't user-typed text to
+// begin with).
+const TEXT_FIELDS = ['clinicName', 'clinicAddress', 'doctorName', 'doctorCredentials', 'footerNote'] as const
 
 function loadTemplate(): PrescriptionTemplate {
   try {
@@ -35,7 +42,12 @@ export function PrescriptionTemplateProvider({ children }: { children: ReactNode
   }, [template])
 
   const updateTemplate = useCallback((patch: Partial<PrescriptionTemplate>) => {
-    setTemplate((prev) => ({ ...prev, ...patch }))
+    const sanitized = { ...patch }
+    for (const field of TEXT_FIELDS) {
+      const value = sanitized[field]
+      if (value != null) sanitized[field] = sanitizeText(value) || undefined
+    }
+    setTemplate((prev) => ({ ...prev, ...sanitized }))
   }, [])
 
   return (

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Role, User } from '../types'
+import { sanitizeText } from '../utils/sanitize'
 import { AuthContext } from './context'
 
 const USERS_KEY = 'testhash.users.v1'
@@ -81,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: crypto.randomUUID(),
         email: input.email.trim(),
         password: input.password,
-        fullName: input.fullName.trim(),
+        fullName: sanitizeText(input.fullName),
         role: input.role,
         createdAt: Date.now(),
       }

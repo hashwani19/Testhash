@@ -100,11 +100,9 @@ export interface PrescriptionTemplate {
   doctorCredentials?: string
   /** Free text printed at the bottom of every prescription. */
   footerNote?: string
-  /** Compressed logo image as a data URL, printed as a small icon next to
-   *  the clinic name in the letterhead header. Optional — no logo means no
-   *  icon, not a placeholder. Rendered once, in the header only — not also
-   *  as a full-page watermark (an earlier version doubled it up as both,
-   *  which is suspected of causing a blank iOS print-preview bug). */
+  /** Compressed logo image as a data URL — prints both as a small icon next
+   *  to the clinic name in the letterhead header and as a faint full-page
+   *  watermark. Optional — no logo means neither. */
   logoDataUrl?: string
 }
 

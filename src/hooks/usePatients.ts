@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Gender, Patient } from '../types'
 import { generatePatientNumber } from '../utils/patientNumber'
+import { sanitizeText } from '../utils/sanitize'
 import { SEED_PATIENTS } from '../seedData'
 import { useAuditLog } from './useAuditLog'
 
@@ -41,14 +42,14 @@ export function usePatients() {
       const patient: Patient = {
         id: crypto.randomUUID(),
         patientNumber: generatePatientNumber(),
-        name: input.name.trim(),
+        name: sanitizeText(input.name),
         dob: input.dob || undefined,
         // The form itself decides whether this is a genuine override (only
         // sending a value when it diverges from the dob-computed age) — the
         // hook just persists whatever it's given (§ getPatientAge).
         manualAge: input.manualAge,
-        address: input.address?.trim() || undefined,
-        mobile: input.mobile?.trim() || undefined,
+        address: input.address ? sanitizeText(input.address) || undefined : undefined,
+        mobile: input.mobile ? sanitizeText(input.mobile) || undefined : undefined,
         gender: input.gender,
         groupId: input.groupId || undefined,
         createdAt: now,
@@ -67,14 +68,14 @@ export function usePatients() {
       if (!before) return
       const after: Patient = {
         ...before,
-        name: input.name.trim(),
+        name: sanitizeText(input.name),
         dob: input.dob || undefined,
         // The form itself decides whether this is a genuine override (only
         // sending a value when it diverges from the dob-computed age) — the
         // hook just persists whatever it's given (§ getPatientAge).
         manualAge: input.manualAge,
-        address: input.address?.trim() || undefined,
-        mobile: input.mobile?.trim() || undefined,
+        address: input.address ? sanitizeText(input.address) || undefined : undefined,
+        mobile: input.mobile ? sanitizeText(input.mobile) || undefined : undefined,
         gender: input.gender,
         groupId: input.groupId || undefined,
         updatedAt: Date.now(),

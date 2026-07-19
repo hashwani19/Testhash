@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { PatientGroup } from '../types'
+import { sanitizeText } from '../utils/sanitize'
 import { SEED_GROUPS } from '../seedData'
 import { useAuditLog } from './useAuditLog'
 
@@ -28,7 +29,7 @@ export function usePatientGroups() {
     (name: string) => {
       const group: PatientGroup = {
         id: crypto.randomUUID(),
-        name: name.trim(),
+        name: sanitizeText(name),
         createdAt: Date.now(),
         updatedAt: Date.now(),
       }
@@ -43,7 +44,7 @@ export function usePatientGroups() {
     (id: string, name: string) => {
       const before = groups.find((g) => g.id === id)
       if (!before) return
-      const after: PatientGroup = { ...before, name: name.trim(), updatedAt: Date.now() }
+      const after: PatientGroup = { ...before, name: sanitizeText(name), updatedAt: Date.now() }
       setGroups((prev) => prev.map((g) => (g.id === id ? after : g)).sort((a, b) => a.name.localeCompare(b.name)))
       logEntry({ action: 'update', entityType: 'patient_group', entityId: id, entityLabel: after.name, before, after })
     },
