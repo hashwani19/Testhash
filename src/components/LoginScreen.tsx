@@ -5,19 +5,28 @@ import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
 import { card, fieldLabel, fieldLabelText, pageTitle } from '../styles'
 
-export function LoginScreen() {
+interface Props {
+  onSignUp: () => void
+}
+
+export function LoginScreen({ onSignUp }: Props) {
   const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (!login(email, password)) {
-      setError(true)
+    const result = login(email, password)
+    if (!result.ok) {
+      setError(
+        result.error === 'suspended'
+          ? 'This clinic account has been suspended. Contact your administrator.'
+          : 'Incorrect email or password.',
+      )
       return
     }
-    setError(false)
+    setError(null)
   }
 
   return (
@@ -48,10 +57,14 @@ export function LoginScreen() {
           />
         </label>
 
-        {error && <p className="text-[13px] text-high">Incorrect email or password.</p>}
+        {error && <p className="text-[13px] text-high">{error}</p>}
 
         <Button type="submit" variant="primary" fullWidth>
           Sign in
+        </Button>
+
+        <Button variant="link" onClick={onSignUp}>
+          New clinic? Sign up
         </Button>
 
         <div className="border-t border-border pt-3 text-xs text-text">

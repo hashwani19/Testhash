@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import type { ChangeEvent } from 'react'
-import type { ThemePreference } from '../types'
+import type { ClinicType, ThemePreference } from '../types'
 import { usePreferences } from '../hooks/usePreferences'
 import { useGlobalSettings } from '../hooks/useGlobalSettings'
 import { usePrescriptionTemplate } from '../hooks/usePrescriptionTemplate'
 import { useAuth } from '../hooks/useAuth'
 import { compressLogoFile } from '../utils/imageCompression'
+import { CLINIC_TYPE_OPTIONS } from '../clinicTypes'
 import { DEFAULT_LIST_PAGE_SIZE } from './common/ListView'
 import { TextInput } from './common/TextInput'
 import { Textarea } from './common/Textarea'
@@ -26,10 +27,11 @@ const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
 
 export function PreferencesScreen({ onBack }: Props) {
   const { preferences, updatePreferences } = usePreferences()
-  const { user } = useAuth()
+  const { user, tenants, updateTenantProfile } = useAuth()
   const { settings, updateSettings } = useGlobalSettings()
   const { template, updateTemplate } = usePrescriptionTemplate()
   const [compressingLogo, setCompressingLogo] = useState(false)
+  const tenant = tenants.find((t) => t.id === user?.tenantId)
 
   const handleLogoSelected = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -82,8 +84,37 @@ export function PreferencesScreen({ onBack }: Props) {
         </label>
       </div>
 
-      {user?.role === 'admin' && (
+      {user?.role === 'admin' && tenant && (
         <>
+          <h3 className="text-base font-bold text-text-h">Clinic profile (admin only)</h3>
+          <div className={`${card} flex flex-col gap-3.5`}>
+            <label className={fieldLabel}>
+              <span className={fieldLabelText}>Mobile number</span>
+              <TextInput
+                type="tel"
+                inputMode="numeric"
+                value={tenant.mobile}
+                onChange={(e) => updateTenantProfile(tenant.id, { mobile: e.target.value })}
+                pattern="[6-9][0-9]{9}"
+                title="10-digit Indian mobile number"
+              />
+            </label>
+
+            <label className={fieldLabel}>
+              <span className={fieldLabelText}>Clinic type</span>
+              <Select
+                value={tenant.clinicType}
+                onChange={(e) => updateTenantProfile(tenant.id, { clinicType: e.target.value as ClinicType })}
+              >
+                {CLINIC_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </div>
+
           <h3 className="text-base font-bold text-text-h">App settings (admin only)</h3>
           <div className={`${card} flex flex-col gap-3.5`}>
             <label className="flex items-center gap-2 text-[15px] text-text-h">

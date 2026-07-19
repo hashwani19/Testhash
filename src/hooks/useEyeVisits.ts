@@ -1,21 +1,23 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import type { EyeVisit, Patient, RefractionGrid } from '../types'
 import { isEmptyVisit } from '../utils/eyeVisit'
 import { sanitizeText } from '../utils/sanitize'
+import { DEFAULT_TENANT_ID, useTenantStorageState } from '../utils/tenantStorage'
 import { SEED_VISITS } from '../seedData'
 import { useAuditLog } from './useAuditLog'
 
-const STORAGE_KEY = 'testhash.eyeVisits.v1'
+const BASE_STORAGE_KEY = 'testhash.eyeVisits.v1'
 
-function loadVisits(): EyeVisit[] {
+function loadVisits(storageKey: string, tenantId: string): EyeVisit[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     if (raw) return JSON.parse(raw) as EyeVisit[]
   } catch {
     // fall through to reseed
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_VISITS))
-  return SEED_VISITS
+  const seed = tenantId === DEFAULT_TENANT_ID ? SEED_VISITS : []
+  localStorage.setItem(storageKey, JSON.stringify(seed))
+  return seed
 }
 
 export interface EyeVisitInput {
@@ -42,12 +44,8 @@ function visitLabel(visit: Pick<EyeVisit, 'patientId' | 'visitAt'>, patients: Pa
  *  label (patient name + visit date) resolved at write time, before the
  *  patient a visit belongs to might ever be deleted (§7 of docs/design.md). */
 export function useEyeVisits(patients: Patient[]) {
-  const [visits, setVisits] = useState<EyeVisit[]>(() => loadVisits())
+  const [visits, setVisits] = useTenantStorageState<EyeVisit[]>(BASE_STORAGE_KEY, loadVisits)
   const { logEntry } = useAuditLog()
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(visits))
-  }, [visits])
 
   const addVisit = useCallback(
     (patientId: string, input: EyeVisitInput, hasAttachments = false) => {
@@ -91,7 +89,7 @@ export function useEyeVisits(patients: Patient[]) {
       // photos to it right after creation, once it actually exists.
       return visit.id
     },
-    [logEntry, patients],
+    [logEntry, patients, setVisits],
   )
 
   const updateVisit = useCallback(
@@ -134,7 +132,7 @@ export function useEyeVisits(patients: Patient[]) {
       })
       return true
     },
-    [visits, logEntry, patients],
+    [visits, logEntry, patients, setVisits],
   )
 
   const deleteVisit = useCallback(
@@ -151,7 +149,7 @@ export function useEyeVisits(patients: Patient[]) {
         })
       }
     },
-    [visits, logEntry, patients],
+    [visits, logEntry, patients, setVisits],
   )
 
   const deleteVisitsForPatient = useCallback(
@@ -168,7 +166,7 @@ export function useEyeVisits(patients: Patient[]) {
         })
       }
     },
-    [visits, logEntry, patients],
+    [visits, logEntry, patients, setVisits],
   )
 
   const getVisitsForPatient = useCallback(

@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import type { ReactNode } from 'react'
 import type { GlobalSettings } from '../types'
+import { useTenantStorageState } from '../utils/tenantStorage'
 import { GlobalSettingsContext } from './context'
 
-const STORAGE_KEY = 'testhash.settings.v1'
+const BASE_STORAGE_KEY = 'testhash.settings.v1'
 
 const DEFAULT_SETTINGS: GlobalSettings = {
   autoDeleteOldAppointments: true,
   autoDeleteAfterDays: 2,
 }
 
-function loadSettings(): GlobalSettings {
+function loadSettings(storageKey: string): GlobalSettings {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     if (raw) return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<GlobalSettings>) }
   } catch {
     // fall through to defaults
@@ -30,15 +31,14 @@ function loadSettings(): GlobalSettings {
  * same live value rather than its own disconnected copy.
  */
 export function GlobalSettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<GlobalSettings>(() => loadSettings())
+  const [settings, setSettings] = useTenantStorageState<GlobalSettings>(BASE_STORAGE_KEY, loadSettings)
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
-  }, [settings])
-
-  const updateSettings = useCallback((patch: Partial<GlobalSettings>) => {
-    setSettings((prev) => ({ ...prev, ...patch }))
-  }, [])
+  const updateSettings = useCallback(
+    (patch: Partial<GlobalSettings>) => {
+      setSettings((prev) => ({ ...prev, ...patch }))
+    },
+    [setSettings],
+  )
 
   return (
     <GlobalSettingsContext.Provider value={{ settings, updateSettings }}>

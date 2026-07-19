@@ -2,11 +2,14 @@ import type { Role } from '../types'
 import { formatBuildVersion } from '../buildInfo'
 import { Button } from './common/Button'
 import { Dropdown } from './common/Dropdown'
+import { cx } from '../styles'
 
 interface Props {
   fullName: string
   role: Role
-  onOpenPreferences: () => void
+  /** Omitted for the superuser — it has no tenant-specific preferences to
+   *  configure (§5.5 of docs/design.md), so the menu item doesn't render. */
+  onOpenPreferences?: () => void
   onSignOut: () => void
 }
 
@@ -41,19 +44,24 @@ export function ProfileMenu({ fullName, role, onOpenPreferences, onSignOut }: Pr
           <span className="mx-1 mb-1 w-fit rounded-full border border-border bg-bg px-2 py-0.5 text-[11px] capitalize text-text">
             {role}
           </span>
+          {onOpenPreferences && (
+            <Button
+              variant="unstyled"
+              className="mt-1 cursor-pointer rounded-lg border-t border-border bg-transparent px-3 pt-3 pb-1.5 text-left text-[15px] font-medium text-text-h"
+              onClick={() => {
+                close()
+                onOpenPreferences()
+              }}
+            >
+              Preferences
+            </Button>
+          )}
           <Button
             variant="unstyled"
-            className="mt-1 cursor-pointer rounded-lg border-t border-border bg-transparent px-3 pt-3 pb-1.5 text-left text-[15px] font-medium text-text-h"
-            onClick={() => {
-              close()
-              onOpenPreferences()
-            }}
-          >
-            Preferences
-          </Button>
-          <Button
-            variant="unstyled"
-            className="cursor-pointer rounded-lg bg-transparent px-3 pt-1.5 pb-2.5 text-left text-[15px] font-medium text-text-h"
+            className={cx(
+              'cursor-pointer rounded-lg bg-transparent px-3 pt-1.5 pb-2.5 text-left text-[15px] font-medium text-text-h',
+              !onOpenPreferences && 'mt-1 border-t border-border pt-3',
+            )}
             onClick={() => {
               close()
               onSignOut()

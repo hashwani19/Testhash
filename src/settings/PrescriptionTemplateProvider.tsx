@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import type { ReactNode } from 'react'
 import type { PrescriptionTemplate } from '../types'
 import { sanitizeText } from '../utils/sanitize'
+import { useTenantStorageState } from '../utils/tenantStorage'
 import { PrescriptionTemplateContext } from './prescriptionTemplateContext'
 
-const STORAGE_KEY = 'testhash.prescriptionTemplate.v1'
+const BASE_STORAGE_KEY = 'testhash.prescriptionTemplate.v1'
 
 const DEFAULT_TEMPLATE: PrescriptionTemplate = {
   showLetterhead: true,
@@ -17,9 +18,9 @@ const DEFAULT_TEMPLATE: PrescriptionTemplate = {
 // begin with).
 const TEXT_FIELDS = ['clinicName', 'clinicAddress', 'doctorName', 'doctorCredentials', 'footerNote'] as const
 
-function loadTemplate(): PrescriptionTemplate {
+function loadTemplate(storageKey: string): PrescriptionTemplate {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     if (raw) return { ...DEFAULT_TEMPLATE, ...(JSON.parse(raw) as Partial<PrescriptionTemplate>) }
   } catch {
     // fall through to defaults
@@ -35,20 +36,19 @@ function loadTemplate(): PrescriptionTemplate {
  * section and the print view always observe the same live value.
  */
 export function PrescriptionTemplateProvider({ children }: { children: ReactNode }) {
-  const [template, setTemplate] = useState<PrescriptionTemplate>(() => loadTemplate())
+  const [template, setTemplate] = useTenantStorageState<PrescriptionTemplate>(BASE_STORAGE_KEY, loadTemplate)
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(template))
-  }, [template])
-
-  const updateTemplate = useCallback((patch: Partial<PrescriptionTemplate>) => {
-    const sanitized = { ...patch }
-    for (const field of TEXT_FIELDS) {
-      const value = sanitized[field]
-      if (value != null) sanitized[field] = sanitizeText(value) || undefined
-    }
-    setTemplate((prev) => ({ ...prev, ...sanitized }))
-  }, [])
+  const updateTemplate = useCallback(
+    (patch: Partial<PrescriptionTemplate>) => {
+      const sanitized = { ...patch }
+      for (const field of TEXT_FIELDS) {
+        const value = sanitized[field]
+        if (value != null) sanitized[field] = sanitizeText(value) || undefined
+      }
+      setTemplate((prev) => ({ ...prev, ...sanitized }))
+    },
+    [setTemplate],
+  )
 
   return (
     <PrescriptionTemplateContext.Provider value={{ template, updateTemplate }}>

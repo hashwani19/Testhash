@@ -1,6 +1,8 @@
 export type Gender = 'female' | 'male' | 'other' | 'unspecified'
 
-export type Role = 'admin' | 'doctor' | 'front_desk'
+/** `super_user` is platform-level (manages tenants, not scoped to one). The
+ *  other three are tenant-scoped roles (§6/§8 of docs/design.md). */
+export type Role = 'super_user' | 'admin' | 'doctor' | 'front_desk'
 
 export type ThemePreference = 'light' | 'dark' | 'auto'
 
@@ -17,6 +19,31 @@ export interface User {
   password: string
   fullName: string
   role: Role
+  /** Owning tenant. Unset only for the fixed `super_user` account, which
+   *  isn't scoped to any one clinic. */
+  tenantId?: string
+  createdAt: number
+}
+
+/** Extensible clinic-type lookup (docs/design.md §5.5) — not a hardcoded
+ *  enum in the real backend design, but a closed union is enough for this
+ *  local-only build. Drives which prescription fields a tenant sees. */
+export type ClinicType = 'ophthalmology' | 'orthopedic'
+
+export type TenantStatus = 'active' | 'suspended'
+
+/** A signed-up clinic. Doctor name/credentials/clinic address/logo live on
+ *  that tenant's own `PrescriptionTemplate` (§5.6) rather than here, since
+ *  they're already an existing, tenant-scoped, admin-editable settings
+ *  object — this just holds the identity/status fields specific to
+ *  provisioning and superuser management. */
+export interface Tenant {
+  id: string
+  clinicType: ClinicType
+  /** India mobile number, 10 digits (no country code stored) — same
+   *  convention as `Patient.mobile`. */
+  mobile: string
+  status: TenantStatus
   createdAt: number
 }
 

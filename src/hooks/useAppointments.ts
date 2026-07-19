@@ -1,23 +1,25 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect } from 'react'
 import type { Appointment, Patient } from '../types'
 import { dateOnlyDaysAgo } from '../utils/date'
 import { resolveAppointmentName } from '../utils/appointmentQuery'
 import { sanitizeText } from '../utils/sanitize'
+import { DEFAULT_TENANT_ID, useTenantStorageState } from '../utils/tenantStorage'
 import { useGlobalSettings } from './useGlobalSettings'
 import { useAuditLog } from './useAuditLog'
 import { SEED_APPOINTMENTS } from '../seedData'
 
-const STORAGE_KEY = 'testhash.appointments.v1'
+const BASE_STORAGE_KEY = 'testhash.appointments.v1'
 
-function loadAppointments(): Appointment[] {
+function loadAppointments(storageKey: string, tenantId: string): Appointment[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     if (raw) return JSON.parse(raw) as Appointment[]
   } catch {
     // fall through to reseed
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_APPOINTMENTS))
-  return SEED_APPOINTMENTS
+  const seed = tenantId === DEFAULT_TENANT_ID ? SEED_APPOINTMENTS : []
+  localStorage.setItem(storageKey, JSON.stringify(seed))
+  return seed
 }
 
 export interface NewPatientAppointmentInput {
@@ -49,19 +51,18 @@ export interface AppointmentInput {
  * name) the same way the appointments list itself does.
  */
 export function useAppointments(patients: Patient[]) {
-  const [appointments, setAppointments] = useState<Appointment[]>(() => loadAppointments())
+  const [appointments, setAppointments] = useTenantStorageState<Appointment[]>(
+    BASE_STORAGE_KEY,
+    loadAppointments,
+  )
   const { settings } = useGlobalSettings()
   const { logEntry } = useAuditLog()
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments))
-  }, [appointments])
 
   useEffect(() => {
     if (!settings.autoDeleteOldAppointments) return
     const cutoff = dateOnlyDaysAgo(settings.autoDeleteAfterDays)
     setAppointments((prev) => prev.filter((a) => a.date >= cutoff))
-  }, [settings.autoDeleteOldAppointments, settings.autoDeleteAfterDays])
+  }, [settings.autoDeleteOldAppointments, settings.autoDeleteAfterDays, setAppointments])
 
   const addAppointment = useCallback(
     (input: AppointmentInput) => {
@@ -91,7 +92,7 @@ export function useAppointments(patients: Patient[]) {
         after: appointment,
       })
     },
-    [logEntry, patients],
+    [logEntry, patients, setAppointments],
   )
 
   /** Called once an appointment's prospective patient is actually created, so
@@ -111,7 +112,7 @@ export function useAppointments(patients: Patient[]) {
         after,
       })
     },
-    [appointments, logEntry, patients],
+    [appointments, logEntry, patients, setAppointments],
   )
 
   const updateAppointment = useCallback(
@@ -143,7 +144,7 @@ export function useAppointments(patients: Patient[]) {
         after,
       })
     },
-    [appointments, logEntry, patients],
+    [appointments, logEntry, patients, setAppointments],
   )
 
   const deleteAppointment = useCallback(
@@ -160,7 +161,7 @@ export function useAppointments(patients: Patient[]) {
         })
       }
     },
-    [appointments, logEntry, patients],
+    [appointments, logEntry, patients, setAppointments],
   )
 
   /** Bulk delete — every role can select multiple rows and remove them in
@@ -183,7 +184,7 @@ export function useAppointments(patients: Patient[]) {
         })
       }
     },
-    [appointments, logEntry, patients],
+    [appointments, logEntry, patients, setAppointments],
   )
 
   return {

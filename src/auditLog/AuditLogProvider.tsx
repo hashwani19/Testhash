@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import type { ReactNode } from 'react'
 import type { AuditLogEntry } from '../types'
 import { useAuth } from '../hooks/useAuth'
+import { useTenantStorageState } from '../utils/tenantStorage'
 import { AuditLogContext } from './context'
 import type { LogAuditEntryInput } from './context'
 
-const STORAGE_KEY = 'testhash.auditLog.v1'
+const BASE_STORAGE_KEY = 'testhash.auditLog.v1'
 
-function loadEntries(): AuditLogEntry[] {
+function loadEntries(storageKey: string): AuditLogEntry[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     if (raw) return JSON.parse(raw) as AuditLogEntry[]
   } catch {
     // fall through to an empty log
@@ -34,11 +35,7 @@ function loadEntries(): AuditLogEntry[] {
  */
 export function AuditLogProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
-  const [entries, setEntries] = useState<AuditLogEntry[]>(() => loadEntries())
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries))
-  }, [entries])
+  const [entries, setEntries] = useTenantStorageState<AuditLogEntry[]>(BASE_STORAGE_KEY, loadEntries)
 
   const logEntry = useCallback(
     (input: LogAuditEntryInput) => {
@@ -57,7 +54,7 @@ export function AuditLogProvider({ children }: { children: ReactNode }) {
       }
       setEntries((prev) => [entry, ...prev])
     },
-    [user],
+    [user, setEntries],
   )
 
   return <AuditLogContext.Provider value={{ entries, logEntry }}>{children}</AuditLogContext.Provider>

@@ -168,6 +168,15 @@ the authenticated user — there is no client-supplied tenant parameter
 anywhere in §6. Getting this wrong is a worse failure mode than a
 permissions bug: it leaks one clinic's data into another's.
 
+**Implemented in this local-storage build** as a UI-only prototype (§5.4) —
+a fixed, hardcoded test account (`superuser@testhash.local`), not a real
+row in `users`/`tenants`. No reserved platform tenant exists locally: the
+account simply has no `tenantId` rather than pointing at one, since there's
+no `NOT NULL` schema constraint forcing every user to belong to a tenant.
+It signs in through the same login form as every other role and gets its
+own minimal shell (`SuperUserShell`) with none of the tenant-scoped
+providers mounted.
+
 ## 5. Data model
 
 ### 5.1 Entity overview
@@ -991,11 +1000,74 @@ already chosen in §3.3.
   clinic's data into another's rather than just over- or under-granting
   within one clinic.
 - **Not addressed by this phase** (see also §13): billing/plan tiers,
-  self-serve tenant signup, per-tenant subdomains/branded PWAs, and
-  generalizing `mobile` validation beyond the India-specific 10-digit format
-  already baked into `patients.mobile`/`appointments.mobile` (§5.2) — fine
-  while every tenant is assumed to be an India-based clinic, but worth
-  revisiting if this service ever serves clinics outside India.
+  per-tenant subdomains/branded PWAs, and generalizing `mobile` validation
+  beyond the India-specific 10-digit format already baked into
+  `patients.mobile`/`appointments.mobile` (§5.2) — fine while every tenant
+  is assumed to be an India-based clinic, but worth revisiting if this
+  service ever serves clinics outside India.
+
+**Self-serve signup and tenant management are implemented in this
+local-storage build**, as a UI-only prototype ahead of the invite-email
+flow specified above:
+
+- **`SignUpScreen`** collects the same fields §1 of the original request
+  asked for: email + password + repeat (mandatory), mobile + clinic type
+  (mandatory), and doctor name/credentials/clinic address/logo (optional,
+  explicitly captioned as shaping the printed prescription only). On
+  submit it creates the `Tenant`, creates that tenant's first `User` as
+  `admin`, and signs them in immediately — there is no invite-email/
+  accept-invite step to prototype locally, so the password is set directly
+  at signup rather than via a token-based follow-up. The account's display
+  name is derived from the email's local part (there's no separate "your
+  name" field in the mandatory set) rather than reusing the optional
+  doctor name, since the signer-up isn't necessarily the doctor.
+- **`TenantsScreen`** (superuser-only) does the create side with the exact
+  same fields/form as `SignUpScreen` (shared via `ClinicProfileFields`),
+  plus suspend/reactivate, hard-delete (cascades every localStorage key
+  under that tenant, unlike the real design's indefinite-retention
+  suspension, §13), and resetting a tenant's admin password directly (no
+  email involved).
+- **Tenant-scoped storage**: every per-clinic hook/provider
+  (`usePatients`, `useEyeVisits`, `usePatientGroups`, `useAppointments`,
+  `useAttachments`, `AuditLogProvider`, `GlobalSettingsProvider`,
+  `PrescriptionTemplateProvider`) derives its localStorage key from the
+  signed-in user's `tenantId` via `useTenantStorageState` (`utils/
+  tenantStorage.ts`) instead of a single hardcoded key. A `DEFAULT_TENANT_ID`
+  constant keeps the pre-existing seeded admin/doctor/front_desk accounts
+  and their data on the exact same unsuffixed keys they always used, so
+  none of it moved when multi-tenancy landed. A fresh tenant's hooks start
+  from empty arrays — the seed data (`seedData.ts`) only ever applies to
+  `DEFAULT_TENANT_ID`. Since these hooks live inside `AppShell`, which
+  stays mounted across login/logout/signup rather than remounting,
+  `useTenantStorageState` resets its state synchronously during render
+  (comparing the derived storage key against its previous value) whenever
+  the signed-in tenant changes, rather than in a `useEffect` — avoiding a
+  one-frame flash of the previous tenant's data.
+- **Email is the login username and is validated unique across every
+  tenant** client-side (`AuthContext.emailTaken`) — no server round trip to
+  simulate, so this is just an array scan.
+- **Suspension blocks login immediately** (checked in `login()` against the
+  matched user's tenant status) but there's no server-side session to kill
+  — a local `sessionUserId` only exists in the browser that's holding it,
+  so there's nothing else to revoke.
+- **The clinic-profile fields are editable later from Preferences**, per
+  the original request — a "Clinic profile (admin only)" section
+  (`PreferencesScreen`) edits `Tenant.mobile`/`clinicType`
+  (`updateTenantProfile`), right above the existing "Prescription template
+  (admin only)" section that already owns clinicName/clinicAddress/
+  doctorName/doctorCredentials/logo (§5.6) — split across two sections
+  since one edits the `Tenant` row and the other edits that tenant's
+  `PrescriptionTemplate`, but presented together as one continuous set of
+  clinic-identity fields.
+- **A `Users` screen** (admin-only, own tenant) covers add/delete/reset-
+  password for that tenant's staff — `createUser`/`deleteUser`/
+  `updateUserPassword` on `AuthContext`, with `deleteUser` guarding against
+  removing yourself or a tenant's last remaining `admin`.
+- **Password strength** is enforced client-side (`utils/password.ts`:
+  ≥8 characters, at least one letter and one digit) everywhere a password
+  is set — signup, superuser tenant creation, and the Users screen —
+  rather than left unvalidated like the pre-existing seeded test accounts'
+  short passwords.
 
 ### 5.5 Tenant branding
 
@@ -1141,16 +1213,16 @@ HTML/layout template**:
 - **Printing is implemented** in this local-storage build, not just
   designed — adapted for the current single-implicit-clinic architecture
   rather than the multi-tenant one above:
-  - `PrescriptionTemplateProvider` holds one instance-wide
-    `PrescriptionTemplate` (`showLetterhead`/`topMarginMm`/`clinicName`/
-    `clinicAddress`/`doctorName`/`doctorCredentials`/`footerNote`/
-    `logoDataUrl`), same load-or-seed-then-persist-on-change shape as
-    `GlobalSettingsProvider` — there's no `tenant_id` to key it by yet, so
-    it's a single value, not a per-tenant table. Editable from a
-    "Prescription template (admin only)" section in `PreferencesScreen`,
-    alongside the existing app-settings section, matching how the
-    auto-delete settings are already surfaced there rather than the
-    separate nav destination §8.2 describes for the eventual real backend.
+  - `PrescriptionTemplateProvider` holds one `PrescriptionTemplate`
+    (`showLetterhead`/`topMarginMm`/`clinicName`/`clinicAddress`/
+    `doctorName`/`doctorCredentials`/`footerNote`/`logoDataUrl`) per
+    tenant, keyed via `useTenantStorageState` (§5.4) — matching "one
+    template per tenant, assumed" above, now that tenants exist locally
+    too. Editable from a "Prescription template (admin only)" section in
+    `PreferencesScreen`, alongside the existing app-settings section,
+    matching how the auto-delete settings are already surfaced there
+    rather than the separate nav destination §8.2 describes for the
+    eventual real backend.
   - `doctorName`/`doctorCredentials` are a static per-template field, not
     per-visit — this build's `EyeVisit` has no `examiner_id` (unlike the
     real schema, §5.3) to pull a per-visit "seen by" line from.
@@ -2081,10 +2153,15 @@ build them if multi-device offline editing turns out to be a real need.
   single tenant ever needs several physical locations sharing one patient
   base, that's an additive `locations` table nested under a tenant, not a
   rework of the isolation model here.
-- **Tenant provisioning is `super_user`-only, not self-serve signup** (§4.1/
-  §5.4) — a clinic can't sign itself up through a public form yet; someone
-  running the service, holding the `super_user` role, creates the tenant.
-  Revisit if/when a self-serve onboarding flow is wanted.
+- **Tenant provisioning is `super_user`-only in the real backend design,
+  not self-serve signup** (§4.1/§5.4) — the production API has no public
+  "create a tenant" endpoint; someone running the service, holding the
+  `super_user` role, creates the tenant via invite email. A self-serve
+  `SignUpScreen` exists as a **UI-only prototype in this local-storage
+  build** (§5.4) — whether the real backend should ever expose a public
+  signup endpoint (skipping the invite-email step, or keeping it but
+  letting the clinic request its own invite) is still an open product
+  decision, not resolved by the prototype existing.
 - **`super_user` has no cross-tenant clinical-data access** (§4.1) — a
   deliberate least-privilege choice: provisioning/revoking tenants and
   managing service config doesn't require reading any clinic's patient
@@ -2099,10 +2176,15 @@ build them if multi-device offline editing turns out to be a real need.
   Per-tenant subdomains would allow a more distinctly-branded, separately
   installable PWA per clinic, but need wildcard-subdomain infrastructure not
   built yet.
-- **No whole-tenant hard-delete/offboarding workflow** — a suspended tenant
-  (§5.4) keeps its data indefinitely; there's no equivalent of the
-  per-patient hard-delete/erasure workflow (§10) scoped to an entire tenant.
-  Add one if a clinic ever needs to fully exit and have their data purged.
+- **No whole-tenant hard-delete/offboarding workflow specified for the real
+  backend** — a suspended tenant (§5.4) keeps its data indefinitely there;
+  there's no equivalent of the per-patient hard-delete/erasure workflow
+  (§10) scoped to an entire tenant. (The local-storage build's superuser
+  `TenantsScreen` does hard-delete a tenant, §5.4 — but that's a
+  test-convenience shortcut for a UI prototype with no real user data or
+  compliance obligations, not a stand-in for a designed offboarding
+  workflow.) Add one if a real clinic ever needs to fully exit and have
+  their data purged.
 - **`mobile` validation is India-specific** (10-digit, `[6-9][0-9]{9}`,
   §5.2) on both `patients.mobile`/`appointments.mobile` and the new
   `tenants.contact_mobile` — a reasonable assumption while every tenant is

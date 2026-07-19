@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import type { Attachment } from '../types'
+import { useTenantStorageState } from '../utils/tenantStorage'
 import { useAuditLog } from './useAuditLog'
 
-const STORAGE_KEY = 'testhash.attachments.v1'
+const BASE_STORAGE_KEY = 'testhash.attachments.v1'
 
-function loadAttachments(): Attachment[] {
+function loadAttachments(storageKey: string): Attachment[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     if (raw) return JSON.parse(raw) as Attachment[]
   } catch {
     // fall through to an empty list
@@ -33,12 +34,8 @@ function auditSnapshot(attachment: Attachment) {
 }
 
 export function useAttachments() {
-  const [attachments, setAttachments] = useState<Attachment[]>(() => loadAttachments())
+  const [attachments, setAttachments] = useTenantStorageState<Attachment[]>(BASE_STORAGE_KEY, loadAttachments)
   const { logEntry } = useAuditLog()
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(attachments))
-  }, [attachments])
 
   const addAttachments = useCallback(
     (visitId: string, inputs: NewAttachmentInput[]) => {
@@ -64,7 +61,7 @@ export function useAttachments() {
         })
       }
     },
-    [logEntry],
+    [logEntry, setAttachments],
   )
 
   const deleteAttachment = useCallback(
@@ -81,7 +78,7 @@ export function useAttachments() {
         })
       }
     },
-    [attachments, logEntry],
+    [attachments, logEntry, setAttachments],
   )
 
   /** Cascade cleanup when one or more visits are deleted (§5.1 of
@@ -104,7 +101,7 @@ export function useAttachments() {
         })
       }
     },
-    [attachments, logEntry],
+    [attachments, logEntry, setAttachments],
   )
 
   const getAttachmentsForVisit = useCallback(

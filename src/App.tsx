@@ -27,7 +27,9 @@ import { AppHeader } from './components/AppHeader'
 import { NavRail } from './components/NavRail'
 import type { NavTarget } from './nav'
 import { ConfirmModal } from './components/ConfirmModal'
-import { LoginScreen } from './components/LoginScreen'
+import { AuthScreen } from './components/AuthScreen'
+import { SuperUserShell } from './components/SuperUserShell'
+import { UsersScreen } from './components/UsersScreen'
 import { OfflineBanner } from './components/OfflineBanner'
 import { InstallBanner } from './components/InstallBanner'
 import { Button } from './components/common/Button'
@@ -46,6 +48,7 @@ type View =
   | 'newAppointment'
   | 'editAppointment'
   | 'analytics'
+  | 'users'
   | 'preferences'
 
 const VIEW_TO_NAV_TARGET: Partial<Record<View, NavTarget>> = {
@@ -55,6 +58,7 @@ const VIEW_TO_NAV_TARGET: Partial<Record<View, NavTarget>> = {
   newAppointment: 'appointments',
   editAppointment: 'appointments',
   analytics: 'analytics',
+  users: 'users',
 }
 
 function AppShell() {
@@ -88,7 +92,7 @@ function AppShell() {
   const [linkAppointmentId, setLinkAppointmentId] = useState<string | null>(null)
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
 
-  if (!user) return <LoginScreen />
+  if (!user) return null
 
   const isAdmin = user.role === 'admin'
   // Attachments aren't rendered at all for front_desk (§8.4/§8.5 of docs/design.md).
@@ -114,6 +118,7 @@ function AppShell() {
     else if (target === 'activity') setView('activity')
     else if (target === 'appointments') setView('appointments')
     else if (target === 'analytics') setView('analytics')
+    else if (target === 'users') setView('users')
   }
 
   const requestSignOut = () => setConfirmingSignOut(true)
@@ -368,6 +373,8 @@ function AppShell() {
           <AnalyticsScreen patients={patients} visits={visits} onBack={goToList} />
         )}
 
+        {view === 'users' && isAdmin && <UsersScreen onBack={goToList} />}
+
         {view === 'preferences' && <PreferencesScreen onBack={goToList} />}
         </main>
       </div>
@@ -375,18 +382,36 @@ function AppShell() {
   )
 }
 
+/**
+ * Branches on auth state before any tenant-scoped provider mounts (§5.5 of
+ * docs/design.md): signed out gets the sign-in/signup screen, the fixed
+ * superuser account gets its own minimal shell with none of the per-clinic
+ * providers (patients, appointments, prescription template, ...) mounted,
+ * and every tenant-scoped role gets the full app.
+ */
+function AuthGate() {
+  const { user } = useAuth()
+
+  if (!user) return <AuthScreen />
+  if (user.role === 'super_user') return <SuperUserShell />
+
+  return (
+    <AuditLogProvider>
+      <GlobalSettingsProvider>
+        <PrescriptionTemplateProvider>
+          <PreferencesProvider>
+            <AppShell />
+          </PreferencesProvider>
+        </PrescriptionTemplateProvider>
+      </GlobalSettingsProvider>
+    </AuditLogProvider>
+  )
+}
+
 function App() {
   return (
     <AuthProvider>
-      <AuditLogProvider>
-        <GlobalSettingsProvider>
-          <PrescriptionTemplateProvider>
-            <PreferencesProvider>
-              <AppShell />
-            </PreferencesProvider>
-          </PrescriptionTemplateProvider>
-        </GlobalSettingsProvider>
-      </AuditLogProvider>
+      <AuthGate />
     </AuthProvider>
   )
 }

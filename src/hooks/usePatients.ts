@@ -1,21 +1,23 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import type { Gender, Patient } from '../types'
 import { generatePatientNumber } from '../utils/patientNumber'
 import { sanitizeText } from '../utils/sanitize'
+import { DEFAULT_TENANT_ID, useTenantStorageState } from '../utils/tenantStorage'
 import { SEED_PATIENTS } from '../seedData'
 import { useAuditLog } from './useAuditLog'
 
-const STORAGE_KEY = 'testhash.patients.v1'
+const BASE_STORAGE_KEY = 'testhash.patients.v1'
 
-function loadPatients(): Patient[] {
+function loadPatients(storageKey: string, tenantId: string): Patient[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     if (raw) return JSON.parse(raw) as Patient[]
   } catch {
     // fall through to reseed
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_PATIENTS))
-  return SEED_PATIENTS
+  const seed = tenantId === DEFAULT_TENANT_ID ? SEED_PATIENTS : []
+  localStorage.setItem(storageKey, JSON.stringify(seed))
+  return seed
 }
 
 export interface PatientInput {
@@ -29,12 +31,8 @@ export interface PatientInput {
 }
 
 export function usePatients() {
-  const [patients, setPatients] = useState<Patient[]>(() => loadPatients())
+  const [patients, setPatients] = useTenantStorageState<Patient[]>(BASE_STORAGE_KEY, loadPatients)
   const { logEntry } = useAuditLog()
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(patients))
-  }, [patients])
 
   const addPatient = useCallback(
     (input: PatientInput) => {
@@ -59,7 +57,7 @@ export function usePatients() {
       logEntry({ action: 'create', entityType: 'patient', entityId: patient.id, entityLabel: patient.name, after: patient })
       return patient.id
     },
-    [logEntry],
+    [logEntry, setPatients],
   )
 
   const updatePatient = useCallback(
@@ -83,7 +81,7 @@ export function usePatients() {
       setPatients((prev) => prev.map((p) => (p.id === id ? after : p)))
       logEntry({ action: 'update', entityType: 'patient', entityId: id, entityLabel: after.name, before, after })
     },
-    [patients, logEntry],
+    [patients, logEntry, setPatients],
   )
 
   const deletePatient = useCallback(
@@ -94,7 +92,7 @@ export function usePatients() {
         logEntry({ action: 'delete', entityType: 'patient', entityId: id, entityLabel: before.name, before })
       }
     },
-    [patients, logEntry],
+    [patients, logEntry, setPatients],
   )
 
   return { patients, addPatient, updatePatient, deletePatient }

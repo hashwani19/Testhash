@@ -9,7 +9,7 @@ interface Props {
   role: Role
   activeNavTarget: NavTarget
   onNavigate: (target: NavTarget) => void
-  onOpenPreferences: () => void
+  onOpenPreferences?: () => void
   onSignOut: () => void
 }
 
