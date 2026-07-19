@@ -14,9 +14,10 @@ These were confirmed before writing this doc and drive every section below:
 |---|---|
 | Data architecture | Backend + database (not local-only) — multi-device sync, durable storage |
 | User accounts | Multiple staff accounts with distinct logins, roles, and an audit trail |
-| Clinical fields | Per eye, **Distance** and **Reading** prescriptions (sphere, cylinder, axis, visual acuity each), a free-text Lenses line, diagnosis/treatment plan text, attachments (images/scans) — modeled directly on a real prescription pad (see §5.2). Add power was considered but dropped as unneeded (§13) |
+| Clinical fields | Per eye, **Distance** and **Reading** prescriptions (sphere, cylinder, axis, visual acuity each), a free-text Lenses line, diagnosis/treatment plan text, attachments (images/scans) — modeled directly on a real prescription pad (see §5.2). Add power was considered but dropped as unneeded (§13). This is the **ophthalmology** clinic type's clinical shape specifically — see "Clinic type" below |
+| Clinic type | Every tenant is a clinic of one **clinic type** (`ophthalmology`, `orthopedic` today), set once at provisioning — it decides which clinical/visit form and prescription layout the client renders for that tenant. Modeled as an extensible lookup, not a hardcoded enum, so a third type is an additive row, not a schema change (§5.1/§5.2/§5.4). Only ophthalmology's clinical fields (row above) are specified in this document; orthopedic's are a follow-up design pass (§13) |
 | Compliance | Design includes health-data safeguards (encryption, audit logging, retention/export/erasure, consent) from the start |
-| Multi-tenancy | This is a shared cloud service, not one deployment per clinic: a single backend serves many independent clinics ("tenants"), each fully isolated from the others' data. Tenants are **provisioned by a `super_user`** (name, contact email, contact mobile — all mandatory) — a dedicated role that operates the service (provision/revoke tenants, service config) but has no access to any tenant's clinical data — not self-serve signup, in this phase (§4.1/§5.4) |
+| Multi-tenancy | This is a shared cloud service, not one deployment per clinic: a single backend serves many independent clinics ("tenants"), each fully isolated from the others' data. Tenants are **provisioned by a `super_user`** (name, contact email, contact mobile, clinic type — all mandatory) — a dedicated role that operates the service (provision/revoke tenants, service config) but has no access to any tenant's clinical data — not self-serve signup, in this phase (§4.1/§5.4) |
 
 ## 2. Goals / Non-goals
 
@@ -173,6 +174,7 @@ permissions bug: it leaks one clinic's data into another's.
 
 ```mermaid
 erDiagram
+    CLINIC_TYPES ||--o{ TENANTS : "is a"
     TENANTS ||--o{ USERS : has
     TENANTS ||--o{ PATIENTS : has
     TENANTS ||--o{ PATIENT_GROUPS : has
@@ -194,11 +196,17 @@ erDiagram
     EYE_VISITS ||--o{ EYE_REFRACTIONS : has
     EYE_VISITS ||--o{ ATTACHMENTS : has
 
+    CLINIC_TYPES {
+        text id PK "'ophthalmology' | 'orthopedic' today — extensible, §5.2"
+        text label "display name"
+        int sort_order
+    }
     TENANTS {
         text id PK
         text name
         text contact_email
         text contact_mobile
+        text clinic_type_id FK "drives which visit/print form renders, §5.2/§5.6"
         text status "'active' | 'suspended', §5.4"
         int is_platform "exactly one row; home for super_user accounts, §4.1"
         text created_at
@@ -357,8 +365,41 @@ could theoretically drift from its parent's instead of a real scoping need.
 `patient_number_counters` (§5.3) is the one exception worth calling out:
 it isn't a child of anything, so it carries `tenant_id` directly.
 
+**`EYE_VISITS`/`EYE_REFRACTIONS` are the `ophthalmology` clinic type's visit
+schema specifically**, not a generic "visit" concept — `PATIENTS` (shared
+demographics) stays common to every clinic type, but the clinical detail
+hanging off a visit is type-specific. A second clinic type (`orthopedic`)
+gets its own analogous tables with its own fields once that type's clinical
+requirements are gathered (§13) — an additive change (new tables + a new
+client visit form/print template selected by `tenants.clinic_type_id`), not
+a rework of `PATIENTS` or anything tenant-level.
+
 ### 5.2 Field notes / definitions
 
+- **`clinic_types` / `tenants.clinic_type_id`** — every tenant is a clinic of
+  one type (`ophthalmology`, `orthopedic` today), and that type decides
+  which clinical/visit form and prescription template the client renders
+  for that tenant's staff (§5.6/§7/§8.5). Modeled as its own lookup table
+  rather than a `CHECK (clinic_type IN (...))` constraint on `tenants`
+  directly — the constraint approach means every new clinic type is a
+  migration touching the `tenants` table; a lookup table means it's a
+  plain `INSERT INTO clinic_types`, with `tenants.clinic_type_id` just
+  pointing at whichever row applies. `sort_order` is display-only (the
+  order clinic types list in a future "choose a type" provisioning UI),
+  not a ranking of any kind.
+  - **Set once, at provisioning** (§5.4) — a `super_user` picks it when
+    creating the tenant, alongside name/contact email/contact mobile.
+    Changing a tenant's clinic type after the fact isn't a supported flow
+    in this design (a clinic doesn't switch specialties); if that's ever
+    needed, it's a deliberate, audited operation, not a self-service
+    settings toggle.
+  - **Only `ophthalmology` has its clinical fields specified** in this
+    document (§1, §5.1's `EYE_VISITS`/`EYE_REFRACTIONS`) — `orthopedic` is
+    named so the extensibility mechanism (this lookup table, plus
+    `tenants.clinic_type_id`) can be designed and reviewed now, but its
+    actual exam fields need their own design pass, the same way
+    ophthalmology's were derived from a real prescription pad (§5.2 above)
+    rather than guessed at (§13).
 - **`patient_groups` / `patients.group_id`** — a free-form category a clinic
   puts patients into (e.g. "Friends", "Family", "VIP"), not a clinical
   concept. Modeled as **one group per patient** (`patients.group_id` is a
@@ -587,6 +628,18 @@ it isn't a child of anything, so it carries `tenant_id` directly.
 ```sql
 PRAGMA foreign_keys = ON;
 
+-- Extensible lookup, not a CHECK-constrained enum on tenants — adding a
+-- third clinic type is a plain INSERT here, not a migration touching
+-- tenants (§5.2). Seeded with the two known types; more added as needed.
+CREATE TABLE clinic_types (
+    id         TEXT PRIMARY KEY,    -- e.g. 'ophthalmology', 'orthopedic'
+    label      TEXT NOT NULL,       -- display name
+    sort_order INTEGER NOT NULL DEFAULT 0
+);
+-- INSERT INTO clinic_types (id, label, sort_order) VALUES
+--   ('ophthalmology', 'Ophthalmology', 0),
+--   ('orthopedic', 'Orthopedic', 1);
+
 -- One row per clinic, plus exactly one reserved non-clinic row
 -- (is_platform = 1) that's home to super_user accounts (§4.1/§5.4). The
 -- top-level tenancy boundary everything else below scopes under.
@@ -595,6 +648,7 @@ CREATE TABLE tenants (
     name           TEXT NOT NULL,
     contact_email  TEXT NOT NULL,
     contact_mobile TEXT NOT NULL,
+    clinic_type_id TEXT REFERENCES clinic_types(id),  -- decides visit/print form, §5.2/§5.6; nullable only for the is_platform row, which has no clinical UI at all
     status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
     is_platform    INTEGER NOT NULL DEFAULT 0,   -- boolean; exactly one row has this set (§4.1)
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
@@ -848,13 +902,14 @@ already chosen in §3.3.
 
 - **Provisioning**: a new tenant is created by a **`super_user`** (§4.1) —
   not self-serve signup in this phase — supplying **name**, **contact
-  email**, and **contact mobile**, all mandatory. `POST /platform/tenants`
-  (§6) does three things in one transaction:
-  1. Inserts the `tenants` row (`status = 'active'`, `is_platform = 0`).
+  email**, **contact mobile**, and **clinic type** (§5.2), all mandatory.
+  `POST /platform/tenants` (§6) does three things in one transaction:
+  1. Inserts the `tenants` row (`status = 'active'`, `is_platform = 0`,
+     `clinic_type_id` set to the chosen `clinic_types` row).
   2. Inserts the first `users` row for it: `role = 'admin'`,
      `email = contact_email`, `full_name = name` (the tenant's name is used
      as a placeholder for the first admin's display name — there's no
-     separate "contact person" field among the three mandatory ones; the
+     separate "contact person" field among the four mandatory ones; the
      admin can't yet self-edit their own `full_name` since no such screen
      exists today, so this is a real gap worth a follow-up, not a fully
      solved edge). `active = 0` and an `invite_token`/`invite_expires_at`
@@ -995,14 +1050,18 @@ itself:
   `logo_storage_key` and deletes the R2 object — the header then falls back
   to title/subtitle text only, same as a tenant that never uploaded one.
 
-### 5.6 Prescription printing
+### 5.6 Prescription printing (`ophthalmology` clinic type)
 
 Staff can print a US Letter page of a single visit's prescription — the same
 clinical content already shown on-screen (§8.5: the Distance/Reading
 refraction grid per eye, lenses, diagnosis, treatment plan, follow-up date,
-notes), formatted to hand to a patient or file physically. Modeled as
-`prescription_templates` (§5.1/§5.3), one row per tenant, **fixed layout
-with configurable content — not a custom HTML/layout template**:
+notes), formatted to hand to a patient or file physically. This section
+describes the `ophthalmology` clinic type's print layout specifically
+(§5.2) — the one fully specified in this document; another clinic type
+gets its own analogous template shaped around its own clinical fields, not
+this refraction grid. Modeled as `prescription_templates` (§5.1/§5.3), one
+row per tenant, **fixed layout with configurable content — not a custom
+HTML/layout template**:
 
 - **What's configurable, and why that's the line drawn here**: a full
   custom-HTML template (a tenant designing their own layout/markup from
@@ -1226,15 +1285,16 @@ UI at all — only the data-fetching layer.
 
 | Method & path | Role required | Purpose | Default sort |
 |---|---|---|---|
-| `POST /platform/tenants` | super_user | Provision a tenant — `name`/`contact_email`/`contact_mobile`, all mandatory (§5.4). Creates the tenant, a default `app_settings` row, and an inactive first `admin` user with an invite token; sends the invite email. Response is the created tenant — never the invite token | — |
+| `POST /platform/tenants` | super_user | Provision a tenant — `name`/`contact_email`/`contact_mobile`/`clinic_type_id`, all mandatory (§5.4). Creates the tenant, a default `app_settings` row, and an inactive first `admin` user with an invite token; sends the invite email. Response is the created tenant — never the invite token | — |
 | `GET /platform/tenants?status=&page=&limit=` | super_user | List tenants across the whole service (excludes the reserved platform tenant, §4.1) | `created_at` desc |
+| `GET /clinic-types` | super_user | List available clinic types (§5.2) — powers the provisioning UI's type picker. Regular staff don't call this; their own tenant's clinic type comes back on `GET /auth/me` below instead | `sort_order` |
 | `PATCH /platform/tenants/:id` | super_user | Update `status` (`active`/`suspended`) — suspending also kills that tenant's live sessions immediately (§5.4/§10) | — |
 | `GET /platform/settings` | super_user | Service-wide configuration (§5.4) — distinct from the per-tenant `GET /settings` below | — |
 | `PATCH /platform/settings` | super_user | Update service-wide configuration | — |
 | `POST /auth/accept-invite` | — (public, token in body) | Accept a provisioning invite — `token` + new `password` — sets the password, activates the user, clears the invite fields, and signs them in (§5.4) | — |
 | `POST /auth/login` | — | Authenticate, set session cookie. Resolves both the user *and* their tenant from `email` — globally unique (§5.4) — no separate tenant-selection step | — |
 | `POST /auth/logout` | any | Invalidate session | — |
-| `GET /auth/me` | any | Current user + role, plus `branding: { title, subtitle, logoUrl }` (§5.5) bundled in so the header can render from one call instead of a second round-trip on every app load | — |
+| `GET /auth/me` | any | Current user + role, plus `branding: { title, subtitle, logoUrl }` (§5.5) and `clinicType: { id, label }` (§5.2) bundled in so the header renders and the client picks the right visit/print form from one call, no second round-trip on every app load | — |
 | `GET /me/preferences` | any | Current user's own theme + list page size (§5.2). Not gated by role — every account manages its own | — |
 | `PATCH /me/preferences` | any | Update either/both fields; creates the row on first write if it doesn't exist yet | — |
 | `PATCH /branding` | admin | Update `title`/`subtitle` (§5.5). Creates the `tenant_branding` row on first write if it doesn't exist yet, same as `PATCH /me/preferences` | — |
@@ -1634,7 +1694,13 @@ emailed link.
   the on-screen card and the printed page deliberately don't look identical
   to each other.
 
-### 8.5 Visit Record Form (create/edit)
+### 8.5 Visit Record Form (create/edit) — `ophthalmology` clinic type
+
+This screen is what an `ophthalmology` tenant's staff see; the client picks
+which visit form to render from the caller's tenant `clinicType` (§6's
+`GET /auth/me`), so a different clinic type gets its own form here, not
+this one with fields relabeled. Not yet designed for any type beyond
+`ophthalmology` (§5.2/§13).
 
 - Date + time picker for `visit_at`, defaulting to "now," adjustable (for
   backdating a transcribed paper chart, §5.2).
@@ -1991,6 +2057,15 @@ build them if multi-device offline editing turns out to be a real need.
   briefly implemented, but not needed for this clinic's records. Reading
   prescriptions are entered as absolute sphere/cylinder/axis/VA values, not
   as a delta on top of Distance.
+- **`orthopedic` clinic type's clinical fields are not yet defined.** §5.2
+  establishes the extensibility mechanism (the `clinic_types` lookup,
+  `tenants.clinic_type_id`, and a client that picks its visit/print form
+  from the caller's resolved clinic type) and names `orthopedic` as the
+  second type, but its actual exam fields, visit form (§8.5), and
+  prescription template (§5.6) still need their own design pass — the same
+  way ophthalmology's were derived from a real prescription pad rather than
+  guessed at. Do that work before provisioning any real `orthopedic`
+  tenant; the mechanism doesn't require it to exist yet.
 - **Patient groups: one per patient, assumed.** Modeled as a single nullable
   `patients.group_id`, not many-to-many — matches "Friends"/"Family" reading
   as mutually-exclusive categories, but wasn't asked explicitly. If a patient
