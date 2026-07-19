@@ -6,13 +6,10 @@ import { ListView } from './common/ListView'
 import { ImageViewer, type ViewerImage } from './common/ImageViewer'
 import { EditIcon, PrintIcon } from './common/icons'
 import { ConfirmModal } from './ConfirmModal'
-// [§13 iOS print investigation] PrescriptionPrint swapped out for
-// SimplePrintTest below, temporarily — kept here, unused, to swap back in.
-// import { PrescriptionPrint } from './PrescriptionPrint'
-import { SimplePrintTest } from './SimplePrintTest'
+import { PrescriptionPrint } from './PrescriptionPrint'
 import { usePreferences } from '../hooks/usePreferences'
-// import { usePrescriptionTemplate } from '../hooks/usePrescriptionTemplate'
-// import { useAuditLog } from '../hooks/useAuditLog'
+import { usePrescriptionTemplate } from '../hooks/usePrescriptionTemplate'
+import { useAuditLog } from '../hooks/useAuditLog'
 import { hasRefractionData } from '../utils/eyeVisit'
 
 interface Props {
@@ -105,8 +102,7 @@ function VisitAttachments({
 }
 
 export function EyeRecordHistory({
-  // [§13 iOS print investigation] Only fed the (currently unused) PrescriptionPrint below.
-  // patient,
+  patient,
   visits,
   canDelete,
   canViewAttachments,
@@ -119,10 +115,8 @@ export function EyeRecordHistory({
   const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null)
   const [printingVisit, setPrintingVisit] = useState<EyeVisit | null>(null)
   const { preferences } = usePreferences()
-  // [§13 iOS print investigation] Both only feed the (currently unused)
-  // PrescriptionPrint below.
-  // const { template } = usePrescriptionTemplate()
-  // const { logEntry } = useAuditLog()
+  const { template } = usePrescriptionTemplate()
+  const { logEntry } = useAuditLog()
 
   return (
     <>
@@ -218,9 +212,22 @@ export function EyeRecordHistory({
         <ImageViewer images={viewer.images} initialIndex={viewer.index} onClose={() => setViewer(null)} />
       )}
 
-      {/* [§13 iOS print investigation] SimplePrintTest swapped in for
-       * PrescriptionPrint — see the commented-out imports/hooks above. */}
-      {printingVisit && <SimplePrintTest onClose={() => setPrintingVisit(null)} />}
+      {printingVisit && (
+        <PrescriptionPrint
+          patient={patient}
+          visit={printingVisit}
+          template={template}
+          onClose={() => setPrintingVisit(null)}
+          onPrinted={() =>
+            logEntry({
+              action: 'export',
+              entityType: 'eye_visit',
+              entityId: printingVisit.id,
+              entityLabel: `${patient.name} — ${formatVisitDateTime(printingVisit.visitAt)}`,
+            })
+          }
+        />
+      )}
     </>
   )
 }

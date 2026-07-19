@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import type { EyeRefraction, EyeVisit, Patient, PrescriptionTemplate } from '../types'
 import { getPatientAge } from '../utils/age'
+import { buildPrescriptionPdf, DEFAULT_CLINIC_NAME } from '../utils/prescriptionPdf'
 import { Button } from './common/Button'
 import { dimmedBackdrop } from '../styles'
 
@@ -17,11 +18,41 @@ interface Props {
   onPrinted: () => void
 }
 
-// Matches the string every other hardcoded "Ortho and Vision Care" surface
-// still uses (LoginScreen, AppHeader, index.html) — this is the only one of
-// the four that became admin-editable (docs/design.md §5.6); the other
-// three are a separate, unimplemented "tenant branding" concept (§5.5).
-const DEFAULT_CLINIC_NAME = 'Ortho and Vision Care'
+// [checkpoint F] window.print() is a dead end on iOS home-screen web apps:
+// the dialog opens, but its preview renders blank at the platform level —
+// reproduced here with a bare-bones no-CSS test page, and matching years of
+// Apple-forum reports (docs/design.md §5.6/§13). And even a direct tap gets
+// Safari's "blocked from automatic printing" prompt in that context, so
+// there's no gesture-plumbing fix left to try. On iOS (any browser — they're
+// all WebKit, and iOS Safari itself has a long history of blank print
+// previews) and in any installed/standalone display mode, printing is
+// instead: build a real PDF client-side (utils/prescriptionPdf) and hand it
+// to the native share sheet, which includes AirPrint plus save/send options.
+// Desktop keeps window.print(), which works reliably there.
+function isIosDevice() {
+  return (
+    /iphone|ipad|ipod/i.test(window.navigator.userAgent) ||
+    // iPadOS Safari reports itself as macOS; touch support tells it apart.
+    (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1)
+  )
+}
+
+function isStandaloneDisplay() {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  )
+}
+
+function downloadFile(file: File) {
+  const url = URL.createObjectURL(file)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = file.name
+  a.click()
+  // Long enough for the browser to have started the download/preview.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
 
 function formatSigned(value?: number): string {
   if (value == null) return ''
@@ -138,6 +169,44 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     // succeed, onClose() already ran and unmounted this component first,
     // making the pending restore a harmless no-op.
     restoreTimeoutRef.current = window.setTimeout(() => setIsPrinting(false), 1200)
+  }
+
+  // [checkpoint F] PDF path for iOS / installed-app contexts. The file is
+  // built eagerly on mount (not on tap) so the Share tap handler stays fully
+  // synchronous — navigator.share needs the same user-gesture transient
+  // activation window.print() does (§ checkpoint D), and pre-building keeps
+  // every await out of the tap.
+  const usePdfExport = isIosDevice() || isStandaloneDisplay()
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
+  useEffect(() => {
+    if (!usePdfExport) return
+    let cancelled = false
+    buildPrescriptionPdf(patient, visit, template).then(
+      (file) => {
+        if (!cancelled) setPdfFile(file)
+      },
+      () => {
+        // Generation failing leaves the button disabled; the on-screen
+        // preview is still fully usable/readable.
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [patient, visit, template, usePdfExport])
+
+  const sharePdf = () => {
+    if (!pdfFile) return
+    onPrinted()
+    const nav = window.navigator as Navigator & { canShare?: (data: ShareData) => boolean }
+    if (typeof nav.share === 'function' && nav.canShare?.({ files: [pdfFile] })) {
+      nav.share({ files: [pdfFile] }).catch((err: unknown) => {
+        // AbortError is the user closing the sheet — not a failure.
+        if ((err as Error)?.name !== 'AbortError') downloadFile(pdfFile)
+      })
+    } else {
+      downloadFile(pdfFile)
+    }
   }
 
   useEffect(() => {
@@ -358,9 +427,17 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
         // interactive control) keeps Print reachable everywhere the app
         // shell already accounts for.
         <div className="fixed top-[calc(1rem_+_env(safe-area-inset-top))] right-[calc(1rem_+_env(safe-area-inset-right))] z-50 flex gap-2 print:hidden">
-          <Button variant="secondary" onClick={printNow}>
-            Print
-          </Button>
+          {usePdfExport ? (
+            // iOS share sheet includes AirPrint, so this IS the print
+            // button there — plus save-to-Files/send options for free.
+            <Button variant="secondary" disabled={!pdfFile} onClick={sharePdf}>
+              {pdfFile ? 'Print / Share PDF' : 'Preparing PDF…'}
+            </Button>
+          ) : (
+            <Button variant="secondary" onClick={printNow}>
+              Print
+            </Button>
+          )}
           <Button
             variant="icon"
             aria-label="Close"

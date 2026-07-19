@@ -1152,11 +1152,23 @@ with configurable content — not a custom HTML/layout template**:
     removing `position:fixed` chrome from the DOM, the viewport-pinning
     above) still called `window.print()` from inside an effect or a
     `.then()`, both of which cross an async boundary and lose the gesture
-    regardless of how soon after the tap they run. This alone did **not**
-    fully resolve a reported blank iOS print preview, though — the browser
-    still shows its "blocked from automatic printing" prompt even on this
-    direct tap, and choosing "Allow" still produces a blank page. Root
-    cause not yet confirmed; still open (§13).
+    regardless of how soon after the tap they run. Necessary but not
+    sufficient on iOS — see the PDF bullet below.
+  - **iOS and installed/standalone contexts never call `window.print()` at
+    all — they build a real PDF client-side and hand it to the native share
+    sheet instead.** A bare-bones no-CSS test page still produced a blank
+    print preview (and still tripped the "blocked from automatic printing"
+    prompt on a direct tap), which matches years-old Apple-forum reports:
+    printing from an iOS home-screen web app is broken at the platform
+    level, and no timing/CSS fix on our side can reach it. The PDF
+    (`utils/prescriptionPdf.ts`, jsPDF in its own lazy chunk) mirrors the
+    overlay's letterhead/table/detail layout; it's pre-built when the
+    overlay mounts so the Share tap stays synchronous (same user-gesture
+    rule as above), shared via `navigator.share` with a plain
+    anchor-download fallback, and the share sheet's built-in AirPrint entry
+    is what makes this a *print* path, not just an export. The tap is still
+    logged as the same export-class audit action. Desktop keeps
+    `window.print()`, which works reliably there.
   - **The Print/Close controls are restored a beat after `window.print()`
     is called, regardless of what happens next** — `window.print()` has no
     callback or promise, so there's no way to know whether it actually
@@ -2077,18 +2089,17 @@ build them if multi-device offline editing turns out to be a real need.
   (§5.4) keeps its data indefinitely; there's no equivalent of the
   per-patient hard-delete/erasure workflow (§10) scoped to an entire tenant.
   Add one if a clinic ever needs to fully exit and have their data purged.
-- **Blank print preview on iOS Safari — still unresolved** (§5.6). Several
-  real causes were found and fixed along the way (a `position:fixed`
-  print-pagination quirk, the printable content sitting outside the
-  viewport in normal document flow, `window.print()` losing its user-
-  gesture context across an async boundary) but a report persists even
-  past all of them: the browser's own "blocked from automatic printing"
-  prompt still appears on a direct tap of the Print button, and choosing
-  "Allow" still renders a blank page. Next real step if this keeps
-  recurring is probably not another timing/CSS fix to `window.print()`,
-  but a different mechanism entirely — e.g. generating an actual PDF
-  client-side for the user to save/share, sidestepping the browser's
-  print-preview rendering pipeline for this dynamically-portaled content.
+- ~~Blank print preview on iOS Safari~~ — **resolved: `window.print()`
+  abandoned on iOS entirely** (§5.6). Several real contributing issues were
+  found and fixed along the way (a `position:fixed` print-pagination quirk,
+  the printable content sitting outside the viewport in normal document
+  flow, `window.print()` losing its user-gesture context across an async
+  boundary), but the preview stayed blank even for a bare-bones no-CSS test
+  page — matching years-old Apple-forum reports that printing from an iOS
+  home-screen web app is broken at the platform level (dialog opens,
+  preview never renders). iOS and installed/standalone contexts now build
+  a real PDF client-side and hand it to the native share sheet instead;
+  desktop keeps `window.print()`.
 - **`mobile` validation is India-specific** (10-digit, `[6-9][0-9]{9}`,
   §5.2) on both `patients.mobile`/`appointments.mobile` and the new
   `tenants.contact_mobile` — a reasonable assumption while every tenant is
