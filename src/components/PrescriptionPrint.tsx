@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import type { EyeRefraction, EyeVisit, Patient, PrescriptionTemplate } from '../types'
 import { getPatientAge } from '../utils/age'
@@ -117,11 +117,34 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
   // removal is guaranteed to commit before `window.print()` actually runs)
   // instead of just hiding them.
   const [isPrinting, setIsPrinting] = useState(false)
+  const restoreTimeoutRef = useRef<number | null>(null)
   const printNow = () => {
     onPrinted()
     flushSync(() => setIsPrinting(true))
     window.print()
+    // [checkpoint E] window.print() has no callback/promise — there's no
+    // programmatic way to know whether it actually opened a print UI or
+    // was silently/interactively declined by the browser's own "blocked
+    // from automatic printing" gate (observed on iOS Safari even on a
+    // direct tap of this button, not just an auto-triggered call). When
+    // that happens, none of the afterprint/matchMedia/visibilitychange
+    // signals below ever fire, since no print flow actually started — and
+    // the backdrop/Close button were already removed above in
+    // anticipation of a successful print, leaving the overlay with no
+    // in-overlay way to dismiss it (a real report: stuck until navigating
+    // away via the app's own breadcrumb). This timeout is a safety net,
+    // not a detector: it restores the controls regardless, a beat after
+    // the call, so the overlay is never permanently stuck. If printing did
+    // succeed, onClose() already ran and unmounted this component first,
+    // making the pending restore a harmless no-op.
+    restoreTimeoutRef.current = window.setTimeout(() => setIsPrinting(false), 1200)
   }
+
+  useEffect(() => {
+    return () => {
+      if (restoreTimeoutRef.current != null) window.clearTimeout(restoreTimeoutRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -223,7 +246,7 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
           )}
 
           {template.showLetterhead && (
-            <header className="mb-4 flex items-start justify-between gap-4 border-b-2 border-black pb-3">
+            <header className="mb-4 flex flex-wrap items-start justify-between gap-4 border-b-2 border-black pb-3">
               <div className="flex items-start gap-3">
                 {template.logoDataUrl && (
                   <img src={template.logoDataUrl} alt="" className="h-14 w-14 shrink-0 object-contain" />
@@ -260,42 +283,51 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
             <p>Visit: {formatVisitDateTime(visit.visitAt)}</p>
           </div>
 
-          <table className="mb-4 w-full border-collapse">
-            <thead>
-              <tr>
-                <th className="border border-black/30 px-2 py-1"></th>
-                <th className="border border-black/30 px-2 py-1" colSpan={4}>
-                  Right eye
-                </th>
-                <th className="border border-black/30 px-2 py-1" colSpan={4}>
-                  Left eye
-                </th>
-              </tr>
-              <tr>
-                <th className="border border-black/30 px-2 py-1"></th>
-                <th className="border border-black/30 px-2 py-1">Sph</th>
-                <th className="border border-black/30 px-2 py-1">Cyl</th>
-                <th className="border border-black/30 px-2 py-1">Axis</th>
-                <th className="border border-black/30 px-2 py-1">V.A.</th>
-                <th className="border border-black/30 px-2 py-1">Sph</th>
-                <th className="border border-black/30 px-2 py-1">Cyl</th>
-                <th className="border border-black/30 px-2 py-1">Axis</th>
-                <th className="border border-black/30 px-2 py-1">V.A.</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th className="border border-black/30 px-2 py-1 text-left font-normal">Distance</th>
-                <RefractionCells refraction={visit.refractions.right.distance} />
-                <RefractionCells refraction={visit.refractions.left.distance} />
-              </tr>
-              <tr>
-                <th className="border border-black/30 px-2 py-1 text-left font-normal">Reading</th>
-                <RefractionCells refraction={visit.refractions.right.reading} />
-                <RefractionCells refraction={visit.refractions.left.reading} />
-              </tr>
-            </tbody>
-          </table>
+          {/* This table's 9 columns don't shrink below their content's
+           * natural width — on a phone-width screen that's wider than the
+           * viewport, and without its own scroll container that excess
+           * width was forcing the whole card (and page) wider than the
+           * screen, bleeding past the right edge with no way to reach it.
+           * print:overflow-visible since at the actual printed page width
+           * (this card's design width, §5.6) the table always fits. */}
+          <div className="mb-4 overflow-x-auto print:overflow-visible">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className="border border-black/30 px-2 py-1"></th>
+                  <th className="border border-black/30 px-2 py-1" colSpan={4}>
+                    Right eye
+                  </th>
+                  <th className="border border-black/30 px-2 py-1" colSpan={4}>
+                    Left eye
+                  </th>
+                </tr>
+                <tr>
+                  <th className="border border-black/30 px-2 py-1"></th>
+                  <th className="border border-black/30 px-2 py-1">Sph</th>
+                  <th className="border border-black/30 px-2 py-1">Cyl</th>
+                  <th className="border border-black/30 px-2 py-1">Axis</th>
+                  <th className="border border-black/30 px-2 py-1">V.A.</th>
+                  <th className="border border-black/30 px-2 py-1">Sph</th>
+                  <th className="border border-black/30 px-2 py-1">Cyl</th>
+                  <th className="border border-black/30 px-2 py-1">Axis</th>
+                  <th className="border border-black/30 px-2 py-1">V.A.</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th className="border border-black/30 px-2 py-1 text-left font-normal">Distance</th>
+                  <RefractionCells refraction={visit.refractions.right.distance} />
+                  <RefractionCells refraction={visit.refractions.left.distance} />
+                </tr>
+                <tr>
+                  <th className="border border-black/30 px-2 py-1 text-left font-normal">Reading</th>
+                  <RefractionCells refraction={visit.refractions.right.reading} />
+                  <RefractionCells refraction={visit.refractions.left.reading} />
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
           <div className="mb-4 flex flex-col gap-1.5">
             <DetailLine label="Lenses" value={visit.lenses ?? ''} />

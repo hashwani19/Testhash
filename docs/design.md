@@ -1142,19 +1142,39 @@ with configurable content — not a custom HTML/layout template**:
     DOM swap as the backdrop/controls above), so it still paginates like
     ordinary page content once `#root` is hidden for print.
   - **`window.print()` is only ever called synchronously from the Print
-    button's own click handler, nothing awaited first.** This is what
-    actually fixed a persistently blank mobile print preview, confirmed by
-    the browser's own wording: Chrome/Safari treat `window.print()` as
-    "automatic printing" (the same family of heuristic as popup blocking)
-    and block it — sometimes silently, sometimes with an explicit prompt —
-    whenever the call isn't traceable to a direct user gesture with nothing
-    async in between. The original design auto-triggered printing from a
-    `useEffect` a frame after the overlay mounted; every fix short of
-    removing that (image-decode waits, removing `position:fixed` chrome
-    from the DOM, the viewport-pinning above) still called `window.print()`
-    from inside an effect or a `.then()`, both of which cross an async
-    boundary and lose the gesture regardless of how soon after the tap they
-    run.
+    button's own click handler, nothing awaited first.** Chrome/Safari
+    treat `window.print()` as "automatic printing" (the same family of
+    heuristic as popup blocking) and block it — sometimes silently,
+    sometimes with an explicit prompt — whenever the call isn't traceable
+    to a direct user gesture with nothing async in between. The original
+    design auto-triggered printing from a `useEffect` a frame after the
+    overlay mounted; every fix short of removing that (image-decode waits,
+    removing `position:fixed` chrome from the DOM, the viewport-pinning
+    above) still called `window.print()` from inside an effect or a
+    `.then()`, both of which cross an async boundary and lose the gesture
+    regardless of how soon after the tap they run. This alone did **not**
+    fully resolve a reported blank iOS print preview, though — the browser
+    still shows its "blocked from automatic printing" prompt even on this
+    direct tap, and choosing "Allow" still produces a blank page. Root
+    cause not yet confirmed; still open (§13).
+  - **The Print/Close controls are restored a beat after `window.print()`
+    is called, regardless of what happens next** — `window.print()` has no
+    callback or promise, so there's no way to know whether it actually
+    opened a print UI or was declined. The controls were being removed
+    from the DOM *before* the call (previous bullet's `position:fixed`
+    fix), on the assumption printing would succeed and one of the
+    afterprint/matchMedia/visibilitychange signals would fire and close
+    the whole overlay; when the browser declines instead, none of those
+    signals ever arrive, since no print flow actually started, leaving the
+    overlay with no in-overlay way to dismiss it. The restore is a safety
+    net, not a detector: if printing did succeed, `onClose()` already
+    unmounted the component first, making the pending restore a no-op.
+  - **The refraction table has its own horizontal scroll container** on
+    screen (`print:overflow-visible` for the actual printed page, where it
+    always fits at the design width) — its 9 columns don't shrink below
+    their content's natural width, and without this, that excess width
+    was forcing the whole preview (and page) wider than a phone screen,
+    bleeding past the right edge with no way to reach it.
 
 ### 5.7 Analytics
 
@@ -2057,6 +2077,18 @@ build them if multi-device offline editing turns out to be a real need.
   (§5.4) keeps its data indefinitely; there's no equivalent of the
   per-patient hard-delete/erasure workflow (§10) scoped to an entire tenant.
   Add one if a clinic ever needs to fully exit and have their data purged.
+- **Blank print preview on iOS Safari — still unresolved** (§5.6). Several
+  real causes were found and fixed along the way (a `position:fixed`
+  print-pagination quirk, the printable content sitting outside the
+  viewport in normal document flow, `window.print()` losing its user-
+  gesture context across an async boundary) but a report persists even
+  past all of them: the browser's own "blocked from automatic printing"
+  prompt still appears on a direct tap of the Print button, and choosing
+  "Allow" still renders a blank page. Next real step if this keeps
+  recurring is probably not another timing/CSS fix to `window.print()`,
+  but a different mechanism entirely — e.g. generating an actual PDF
+  client-side for the user to save/share, sidestepping the browser's
+  print-preview rendering pipeline for this dynamically-portaled content.
 - **`mobile` validation is India-specific** (10-digit, `[6-9][0-9]{9}`,
   §5.2) on both `patients.mobile`/`appointments.mobile` and the new
   `tenants.contact_mobile` — a reasonable assumption while every tenant is
