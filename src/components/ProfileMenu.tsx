@@ -1,14 +1,16 @@
 import type { Role } from '../types'
 import { formatBuildVersion } from '../buildInfo'
+import { formatRole } from '../utils/roles'
 import { Button } from './common/Button'
 import { Dropdown } from './common/Dropdown'
 import { cx } from '../styles'
 
 interface Props {
   fullName: string
-  role: Role
-  /** Omitted for the superuser — it has no tenant-specific preferences to
-   *  configure (§5.5 of docs/design.md), so the menu item doesn't render. */
+  roles: Role[]
+  /** Omitted for anyone but a tenant `admin` — preferences (both the
+   *  clinic-wide settings and the personal theme/list-size ones) are
+   *  admin-only, so the menu item doesn't render for other roles. */
   onOpenPreferences?: () => void
   onSignOut: () => void
 }
@@ -22,7 +24,7 @@ function initials(fullName: string): string {
     .join('')
 }
 
-export function ProfileMenu({ fullName, role, onOpenPreferences, onSignOut }: Props) {
+export function ProfileMenu({ fullName, roles, onOpenPreferences, onSignOut }: Props) {
   return (
     <Dropdown
       align="right"
@@ -41,8 +43,15 @@ export function ProfileMenu({ fullName, role, onOpenPreferences, onSignOut }: Pr
       {({ close }) => (
         <>
           <p className="px-1 text-sm font-semibold text-text-h">{fullName}</p>
-          <span className="mx-1 mb-1 w-fit rounded-full border border-border bg-bg px-2 py-0.5 text-[11px] capitalize text-text">
-            {role}
+          <span className="mx-1 mb-1 flex flex-wrap gap-1">
+            {roles.map((role) => (
+              <span
+                key={role}
+                className="w-fit rounded-full border border-border bg-bg px-2 py-0.5 text-[11px] capitalize text-text"
+              >
+                {formatRole(role)}
+              </span>
+            ))}
           </span>
           {onOpenPreferences && (
             <Button

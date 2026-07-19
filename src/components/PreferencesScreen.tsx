@@ -84,7 +84,7 @@ export function PreferencesScreen({ onBack }: Props) {
         </label>
       </div>
 
-      {user?.role === 'admin' && tenant && (
+      {tenant && (
         <>
           <h3 className="text-base font-bold text-text-h">Clinic profile (admin only)</h3>
           <div className={`${card} flex flex-col gap-3.5`}>

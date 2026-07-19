@@ -28,17 +28,19 @@ export interface CreateUserInput {
   email: string
   password: string
   fullName: string
-  role: Role
+  roles: Role[]
   tenantId: string
 }
 
 export type CreateUserResult =
   | { ok: true; id: string }
-  | { ok: false; error: 'duplicate_email' | 'weak_password' }
+  | { ok: false; error: 'duplicate_email' | 'weak_password' | 'empty_roles' }
 
 export type DeleteUserResult = { ok: true } | { ok: false; error: 'self' | 'last_admin' }
 
 export type UpdatePasswordResult = { ok: true } | { ok: false; error: 'weak_password' }
+
+export type UpdateRolesResult = { ok: true } | { ok: false; error: 'empty_roles' | 'last_admin' }
 
 export interface AuthContextValue {
   user: User | null
@@ -56,6 +58,10 @@ export interface AuthContextValue {
   createUser: (input: CreateUserInput) => CreateUserResult
   deleteUser: (id: string) => DeleteUserResult
   updateUserPassword: (id: string, newPassword: string) => UpdatePasswordResult
+  /** Replaces a user's held roles outright (not a patch) — a user can hold
+   *  more than one at once. Rejects an empty list, and rejects dropping
+   *  `admin` from the last `admin` a tenant has left. */
+  updateUserRoles: (id: string, roles: Role[]) => UpdateRolesResult
   /** Superuser-only equivalent of `signUp` — provisions a tenant + its
    *  admin user without signing the caller out of their own session. */
   addTenant: (input: SignUpInput) => SignUpResult

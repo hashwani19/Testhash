@@ -6,7 +6,7 @@ import { pageTitle } from '../styles'
 
 interface Props {
   fullName: string
-  role: Role
+  roles: Role[]
   activeNavTarget: NavTarget
   onNavigate: (target: NavTarget) => void
   onOpenPreferences?: () => void
@@ -15,7 +15,7 @@ interface Props {
 
 export function AppHeader({
   fullName,
-  role,
+  roles,
   activeNavTarget,
   onNavigate,
   onOpenPreferences,
@@ -27,14 +27,14 @@ export function AppHeader({
         {/* NavRail (md:+) carries both the app title and navigation in the
          * sidebar instead — duplicating them up here too would be noise. */}
         <div className="flex min-w-0 flex-1 items-center gap-2 md:hidden">
-          <NavMenu role={role} active={activeNavTarget} onNavigate={onNavigate} />
+          <NavMenu roles={roles} active={activeNavTarget} onNavigate={onNavigate} />
 
           <h1 className={`min-w-0 flex-1 ${pageTitle}`}>Ortho and Vision Care</h1>
         </div>
 
         <ProfileMenu
           fullName={fullName}
-          role={role}
+          roles={roles}
           onOpenPreferences={onOpenPreferences}
           onSignOut={onSignOut}
         />

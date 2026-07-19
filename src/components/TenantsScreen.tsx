@@ -35,7 +35,7 @@ export function TenantsScreen() {
   const [newPassword, setNewPassword] = useState('')
   const [resetError, setResetError] = useState<string | null>(null)
 
-  const adminFor = (tenantId: string) => users.find((u) => u.tenantId === tenantId && u.role === 'admin')
+  const adminFor = (tenantId: string) => users.find((u) => u.tenantId === tenantId && u.roles.includes('admin'))
 
   const resetCreateForm = () => {
     setEmail('')

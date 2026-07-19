@@ -18,7 +18,10 @@ export interface User {
   /** Plaintext for this local-only test build — never do this against a real backend. */
   password: string
   fullName: string
-  role: Role
+  /** A user can hold more than one role at once (e.g. both `admin` and
+   *  `doctor`) — access is the union of every held role's permissions.
+   *  Always at least one entry. */
+  roles: Role[]
   /** Owning tenant. Unset only for the fixed `super_user` account, which
    *  isn't scoped to any one clinic. */
   tenantId?: string

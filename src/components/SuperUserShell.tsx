@@ -20,12 +20,12 @@ export function SuperUserShell() {
 
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-[560px] flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] md:max-w-[1440px] md:flex-row">
-      <NavRail role={user.role} active="tenants" onNavigate={() => {}} />
+      <NavRail roles={user.roles} active="tenants" onNavigate={() => {}} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <AppHeader
           fullName={user.fullName}
-          role={user.role}
+          roles={user.roles}
           activeNavTarget="tenants"
           onNavigate={() => {}}
           onSignOut={() => setConfirmingSignOut(true)}

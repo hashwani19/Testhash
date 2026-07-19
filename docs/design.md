@@ -134,6 +134,18 @@ Modeled as a `role` enum on the user for now (§5); if permission needs get
 more granular later (e.g. per-patient access lists), split into `roles` +
 `permissions` + join tables without changing the rest of the schema.
 
+**Implemented ahead of that in this local-storage build**: `User.roles` is
+already an array, not a single enum value — a user can hold more than one
+role at once (e.g. both `admin` and `doctor`), and every permission check
+(`isAdmin`, `canManageAttachments`, `canViewAnalytics`, nav-item
+visibility, §8.2) is a union over the held roles rather than a single
+equality check. The Users screen (§8, tenant-admin-only) lets an admin
+assign multiple roles when creating a user, and edit an existing user's
+roles afterward — both going through `AuthContext.createUser`/
+`updateUserRoles`, which reject an empty role set and reject removing
+`admin` from a tenant's last remaining admin, the same guard `deleteUser`
+already has for deleting that last admin outright.
+
 **`admin`/`doctor`/`front_desk` are all tenant-scoped** — every one of them
 belongs to exactly one *real* tenant (clinic) and this table describes what
 they can do *within* it. None of them can provision, suspend, or otherwise
@@ -1892,6 +1904,14 @@ this is additive on top of that shell, not a rewrite of it.
 - No admin override of another user's preferences in this phase — everyone
   manages only their own (`PATCH /me/preferences` always targets the
   caller, there's no `:user_id` in the path).
+- **Deviation in this local-storage build: the whole screen is admin-only**,
+  not "every role" as above — `doctor`/`front_desk` get no Preferences
+  entry in the profile menu at all (§4's roles table has neither able to
+  "manage staff accounts"/"manage global app settings," and this build
+  folds the personal theme/list-size controls into the same gate rather
+  than keeping them open to every role). A real product decision, not an
+  oversight — revisit if per-user theme/list-size ever needs to come back
+  for non-admin roles.
 - **Admin-only "App settings" section**, shown on this same screen only when
   the logged-in user's role is `admin` (§4, §8.6) — not a separate nav
   destination just for one setting. Two controls, both reading/writing

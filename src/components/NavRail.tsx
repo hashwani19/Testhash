@@ -5,7 +5,7 @@ import { Button } from './common/Button'
 import { pageTitle, cx } from '../styles'
 
 interface Props {
-  role: Role
+  roles: Role[]
   active: NavTarget
   onNavigate: (target: NavTarget) => void
 }
@@ -19,8 +19,8 @@ interface Props {
  * only ever renders at pointer-friendly widths, unlike the touch-first
  * drawer it replaces.
  */
-export function NavRail({ role, active, onNavigate }: Props) {
-  const items = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role))
+export function NavRail({ roles, active, onNavigate }: Props) {
+  const items = NAV_ITEMS.filter((item) => !item.roles || item.roles.some((r) => roles.includes(r)))
 
   return (
     <nav className="hidden w-56 shrink-0 flex-col gap-1 border-r border-border p-4 md:flex">

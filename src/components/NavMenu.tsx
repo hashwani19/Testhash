@@ -6,13 +6,13 @@ import { Dropdown } from './common/Dropdown'
 import { cx } from '../styles'
 
 interface Props {
-  role: Role
+  roles: Role[]
   active: NavTarget
   onNavigate: (target: NavTarget) => void
 }
 
-export function NavMenu({ role, active, onNavigate }: Props) {
-  const items = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role))
+export function NavMenu({ roles, active, onNavigate }: Props) {
+  const items = NAV_ITEMS.filter((item) => !item.roles || item.roles.some((r) => roles.includes(r)))
 
   return (
     <Dropdown

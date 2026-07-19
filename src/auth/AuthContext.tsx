@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { PrescriptionTemplate, Tenant, TenantStatus, User } from '../types'
+import type { PrescriptionTemplate, Role, Tenant, TenantStatus, User } from '../types'
 import { sanitizeText } from '../utils/sanitize'
 import { isStrongPassword } from '../utils/password'
 import { DEFAULT_TENANT_ID, deleteTenantStorage, tenantStorageKey } from '../utils/tenantStorage'
@@ -13,6 +13,7 @@ import type {
   SignUpInput,
   SignUpResult,
   UpdatePasswordResult,
+  UpdateRolesResult,
 } from './context'
 
 const USERS_KEY = 'testhash.users.v1'
@@ -31,7 +32,7 @@ const SUPER_USER: User = {
   email: SUPER_USER_EMAIL,
   password: SUPER_USER_PASSWORD,
   fullName: 'Super User',
-  role: 'super_user',
+  roles: ['super_user'],
   createdAt: 0,
 }
 
@@ -41,7 +42,7 @@ const SEED_USERS: User[] = [
     email: 'admin@example.com',
     password: 'admin123',
     fullName: 'Alex Admin',
-    role: 'admin',
+    roles: ['admin'],
     tenantId: DEFAULT_TENANT_ID,
     createdAt: Date.now(),
   },
@@ -50,7 +51,7 @@ const SEED_USERS: User[] = [
     email: 'doctor@example.com',
     password: 'doctor123',
     fullName: 'Dr. Dana Doctor',
-    role: 'doctor',
+    roles: ['doctor'],
     tenantId: DEFAULT_TENANT_ID,
     createdAt: Date.now(),
   },
@@ -59,7 +60,7 @@ const SEED_USERS: User[] = [
     email: 'frontdesk@example.com',
     password: 'frontdesk123',
     fullName: 'Frankie Frontdesk',
-    role: 'front_desk',
+    roles: ['front_desk'],
     tenantId: DEFAULT_TENANT_ID,
     createdAt: Date.now(),
   },
@@ -197,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: normalizedEmail,
         password: input.password,
         fullName: deriveFullNameFromEmail(normalizedEmail),
-        role: 'admin',
+        roles: ['admin'],
         tenantId,
         createdAt: Date.now(),
       }
@@ -231,7 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: normalizedEmail,
         password: input.password,
         fullName: deriveFullNameFromEmail(normalizedEmail),
-        role: 'admin',
+        roles: ['admin'],
         tenantId,
         createdAt: Date.now(),
       }
@@ -250,12 +251,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { ok: false, error: 'duplicate_email' }
       }
       if (!isStrongPassword(input.password)) return { ok: false, error: 'weak_password' }
+      if (input.roles.length === 0) return { ok: false, error: 'empty_roles' }
       const newUser: User = {
         id: crypto.randomUUID(),
         email: normalizedEmail,
         password: input.password,
         fullName: sanitizeText(input.fullName),
-        role: input.role,
+        roles: input.roles,
         tenantId: input.tenantId,
         createdAt: Date.now(),
       }
@@ -270,9 +272,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (id === sessionUserId) return { ok: false, error: 'self' }
       const target = users.find((u) => u.id === id)
       if (!target) return { ok: true }
-      if (target.role === 'admin') {
+      if (target.roles.includes('admin')) {
         const remainingAdmins = users.filter(
-          (u) => u.tenantId === target.tenantId && u.role === 'admin' && u.id !== id,
+          (u) => u.tenantId === target.tenantId && u.roles.includes('admin') && u.id !== id,
         )
         if (remainingAdmins.length === 0) return { ok: false, error: 'last_admin' }
       }
@@ -289,6 +291,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { ok: true }
     },
     [],
+  )
+
+  const updateUserRoles = useCallback(
+    (id: string, roles: Role[]): UpdateRolesResult => {
+      if (roles.length === 0) return { ok: false, error: 'empty_roles' }
+      const target = users.find((u) => u.id === id)
+      if (!target) return { ok: true }
+      if (target.roles.includes('admin') && !roles.includes('admin')) {
+        const remainingAdmins = users.filter(
+          (u) => u.tenantId === target.tenantId && u.roles.includes('admin') && u.id !== id,
+        )
+        if (remainingAdmins.length === 0) return { ok: false, error: 'last_admin' }
+      }
+      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, roles } : u)))
+      return { ok: true }
+    },
+    [users],
   )
 
   const updateTenantStatus = useCallback((id: string, status: TenantStatus) => {
@@ -336,6 +355,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         createUser,
         deleteUser,
         updateUserPassword,
+        updateUserRoles,
         addTenant,
         updateTenantStatus,
         updateTenantProfile,

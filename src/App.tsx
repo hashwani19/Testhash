@@ -94,11 +94,14 @@ function AppShell() {
 
   if (!user) return null
 
-  const isAdmin = user.role === 'admin'
-  // Attachments aren't rendered at all for front_desk (§8.4/§8.5 of docs/design.md).
-  const canManageAttachments = user.role !== 'front_desk'
+  const isAdmin = user.roles.includes('admin')
+  const isDoctor = user.roles.includes('doctor')
+  // Attachments aren't rendered at all for a user who is only front_desk
+  // (§8.4/§8.5 of docs/design.md) — holding admin or doctor as one of
+  // possibly several roles is enough to grant it.
+  const canManageAttachments = isAdmin || isDoctor
   // Analytics is clinic-wide, aggregate data — admin + doctor, not front_desk (§5.7).
-  const canViewAnalytics = isAdmin || user.role === 'doctor'
+  const canViewAnalytics = isAdmin || isDoctor
   const selectedPatient = patients.find((p) => p.id === selectedPatientId) ?? null
 
   const goToList = () => {
@@ -126,7 +129,7 @@ function AppShell() {
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-[560px] flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] md:max-w-[1440px] md:flex-row">
       <NavRail
-        role={user.role}
+        roles={user.roles}
         active={VIEW_TO_NAV_TARGET[view] ?? 'patients'}
         onNavigate={navigateTo}
       />
@@ -137,10 +140,10 @@ function AppShell() {
 
         <AppHeader
           fullName={user.fullName}
-          role={user.role}
+          roles={user.roles}
           activeNavTarget={VIEW_TO_NAV_TARGET[view] ?? 'patients'}
           onNavigate={navigateTo}
-          onOpenPreferences={() => setView('preferences')}
+          onOpenPreferences={isAdmin ? () => setView('preferences') : undefined}
           onSignOut={requestSignOut}
         />
 
@@ -375,7 +378,7 @@ function AppShell() {
 
         {view === 'users' && isAdmin && <UsersScreen onBack={goToList} />}
 
-        {view === 'preferences' && <PreferencesScreen onBack={goToList} />}
+        {view === 'preferences' && isAdmin && <PreferencesScreen onBack={goToList} />}
         </main>
       </div>
     </div>
@@ -393,7 +396,7 @@ function AuthGate() {
   const { user } = useAuth()
 
   if (!user) return <AuthScreen />
-  if (user.role === 'super_user') return <SuperUserShell />
+  if (user.roles.includes('super_user')) return <SuperUserShell />
 
   return (
     <AuditLogProvider>
