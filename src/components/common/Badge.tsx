@@ -6,8 +6,8 @@ interface Props {
   className?: string
 }
 
-/** Small pill label — e.g. a patient's group, a role, or an appointment's
- *  "New patient" flag. `self-start` so it hugs its content rather than
+/** Small pill label — e.g. a role, or an appointment's "New patient" flag.
+ *  `self-start` so it hugs its content rather than
  *  stretching to fill a flex-column parent when placed on its own line. */
 export function Badge({ children, className }: Props) {
   return (

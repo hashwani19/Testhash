@@ -10,7 +10,7 @@ interface Props {
 
 /**
  * The one place every "back up a level" control renders through (Patient
- * Detail, Manage Groups, Preferences, the Coming Soon placeholder screens).
+ * Detail, Preferences, the Coming Soon placeholder screens).
  * Deliberately styled larger, bolder, and in the accent color rather than
  * as a plain underlined text link — it's the primary way back to the list
  * from a full-screen detail view, not an incidental inline link, so it

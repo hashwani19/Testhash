@@ -26,7 +26,6 @@ const ACTION_LABELS: Record<AuditAction, string> = {
 
 const ENTITY_TYPE_LABELS: Record<AuditEntityType, string> = {
   patient: 'patient',
-  patient_group: 'patient group',
   eye_visit: 'eye record',
   appointment: 'appointment',
   attachment: 'attachment',
@@ -127,7 +126,6 @@ export function ActivityScreen({ entries, users, onBack }: Props) {
                 >
                   <option value="all">All types</option>
                   <option value="patient">Patient</option>
-                  <option value="patient_group">Patient group</option>
                   <option value="eye_visit">Eye record</option>
                   <option value="appointment">Appointment</option>
                   <option value="attachment">Attachment</option>

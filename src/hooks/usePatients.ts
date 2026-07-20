@@ -27,7 +27,6 @@ export interface PatientInput {
   address?: string
   mobile?: string
   gender: Gender
-  groupId?: string
 }
 
 export function usePatients() {
@@ -49,7 +48,6 @@ export function usePatients() {
         address: input.address ? sanitizeText(input.address) || undefined : undefined,
         mobile: input.mobile ? sanitizeText(input.mobile) || undefined : undefined,
         gender: input.gender,
-        groupId: input.groupId || undefined,
         createdAt: now,
         updatedAt: now,
       }
@@ -75,7 +73,6 @@ export function usePatients() {
         address: input.address ? sanitizeText(input.address) || undefined : undefined,
         mobile: input.mobile ? sanitizeText(input.mobile) || undefined : undefined,
         gender: input.gender,
-        groupId: input.groupId || undefined,
         updatedAt: Date.now(),
       }
       setPatients((prev) => prev.map((p) => (p.id === id ? after : p)))

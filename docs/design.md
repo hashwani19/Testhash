@@ -84,11 +84,11 @@ changes (see column-type notes in §5.3).
 
 ## 4. User roles & permissions
 
-| Role | Can view demographics | Can create/edit demographics | Can view/create/edit clinical records (visits, refraction, diagnosis) | Can delete clinical records | Can manage attachments (upload/view) | Can manage patient groups (create/rename/delete) | Can book/view appointments | Can manage global app settings | Can manage staff accounts | Can view audit log |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `doctor` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| `front_desk` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Role | Can view demographics | Can create/edit demographics | Can view/create/edit clinical records (visits, refraction, diagnosis) | Can delete clinical records | Can manage attachments (upload/view) | Can book/view appointments | Can manage global app settings | Can manage staff accounts | Can view audit log |
+|---|---|---|---|---|---|---|---|---|---|
+| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `doctor` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `front_desk` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
 
 Front desk can register a new patient and edit name/DOB/address/gender —
 e.g. at check-in, before a clinician ever opens the chart. Front desk can
@@ -101,18 +101,7 @@ The API rejects any `front_desk`-authenticated request touching
 `eye_visits`/`eye_refractions` from anyone but `admin` (§6), regardless of
 what the client sends.
 
-**Patient groups** (e.g. "Friends", "Family" — a free-form category a
-clinic assigns patients to) are **admin-managed, everyone-usable**: only
-`admin` can create, rename, or delete a group (via the dedicated screen,
-§8.8), but `doctor` and `front_desk` can both *see* the list of groups and
-*assign* a patient to one when creating/editing demographics — assigning a
-patient to an existing group is part of ordinary demographics editing, not
-a separate permission. The API enforces this the same way as everything
-else: `POST/PATCH/DELETE /patient-groups` are `admin`-only; `GET
-/patient-groups` and the `group_id` field on `POST/PATCH /patients` are
-open to any authenticated role (§6).
-
-**Appointments** (§8.11) reuse the exact same create-patient/create-visit
+**Appointments** (§8.10) reuse the exact same create-patient/create-visit
 permissions every role already has — there's no separate "can book
 appointments" grant to reason about. Booking, viewing, editing, deleting,
 "add as patient," and "add visit" are all open to every role — unlike
@@ -121,10 +110,10 @@ three roles can delete any appointment, since a booking mistake made by
 front desk shouldn't require an admin to come fix it. The *how* differs by
 role purely as a UI convenience, not a permission: `doctor`/`front_desk`
 get a per-row delete icon, `admin` gets bulk select-all + delete-selected
-instead of the per-row icon (§8.11) — same underlying `DELETE
+instead of the per-row icon (§8.10) — same underlying `DELETE
 /appointments/:id` (§6) either way. The one appointments-related thing
-that *is* admin-only is the **global auto-delete setting** (§5.2, §8.10,
-§8.11) — a `doctor` or `front_desk`
+that *is* admin-only is the **global auto-delete setting** (§5.2, §8.9,
+§8.10) — a `doctor` or `front_desk`
 session gets `403` from `GET`/`PATCH /settings` (§6), same enforcement
 pattern as everything else in this table.
 
@@ -222,7 +211,6 @@ erDiagram
     CLINIC_TYPES ||--o{ TENANTS : "is a"
     TENANTS ||--o{ USERS : has
     TENANTS ||--o{ PATIENTS : has
-    TENANTS ||--o{ PATIENT_GROUPS : has
     TENANTS ||--o{ APPOINTMENTS : has
     TENANTS ||--o{ AUDIT_LOG : has
     TENANTS ||--|| APP_SETTINGS : has
@@ -233,8 +221,6 @@ erDiagram
     USERS ||--o{ AUDIT_LOG : "acts in"
     USERS ||--o{ PATIENTS : "created by"
     USERS ||--o{ EYE_VISITS : "examined by"
-    USERS ||--o{ PATIENT_GROUPS : "created by"
-    PATIENT_GROUPS ||--o{ PATIENTS : groups
     PATIENTS ||--o{ EYE_VISITS : has
     PATIENTS ||--o{ CONSENTS : has
     PATIENTS ||--o{ APPOINTMENTS : "may reference"
@@ -269,15 +255,6 @@ erDiagram
         text invite_expires_at "§5.4"
         text created_at
     }
-    PATIENT_GROUPS {
-        text id PK
-        text tenant_id FK
-        text name "unique per tenant, §5.4"
-        text created_by FK
-        text created_at
-        text updated_at
-        text deleted_at
-    }
     PATIENTS {
         text id PK
         text tenant_id FK
@@ -288,7 +265,6 @@ erDiagram
         text address
         text mobile
         text gender
-        text group_id FK
         text created_by FK
         text created_at
         text updated_at
@@ -445,24 +421,6 @@ a rework of `PATIENTS` or anything tenant-level.
     actual exam fields need their own design pass, the same way
     ophthalmology's were derived from a real prescription pad (§5.2 above)
     rather than guessed at (§13).
-- **`patient_groups` / `patients.group_id`** — a free-form category a clinic
-  puts patients into (e.g. "Friends", "Family", "VIP"), not a clinical
-  concept. Modeled as **one group per patient** (`patients.group_id` is a
-  single nullable FK, not a join table) — matches the examples given
-  (mutually-exclusive categories, not overlapping tags). If overlapping
-  multi-group membership turns out to be needed later, that's an additive
-  `patient_group_members` join table without touching anything else here
-  (flagged as an open question, §13).
-  - `patient_groups.name` is `NOT NULL` and unique **per tenant**
-    (`UNIQUE (tenant_id, name)`, §5.4) — two different clinics can both have
-    a "VIP" group without colliding.
-  - Soft-deleted the same way as `patients` (`deleted_at`) rather than hard
-    deleted — so a patient's historical group assignment still resolves to
-    a name even after a group is retired, but retired groups drop out of
-    the assignable/filterable list (§6, §8.8).
-  - Mutation (`POST`/`PATCH`/`DELETE /patient-groups`) is **admin-only**;
-    reading the list and setting `patients.group_id` is open to any role
-    that can edit demographics — i.e. all three roles (§4).
 - **`patients.patient_number`** — the human-facing patient ID (distinct from
   `patients.id`, which stays an opaque UUID used only internally for foreign
   keys). Format: **`P-YYYYMMDD-NNNN`** — registration date + a 4-digit
@@ -584,11 +542,11 @@ a rework of `PATIENTS` or anything tenant-level.
   `create`; `after_json` is unset for `delete`.
 - **`audit_log.actor_name` / `entity_label`**: snapshotted at write time
   rather than resolved later via a join to `users`/the entity's own table —
-  the list view (§8.9) needs a human-readable actor and record reference
+  the list view (§8.8) needs a human-readable actor and record reference
   for *every* row without a live lookup that can fail once the referenced
-  row is gone. This matters even for tables that soft-delete (`patients`,
-  `patient_groups` keep their row via `deleted_at`, so a join would still
-  resolve) because `eye_visits` and `appointments` are **hard**-deleted —
+  row is gone. This matters even for tables that soft-delete (`patients`
+  keeps its row via `deleted_at`, so a join would still resolve) because
+  `eye_visits` and `appointments` are **hard**-deleted —
   there the row is genuinely gone, and a live join can never recover its
   name. Snapshotting both strings once, at the moment of the action, works
   identically for every entity type regardless of that table's delete
@@ -612,11 +570,11 @@ a rework of `PATIENTS` or anything tenant-level.
 - **`appointments`**: a booked day/time slot, for either an existing patient
   (`patient_id` set) or a not-yet-registered one (`patient_id` null, and
   `name`/`dob`/`manual_age`/`mobile`/`address` capture what front desk took
-  down over the phone/at the counter, §8.11).
+  down over the phone/at the counter, §8.10).
   - **Existing vs. prospective is a discriminant on `patient_id`**, not a
     separate `status`/`type` column — `patient_id IS NULL` *is* "this is a
     prospective patient," and the moment `PATCH /appointments/:id` sets it
-    (because "Add new patient" ran, §8.11), the row behaves as an
+    (because "Add new patient" ran, §8.10), the row behaves as an
     existing-patient appointment from then on; `name`/`dob`/etc. are left in
     place as a historical record but no longer read for display (the linked
     patient's own name/DOB take over).
@@ -628,7 +586,7 @@ a rework of `PATIENTS` or anything tenant-level.
     (§13) that would add a `status` column without touching anything else
     here.
   - **`date`/`time` are separate columns** (`YYYY-MM-DD` / `HH:MM`), not one
-    combined datetime — matches how the booking form collects them (§8.11)
+    combined datetime — matches how the booking form collects them (§8.10)
     and how filtering by date/date-range (`?from=&to=`, §6) reads most
     naturally as a plain string-range comparison on `date` alone.
   - **`date` is the only required field besides the patient** — `time` is
@@ -647,7 +605,7 @@ a rework of `PATIENTS` or anything tenant-level.
   `CHECK (id = 1)`, §5.3) holding app-wide, admin-configurable settings —
   today just the two auto-delete fields above. Deliberately *not* rows in
   `user_preferences`: these apply to the whole clinic/instance regardless of
-  which admin changes them, not to one person's own account (§8.10, §8.11).
+  which admin changes them, not to one person's own account (§8.9, §8.10).
   `GET`/`PATCH /settings` (§6) are `admin`-only; every other role never sees
   this resource at all.
 - **Timestamps & default sort order**: every record-bearing table carries a
@@ -736,19 +694,6 @@ CREATE TABLE patient_number_counters (
     PRIMARY KEY (tenant_id, date_key)
 );
 
--- Admin-managed categories (e.g. "Friends", "Family"); one per patient (§5.2).
-CREATE TABLE patient_groups (
-    id         TEXT PRIMARY KEY,
-    tenant_id  TEXT NOT NULL REFERENCES tenants(id),
-    name       TEXT NOT NULL,
-    created_by TEXT REFERENCES users(id),
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    deleted_at TEXT,                             -- soft delete; null = active
-    UNIQUE (tenant_id, name)
-);
-CREATE INDEX idx_patient_groups_tenant ON patient_groups(tenant_id);
-
 CREATE TABLE patients (
     id             TEXT PRIMARY KEY,             -- opaque UUID; internal FK target only
     tenant_id      TEXT NOT NULL REFERENCES tenants(id),
@@ -759,7 +704,6 @@ CREATE TABLE patients (
     address        TEXT,
     mobile         TEXT,                         -- 10-digit India mobile number, validated client-side (§5.2)
     gender         TEXT NOT NULL CHECK (gender IN ('female', 'male', 'other', 'unspecified')),
-    group_id       TEXT REFERENCES patient_groups(id),  -- nullable; ungrouped by default
     created_by     TEXT REFERENCES users(id),
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
@@ -770,7 +714,6 @@ CREATE INDEX idx_patients_tenant ON patients(tenant_id);
 CREATE INDEX idx_patients_name ON patients(tenant_id, name);
 CREATE INDEX idx_patients_deleted_at ON patients(tenant_id, deleted_at);
 CREATE INDEX idx_patients_created_at ON patients(tenant_id, created_at DESC);  -- supports default sort (§6)
-CREATE INDEX idx_patients_group ON patients(tenant_id, group_id);              -- supports filter by group (§6)
 
 -- No direct tenant_id: every access path goes through patient_id, whose
 -- tenant is already checked (§5.1).
@@ -833,7 +776,7 @@ CREATE TABLE audit_log (
     actor_user_id  TEXT REFERENCES users(id),
     actor_name     TEXT NOT NULL,               -- snapshotted at write time (§5.2)
     action         TEXT NOT NULL CHECK (action IN ('create', 'update', 'delete', 'export')),
-    entity_type    TEXT NOT NULL,               -- 'patient' | 'patient_group' | 'eye_visit' | 'appointment' | 'attachment' | ...
+    entity_type    TEXT NOT NULL,               -- 'patient' | 'eye_visit' | 'appointment' | 'attachment' | ...
     entity_id      TEXT NOT NULL,
     entity_label   TEXT NOT NULL,               -- snapshotted at write time (§5.2) — e.g. a patient's name
     before_json    TEXT,
@@ -971,7 +914,7 @@ already chosen in §3.3.
 - **Revoking a tenant**: `PATCH /platform/tenants/:id` with
   `status: 'suspended'` (§6) is a soft-disable lever (a `super_user` can
   suspend a delinquent or offboarded clinic without deleting its data),
-  matching the soft-delete pattern already used for patients/groups
+  matching the soft-delete pattern already used for patients
   elsewhere in this schema. Two things beyond just flipping the column,
   since a suspension needs to actually take effect immediately rather than
   just block *future* logins:
@@ -1018,7 +961,7 @@ already chosen in §3.3.
   wildcard-subdomain infrastructure not built yet (§13).
 - **What gets `tenant_id` directly vs. inherits it transitively**: added
   directly to every table with its own tenant-wide list/search endpoint in
-  §6 (`users`, `patients`, `patient_groups`, `appointments`, `audit_log`,
+  §6 (`users`, `patients`, `appointments`, `audit_log`,
   plus `app_settings` and `patient_number_counters`, which aren't lists but
   have no other FK to inherit through). Left off `eye_visits`,
   `eye_refractions`, `attachments`, `consents`, `sessions`, and
@@ -1083,7 +1026,7 @@ flow specified above:
   exactly the single-column case that convention already covers, and a
   caller shouldn't have to remember to wrap it.
 - **Tenant-scoped storage**: every per-clinic hook/provider
-  (`usePatients`, `useEyeVisits`, `usePatientGroups`, `useAppointments`,
+  (`usePatients`, `useEyeVisits`, `useAppointments`,
   `useAttachments`, `AuditLogProvider`, `GlobalSettingsProvider`,
   `PrescriptionTemplateProvider`) derives its localStorage key from the
   signed-in user's `tenantId` via `useTenantStorageState` (`utils/
@@ -1281,7 +1224,7 @@ HTML/layout template**:
   browser's native print dialog — which already covers "save as PDF" on
   every major platform without this service needing to render one itself.
 - **Always renders light (black on white), regardless of the viewer's own
-  theme preference** (§5.2/§8.10) — a printed medical document needs to
+  theme preference** (§5.2/§8.9) — a printed medical document needs to
   stay legible and ink-economical on paper; a staff member's personal
   dark-mode preference for the *app* has no bearing on what should print.
 - **Printing is logged as an export-class audit action**
@@ -1353,8 +1296,8 @@ functions computing counts over those same arrays, not a new API surface.
 - **New Analytics screen, admin + doctor only** (not front_desk) —
   clinic-wide aggregate data treated as a clinical/operational concern, not
   a front-desk one. `NavMenu`'s per-item gating generalized from a plain
-  `adminOnly?: boolean` to `roles?: Role[]` to express this (`groups`/
-  `activity` became `roles: ['admin']` with no behavior change).
+  `adminOnly?: boolean` to `roles?: Role[]` to express this (`activity`
+  became `roles: ['admin']` with no behavior change).
 - **Five charts**, computed by `src/utils/analyticsQuery.ts` (pure
   functions, same convention as `patientQuery.ts`/`appointmentQuery.ts`):
   - **New patients** and **visits (new vs. returning)** over time, sharing
@@ -1440,9 +1383,7 @@ query params, and returns
 `{ items: [...], totalCount: number }` rather than a bare array —
 `totalCount` is the count across *all* pages, not just the returned page,
 so the client can render "N things" and compute total page count without
-an extra request. (`GET /patient-groups` is deliberately excluded — it's a
-small, admin-managed selector list, not something expected to need
-paging.) This is a deliberate, load-bearing contract: the client's
+an extra request. This is a deliberate, load-bearing contract: the client's
 `ListView` component already has a server-paged mode built around exactly
 this shape (`items` = current page, `totalCount` = grand total, `page`/
 `onPageChange` round-tripped to the API) so that swapping a hook's
@@ -1471,16 +1412,12 @@ UI at all — only the data-fetching layer.
 | `GET /users?page=&limit=` | admin | List staff accounts (own tenant only) | `full_name` asc |
 | `POST /users` | admin, super_user | Create a staff account. `admin` creates `doctor`/`front_desk`/`admin` under their own tenant; a `super_user` may additionally set `role: 'super_user'` on a new user under the reserved platform tenant (§4.1/§5.4) — no other caller may ever set that role | — |
 | `PATCH /users/:id` | admin | Update role/active status | — |
-| `GET /patients?search=&group_id=&sort=&page=&limit=` | any | List/search patients. `search` matches **name** (substring, case-insensitive) **or** `patient_number` (substring, so a partial number or date prefix like `P-20260705` also works) — ≥3 characters or omitted, shorter values → `400` (§5.2). Optional `group_id` filters to one group. Optional `sort` overrides the default: `group` (group name asc, then `created_at` desc within a group), `name_asc`/`name_desc` (patient name, case-insensitive) — omit for the plain default below. Summary rows only (`patient_number`/name/age/gender/group); full clinical detail lives on the visit endpoints below | `created_at` **desc** (newest-registered first) |
-| `POST /patients` | admin, doctor, front_desk | Create patient (demographics only, optionally including `group_id` — request body may not include clinical fields). Response includes the generated `patient_number` | — |
-| `GET /patients/:id` | any | Patient detail (demographics, including group; visit history fetched separately via `/patients/:id/visits`) | — |
+| `GET /patients?search=&sort=&page=&limit=` | any | List/search patients. `search` matches **name** (substring, case-insensitive) **or** `patient_number` (substring, so a partial number or date prefix like `P-20260705` also works) — ≥3 characters or omitted, shorter values → `400` (§5.2). Optional `sort` overrides the default: `name_asc`/`name_desc` (patient name, case-insensitive) — omit for the plain default below. Summary rows only (`patient_number`/name/age/gender); full clinical detail lives on the visit endpoints below | `created_at` **desc** (newest-registered first) |
+| `POST /patients` | admin, doctor, front_desk | Create patient (demographics only — request body may not include clinical fields). Response includes the generated `patient_number` | — |
+| `GET /patients/:id` | any | Patient detail (demographics; visit history fetched separately via `/patients/:id/visits`) | — |
 | `GET /patients/by-number/:patient_number` | any | **Exact-match** convenience alias for the common case of already having the full ID (e.g. a barcode/QR scan) — skips the substring search. Resolves to the same detail response as `GET /patients/:id` | — |
-| `PATCH /patients/:id` | admin, doctor, front_desk | Update demographics, including reassigning `group_id` (any role that can edit demographics — not restricted to admin, §4) | — |
+| `PATCH /patients/:id` | admin, doctor, front_desk | Update demographics (any role that can edit demographics — not restricted to admin, §4) | — |
 | `DELETE /patients/:id` | admin | Soft-delete patient (+ cascade note in audit log) | — |
-| `GET /patient-groups` | any | List active (non-deleted) patient groups, for the group selector in patient forms and the filter dropdown | `name` asc |
-| `POST /patient-groups` | admin | Create a group | — |
-| `PATCH /patient-groups/:id` | admin | Rename a group | — |
-| `DELETE /patient-groups/:id` | admin | Soft-delete a group (existing patients keep their `group_id`/name for history; the group drops out of future assignment/filter lists) | — |
 | `GET /patients/:id/visits?page=&limit=` | admin, doctor, front_desk | Visit history for a patient | `visit_at` **desc** (most recent visit first) |
 | `POST /patients/:id/visits` | admin, doctor, front_desk | Create a visit — one payload containing a `visit_at` datetime, up to 4 refraction rows (distance/reading × left/right), diagnosis, treatment plan, and lenses | — |
 | `GET /visits/:id` | admin, doctor, front_desk | Single visit detail | — |
@@ -1491,11 +1428,11 @@ UI at all — only the data-fetching layer.
 | `GET /attachments/:id` | admin, doctor | Fetch (redirect to a short-lived signed R2 URL) | — |
 | `DELETE /attachments/:id` | admin | Remove attachment | — |
 | `GET /patients/:id/export` | admin | Full patient data export (JSON/PDF) — data portability | — |
-| `GET /audit-log?search=&entity_type=&actor_user_id=&from=&to=&page=&limit=` | admin | Audit trail lookup (§8.9). `search` matches `actor_name` or `entity_label` (≥3 chars, same rule as `/patients`, §5.2). `entity_type`/`actor_user_id` filter to one value each; `from`/`to` filter to a date range (either or both, inclusive) | `created_at` **desc** (most recent activity first, not user-configurable) |
-| `GET /appointments?search=&from=&to=&sort=&page=&limit=` | any | List/search appointments (§8.11). `search` matches the resolved patient name (linked patient's name, or the prospective `name` — ≥3 chars, same rule as `/patients`, §5.2). `from`/`to` filter to a date range (either or both, inclusive). `sort` overrides the default: `name_asc`/`name_desc` | `date`, `time` asc (soonest first) |
-| `POST /appointments` | any | Book an appointment — either `patient_id` (existing patient) or `name`/`dob`/`manual_age`/`mobile`/`address` (prospective patient), plus `date` (required) and `time` (optional). `date` must be today or later — rejects a past date with `400` (§8.11) | — |
-| `PATCH /appointments/:id` | any | Update any of `date`/`time`/`patient_id`/`name`/`dob`/`manual_age`/`mobile`/`address` — used both for the Edit action (§8.11) and to set `patient_id` once a prospective patient is registered via "Add new patient" | — |
-| `DELETE /appointments/:id` | any | Delete a single appointment (§8.11) — not admin-only, unlike `DELETE /visits/:id`; the client's "bulk delete" is just this endpoint called once per selected id | — |
+| `GET /audit-log?search=&entity_type=&actor_user_id=&from=&to=&page=&limit=` | admin | Audit trail lookup (§8.8). `search` matches `actor_name` or `entity_label` (≥3 chars, same rule as `/patients`, §5.2). `entity_type`/`actor_user_id` filter to one value each; `from`/`to` filter to a date range (either or both, inclusive) | `created_at` **desc** (most recent activity first, not user-configurable) |
+| `GET /appointments?search=&from=&to=&sort=&page=&limit=` | any | List/search appointments (§8.10). `search` matches the resolved patient name (linked patient's name, or the prospective `name` — ≥3 chars, same rule as `/patients`, §5.2). `from`/`to` filter to a date range (either or both, inclusive). `sort` overrides the default: `name_asc`/`name_desc` | `date`, `time` asc (soonest first) |
+| `POST /appointments` | any | Book an appointment — either `patient_id` (existing patient) or `name`/`dob`/`manual_age`/`mobile`/`address` (prospective patient), plus `date` (required) and `time` (optional). `date` must be today or later — rejects a past date with `400` (§8.10) | — |
+| `PATCH /appointments/:id` | any | Update any of `date`/`time`/`patient_id`/`name`/`dob`/`manual_age`/`mobile`/`address` — used both for the Edit action (§8.10) and to set `patient_id` once a prospective patient is registered via "Add new patient" | — |
+| `DELETE /appointments/:id` | any | Delete a single appointment (§8.10) — not admin-only, unlike `DELETE /visits/:id`; the client's "bulk delete" is just this endpoint called once per selected id | — |
 | `GET /settings` | admin | App-wide settings (auto-delete toggle + day threshold, §5.2) | — |
 | `PATCH /settings` | admin | Update either/both fields | — |
 
@@ -1522,8 +1459,8 @@ UI at all — only the data-fetching layer.
   to switch between, just one identity to display.
 - **A "Branding" settings screen** (admin-only, §5.5/§8.2) for editing
   `title`/`subtitle` and uploading/removing the logo — reachable from the
-  hamburger nav alongside Groups/Activity (§8.2), not the profile-menu
-  Preferences screen (§8.10), since it's a tenant-wide setting an admin
+  hamburger nav alongside Activity (§8.2), not the profile-menu
+  Preferences screen (§8.9), since it's a tenant-wide setting an admin
   manages on the clinic's behalf, not a personal "my account" setting every
   role gets its own copy of.
 - **A "Prescription Template" settings screen** (admin-only, §5.6/§8.2), same
@@ -1544,7 +1481,7 @@ UI at all — only the data-fetching layer.
   blank where unset, unlike the on-screen history's "hide if empty" display
   (§5.6) — styled with `@page { size: letter; margin: <topMarginMm-aware
   value>; }` print CSS, forced to a light/high-contrast palette regardless
-  of the viewer's own theme preference (§5.2/§8.10). Triggers printing
+  of the viewer's own theme preference (§5.2/§8.9). Triggers printing
   (platform-dependent — §5.6) rather than adding any client-side routing
   (this app has none today — `App.tsx` is a single `view` state switch, not
   a router) just for this one screen. The rest of the app shell is hidden
@@ -1599,7 +1536,7 @@ UI at all — only the data-fetching layer.
     visit's (or all of the patient's visits') attachments, logging one
     audit entry per removed attachment — mirrors how visit deletion already
     cascades from patient deletion.
-  - Every create/delete is written to the audit log (§8.9) the same way
+  - Every create/delete is written to the audit log (§8.8) the same way
     every other mutation hook already does, with a metadata-only snapshot
     (file name, content type, size, visit id) — never the data URL itself,
     which would otherwise bloat every log entry with the full image.
@@ -1656,9 +1593,6 @@ UI at all — only the data-fetching layer.
 - The search box debounces input and only calls the API once the query is
   **3+ characters**; below that it shows the unfiltered (or previous) list
   rather than firing a request, matching the API's enforced minimum (§5.2).
-- A new admin-only Manage Groups screen (§8.8), plus a group filter/sort
-  control and a group selector added to the existing patient list and
-  patient form.
 - Lists render through a shared `ListView` component with two modes: today
   (local-storage) it's handed the entire filtered array and pages through
   it client-side; once a screen's data comes from the real API it's handed
@@ -1667,15 +1601,14 @@ UI at all — only the data-fetching layer.
   `page`/`limit`/`totalCount` contract exists specifically so this swap
   doesn't require changing `ListView` or any screen's markup — only the
   data-fetching hook underneath it).
-- The patient list's search/group-filter/sort state (plus a "reset filters"
-  action) is likewise isolated behind one hook (`usePatientQuery`) rather
-  than lived directly in the screen component. Today its body is an
-  in-memory filter/sort over the full `patients` array; once the backend
-  exists it becomes a debounced call to `GET /patients?search=&group_id=&
-  sort=&page=&limit=` (§6) instead — the hook's returned shape (search/
-  setSearch/groupId/setGroupId/sort/setSort/resetFilters/isFilterActive/
-  results) stays the same either way, so `PatientList` and `SearchBox`
-  don't change when that swap happens.
+- The patient list's search/sort state (plus a "reset filters" action) is
+  likewise isolated behind one hook (`usePatientQuery`) rather than lived
+  directly in the screen component. Today its body is an in-memory
+  filter/sort over the full `patients` array; once the backend exists it
+  becomes a debounced call to `GET /patients?search=&sort=&page=&limit=`
+  (§6) instead — the hook's returned shape (search/setSearch/sort/setSort/
+  resetFilters/isFilterActive/results) stays the same either way, so
+  `PatientList` and `SearchBox` don't change when that swap happens.
 - Per-user preferences (theme; list page size) are likewise isolated behind
   `usePreferences`, backed by a `PreferencesProvider` context (mirroring
   `AuthProvider`) rather than a plain hook — every consumer (the theme
@@ -1693,7 +1626,7 @@ UI at all — only the data-fetching layer.
   DOB/address — optional, validated client-side with an India-format
   `pattern` (§5.2), not required (matches the existing DOB/address fields'
   optionality).
-- A new **Appointments** screen (§8.11) replaces the placeholder reserved by
+- A new **Appointments** screen (§8.10) replaces the placeholder reserved by
   the nav (§8.2): booking (`AppointmentForm`), the list (`AppointmentsScreen`,
   built on the same `ListView`/`SearchBox` used everywhere else), and its
   own search/date-range/sort state isolated behind `useAppointmentQuery`
@@ -1715,11 +1648,11 @@ UI at all — only the data-fetching layer.
 - A new shared **`Badge`** component (small pill label) is the one place any
   such label in the app renders through — introduced for the "New patient"
   flag, used both in the appointments list and live in the booking form
-  itself once a typed name matches nobody (§8.11), rather than a one-off
+  itself once a typed name matches nobody (§8.10), rather than a one-off
   inline `<span>` in each place.
 - A new shared **`Breadcrumb`** component is the one place every "back up a
-  level" control renders through (Patient Detail, Manage Groups,
-  Preferences, Activity's detail view) — previously each screen rendered
+  level" control renders through (Patient Detail, Preferences, Activity's
+  detail view) — previously each screen rendered
   its own `Button variant="link"` with the same "‹ All patients" text,
   styled as a plain small underlined link. `Breadcrumb` is deliberately
   larger, semibold, and in the accent color instead — it's the primary way
@@ -1729,7 +1662,7 @@ UI at all — only the data-fetching layer.
 - **Audit logging is implemented client-side**, reversing this document's
   earlier position that it needed server-side write interception this app
   has no equivalent for. In practice every mutation already funnels through
-  exactly one hook per entity (`usePatients`/`usePatientGroups`/
+  exactly one hook per entity (`usePatients`/
   `useEyeVisits`/`useAppointments`), so each of those hooks calls
   `logEntry` itself right next to where it already calls `setState` —
   functionally the same guarantee "every mutating endpoint writes an
@@ -1764,10 +1697,10 @@ master-detail list+detail layout are known gaps, left for a later pass.
   defaults to the capped, single-column-friendly width; `<Screen
   width="wide">` opts out for a screen with genuine multi-column content of
   its own. Added after the tenant-management screens (§5.4/§8, Tenants/
-  Users) shipped without the cap their sibling screens (Manage Groups,
-  Preferences) already had — a class of bug a shared component now
+  Users) shipped without the cap their sibling screens (Preferences)
+  already had — a class of bug a shared component now
   prevents by construction rather than by every screen author remembering
-  a convention. `ManageGroupsScreen`/`PreferencesScreen`/`UsersScreen`/
+  a convention. `PreferencesScreen`/`UsersScreen`/
   `TenantsScreen` all go through it today; the search+list screens
   (Patients, Appointments, Activity) and `PatientDetail` weren't migrated
   since they already correctly avoid the cap, not because `Screen` doesn't
@@ -1802,7 +1735,6 @@ emailed link.
   | Nav item | `admin` | `doctor` | `front_desk` |
   |---|---|---|---|
   | Patients | ✅ | ✅ | ✅ |
-  | Groups | ✅ | ❌ | ❌ |
   | Activity | ✅ | ❌ | ❌ |
   | Appointments | ✅ | ✅ | ✅ |
   | Branding | ✅ | ❌ | ❌ |
@@ -1810,9 +1742,8 @@ emailed link.
 
 - **Patients** → Patient List (§8.3), unchanged as the default landing
   screen right after login for every role.
-- **Groups** → Manage Groups (§8.8), admin-only.
-- **Activity** → the new Activity (Audit Log) screen (§8.9), admin-only.
-- **Appointments** → Appointments (§8.11), open to all three roles — booking,
+- **Activity** → the new Activity (Audit Log) screen (§8.8), admin-only.
+- **Appointments** → Appointments (§8.10), open to all three roles — booking,
   viewing, and converting an appointment to a patient/visit use the same
   permissions those actions already have elsewhere (§4).
 - **Branding** → the new Branding settings screen (§5.5/§7), admin-only —
@@ -1830,16 +1761,12 @@ emailed link.
 - One search box at the top — debounced, ignores input under 3 characters,
   calls `GET /patients?search=`. Matches name *or* `patient_number` in the
   same box; no separate "search by ID" mode (§5.2, §6).
-- A **group filter** dropdown (all groups + "All groups") next to the search
-  box — sets `group_id` on the same request. And a **sort** toggle: default
-  (newest-registered-first) or **by group** (group name asc, then
-  newest-first within the group), mapping straight to `?sort=group` (§6).
-  Both are plain query-string params — no client-side re-sort/re-filter of
-  an already-fetched page.
-- Below it, summary rows: `patient_number`, name, age, gender, and the
-  patient's group (if any) as a small label/chip. Default order is
-  newest-registered-first (`created_at` desc) — a server-guaranteed order,
-  not incidental array order (§6).
+- A **sort** toggle next to the search box: default (newest-registered-first)
+  or name A-Z/Z-A, mapping straight to `?sort=` (§6) — a plain query-string
+  param, no client-side re-sort/re-filter of an already-fetched page.
+- Below it, summary rows: `patient_number`, name, age, gender. Default order
+  is newest-registered-first (`created_at` desc) — a server-guaranteed
+  order, not incidental array order (§6).
 - "Add new patient" button — visible to `admin`, `doctor`, and `front_desk`.
 - Tapping a row opens Patient Detail.
 
@@ -1847,16 +1774,11 @@ emailed link.
 
 - Header: name, `patient_number`, age (computed from DOB, or the manual
   value when DOB is absent or the computed age was overridden — §5.3), DOB,
-  gender, address, group.
+  gender, address.
 - Edit / Delete patient buttons — delete is **admin-only**, hidden entirely
   (not disabled) for the other two roles (§4). Edit opens the same patient
-  form as creation (§8.3), including the group selector.
-- The patient create/edit form's **Group** field is a plain dropdown
-  populated from `GET /patient-groups` (name asc), plus "No group." It's a
-  *picker*, not a group editor — every role that can edit demographics can
-  assign an existing group to a patient, but only `admin` can add a new
-  option to that dropdown, from the separate Manage Groups screen (§8.8).
-- "Eye treatment history" below: visit cards, most-recent-visit-first
+  form as creation (§8.3).
+- "Prescription History" below: visit cards, most-recent-visit-first
   (`visit_at` desc, §6).
 - Each visit card shows: visit date + time, the Distance/Reading ×
   Left/Right refraction grid (Sphere, Cylinder, Axis, Visual Acuity),
@@ -1906,13 +1828,11 @@ this one with fields relabeled. Not yet designed for any type beyond
 | View/create/edit patients & visits | ✅ | ✅ | ✅ |
 | Delete anything (patient, visit, attachment) | ✅ | ❌ | ❌ |
 | Attachments (upload/view) | ✅ | ✅ | ❌ (hidden) |
-| Assign a patient to an existing group | ✅ | ✅ | ✅ |
-| Manage patient groups (create/rename/delete) | ✅ | ❌ | ❌ |
 | View Activity (audit log) | ✅ | ❌ | ❌ |
 | Manage staff accounts | ✅ | ❌ | ❌ |
-| Appointments — book/view/edit/delete/convert (§8.11) | ✅ | ✅ | ✅ |
-| Global app settings — appointment auto-delete (§8.10) | ✅ | ❌ | ❌ |
-| Preferences (own theme + list page size, §8.10) | ✅ | ✅ | ✅ |
+| Appointments — book/view/edit/delete/convert (§8.10) | ✅ | ✅ | ✅ |
+| Global app settings — appointment auto-delete (§8.9) | ✅ | ❌ | ❌ |
+| Preferences (own theme + list page size, §8.9) | ✅ | ✅ | ✅ |
 | Branding — title/subtitle/logo (§5.5/§8.2) | ✅ | ❌ | ❌ |
 | Print a visit's prescription (§5.6/§8.4) | ✅ | ✅ | ✅ |
 | Prescription Template — letterhead/margin/footer (§5.6/§8.2) | ✅ | ❌ | ❌ |
@@ -1923,32 +1843,17 @@ The offline/install banners (`OfflineBanner`, `InstallBanner`) and the PWA
 install experience are exactly what's already live in the current MVP —
 this is additive on top of that shell, not a rewrite of it.
 
-### 8.8 Manage Groups (admin-only screen)
-
-- A route only `admin` can reach — hidden from the nav entirely for
-  `doctor`/`front_desk` (a direct URL hit gets the same server-side `403`
-  as any other admin-only endpoint, §4).
-- List of groups: name, and how many active patients currently reference it
-  (a simple `COUNT`, not stored).
-- Create (name input), rename, and delete (soft-delete, §5.2) — delete asks
-  for confirmation since it removes the group from every patient's
-  assignable/filterable list going forward, even though existing patients
-  keep their historical group name on record.
-- No bulk reassignment tool in this phase — if a group is deleted, patients
-  who had it keep showing that (now-retired) name read-only; reassigning
-  them individually is a normal patient-edit action.
-
-### 8.9 Activity (Audit Log) — admin-only screen
+### 8.8 Activity (Audit Log) — admin-only screen
 
 - Reachable only via the **Activity** nav item (§8.2); hidden entirely for
-  `doctor`/`front_desk` (§4), same as Manage Groups (§8.8) — a direct URL
+  `doctor`/`front_desk` (§4) — a direct URL
   hit gets the server-side `403` any other admin-only endpoint would (and
   client-side, the view simply isn't rendered for a non-admin session,
   §7).
 - Reverse-chronological feed over `audit_log` (§5.1, §5.3) — always sorted
   newest-first, not a user-configurable sort like the patient/appointment
-  lists (§8.3, §8.11). Each row shows the actor's name, the action
-  (created/updated/deleted), the entity type ("patient" / "patient group" /
+  lists (§8.3, §8.10). Each row shows the actor's name, the action
+  (created/updated/deleted), the entity type ("patient" /
   "eye record" / "appointment"), the entity's snapshotted label (§5.2 —
   e.g. a patient's name), and the timestamp.
 - **Search**: matches actor name or entity label, same ≥3 character rule as
@@ -1956,7 +1861,7 @@ this is additive on top of that shell, not a rewrite of it.
 - **Filters**: entity type, staff member (a dropdown of every registered
   user, §5.1 `users`), and an optional date range (`from`/`to`, either or
   both) — plus the same "reset filters" control every other filtered list
-  in the app has (§8.3, §8.11).
+  in the app has (§8.3, §8.10).
 - Read-only — no edit or delete of audit entries themselves; `audit_log` is
   meant to be tamper-evident (§5.2).
 - Row tap opens a detail view: actor/action/entity summary up top, then a
@@ -1968,11 +1873,11 @@ this is additive on top of that shell, not a rewrite of it.
   not the patient list.
 - **Implemented client-side**, reversing this document's earlier position
   that audit logging needed server-side write interception this app has no
-  equivalent for (§7) — every mutation across patients, patient groups, eye
+  equivalent for (§7) — every mutation across patients, eye
   records, and appointments writes a real entry today, not just seeded demo
   data.
 
-### 8.10 Preferences (own account, every role)
+### 8.9 Preferences (own account, every role)
 
 - Reachable from the **profile menu** (the avatar/initials popover in the
   top-right, §8.2's counterpart on the right side of the header), not the
@@ -2022,7 +1927,7 @@ this is additive on top of that shell, not a rewrite of it.
     as the personal preferences above) and is visible to every admin, since
     it's one shared setting, not a per-admin one.
 
-### 8.11 Appointments (every role)
+### 8.10 Appointments (every role)
 
 - **Booking** (`AppointmentForm`): a **date** (today or later — the form
   rejects a past date client-side and the API would reject one server-side
@@ -2044,7 +1949,7 @@ this is additive on top of that shell, not a rewrite of it.
     §5.2), and address. The typed text becomes the name as-is — no
     confirmation step.
     None of these fields touch the `patients` table yet — they live on the
-    appointment row itself until "Add new patient" (§8.11 below) runs.
+    appointment row itself until "Add new patient" (§8.10 below) runs.
   - If the user keeps typing and the text starts matching someone after
     all, the new-patient fields disappear and the match list takes over
     again — the form always reflects the *current* text, not whichever
@@ -2120,11 +2025,11 @@ this is additive on top of that shell, not a rewrite of it.
     down the page the way a suddenly-appearing button would.
 - **Auto-delete**: independent of the manual delete/bulk-delete above,
   whenever the admin-only "Automatically delete old appointments" setting
-  (§8.10) is on, any appointment dated more than the configured number of
+  (§8.9) is on, any appointment dated more than the configured number of
   days in the past (default 2, §5.2) is swept away automatically — this
   runs whenever the app loads or an admin changes either setting. It's a
   **global** setting, not per-user: one admin turning it off turns it off
-  for everyone, matching the "global app settings" framing in §8.10.
+  for everyone, matching the "global app settings" framing in §8.9.
 
 ## 9. Offline sync strategy (phased)
 
@@ -2194,7 +2099,7 @@ build them if multi-device offline editing turns out to be a real need.
   React escapes automatically — nothing in the client uses
   `dangerouslySetInnerHTML` or raw `innerHTML`. `src/utils/sanitize.ts` adds
   a defense-in-depth layer on top: every hook that persists free-text
-  (patient name/address, visit notes, group names, the prescription
+  (patient name/address, visit notes, the prescription
   letterhead fields, ...) strips non-printable characters through
   `sanitizeText` before writing to storage, so the same guarantee holds
   even for a future sink that doesn't go through JSX (a CSV/PDF export, an
@@ -2263,12 +2168,6 @@ build them if multi-device offline editing turns out to be a real need.
   every other field (lenses, diagnosis, treatment plan, follow-up, notes,
   attachments) as-is. This is a narrow "hide what doesn't apply" patch, not
   the orthopedic-specific field set this bullet still calls for.
-- **Patient groups: one per patient, assumed.** Modeled as a single nullable
-  `patients.group_id`, not many-to-many — matches "Friends"/"Family" reading
-  as mutually-exclusive categories, but wasn't asked explicitly. If a patient
-  should ever belong to more than one group at once, swap in a
-  `patient_group_members(patient_id, group_id)` join table; nothing else in
-  §5/§6/§8 needs to change.
 - ~~Multi-clinic support is not modeled (no `clinic_id` anywhere)~~ —
   **resolved: specified in §5.4 (`tenants`), §5.1/§5.3 (`tenant_id`
   propagation), §6 (`/platform/tenants`, `/auth/accept-invite`), and §8.1
@@ -2319,10 +2218,10 @@ build them if multi-device offline editing turns out to be a real need.
   the rest of this document (§2) — `tenants` has no plan/quota/billing
   fields; add them additively if monetization is ever built out.
 - ~~Appointment scheduling~~ — **resolved: specified in §5 (`appointments`,
-  `app_settings`), §6 (`/appointments`, `/settings`), and §8.11.** Billing
+  `app_settings`), §6 (`/appointments`, `/settings`), and §8.10.** Billing
   remains out of scope; an `invoices` table would be additive the same way,
   referencing `patients`/`eye_visits` without changing what's here.
-- **No appointment status/cancel workflow in this phase** (§5.2, §8.11) —
+- **No appointment status/cancel workflow in this phase** (§5.2, §8.10) —
   an appointment is either booked or gone (deleted manually/in bulk by any
   role, or swept automatically once stale); there is no booked/completed/
   cancelled state machine. If a clinic wants to distinguish "cancelled" from
@@ -2331,7 +2230,7 @@ build them if multi-device offline editing turns out to be a real need.
 - **Appointment auto-delete threshold is admin-configurable** (`app_settings.
   auto_delete_after_days`, default 2), not hardcoded — chosen over a fixed
   constant so a clinic that wants a longer/shorter retention window doesn't
-  need a code change (§8.10, §8.11).
+  need a code change (§8.9, §8.10).
 - ~~Prescription printing~~ — **resolved: specified in §5.6
   (`prescription_templates`), §6 (`GET`/`PATCH /prescription-template`,
   `POST /visits/:id/print`), and §7/§8.4/§8.6.** Deliberately a fixed

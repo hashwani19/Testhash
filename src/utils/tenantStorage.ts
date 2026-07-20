@@ -14,7 +14,6 @@ export const DEFAULT_TENANT_ID = 'default'
 export const TENANT_SCOPED_BASE_KEYS = [
   'testhash.patients.v1',
   'testhash.eyeVisits.v1',
-  'testhash.patientGroups.v1',
   'testhash.appointments.v1',
   'testhash.attachments.v1',
   'testhash.auditLog.v1',

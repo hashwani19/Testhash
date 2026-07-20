@@ -1,6 +1,6 @@
 import type { Role } from './types'
 
-export type NavTarget = 'patients' | 'groups' | 'activity' | 'appointments' | 'analytics' | 'users' | 'tenants'
+export type NavTarget = 'patients' | 'activity' | 'appointments' | 'analytics' | 'users' | 'tenants'
 
 const TENANT_ROLES: Role[] = ['admin', 'doctor', 'front_desk']
 
@@ -15,7 +15,6 @@ export const NAV_ITEMS: Array<{ target: NavTarget; label: string; roles?: Role[]
   { target: 'appointments', label: 'Appointments', roles: TENANT_ROLES },
   { target: 'analytics', label: 'Analytics', roles: ['admin', 'doctor'] },
   { target: 'activity', label: 'Activity', roles: ['admin'] },
-  { target: 'groups', label: 'Groups', roles: ['admin'] },
   { target: 'users', label: 'Users', roles: ['admin'] },
   { target: 'tenants', label: 'Tenants', roles: ['super_user'] },
 ]

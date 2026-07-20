@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Attachment, ClinicType, EyeVisit, Patient, PatientGroup } from '../types'
+import type { Attachment, ClinicType, EyeVisit, Patient } from '../types'
 import { getPatientAge } from '../utils/age'
 import { EyeRecordHistory } from './EyeRecordHistory'
 import { ConfirmModal } from './ConfirmModal'
@@ -10,7 +10,6 @@ import { EditIcon } from './common/icons'
 
 interface Props {
   patient: Patient
-  groups: PatientGroup[]
   visits: EyeVisit[]
   clinicType: ClinicType
   canDeleteRecords: boolean
@@ -28,7 +27,6 @@ interface Props {
 
 export function PatientDetail({
   patient,
-  groups,
   visits,
   clinicType,
   canDeleteRecords,
@@ -43,7 +41,6 @@ export function PatientDetail({
   onBack,
 }: Props) {
   const age = getPatientAge(patient)
-  const groupName = groups.find((g) => g.id === patient.groupId)?.name
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   return (
@@ -85,10 +82,6 @@ export function PatientDetail({
             <dd className="mt-0.5 capitalize text-text-h">
               {patient.gender === 'unspecified' ? 'Unspecified' : patient.gender}
             </dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-text">Group</dt>
-            <dd className="mt-0.5 capitalize text-text-h">{groupName || 'No group'}</dd>
           </div>
           <div>
             <dt className="text-xs uppercase tracking-wide text-text">Mobile</dt>

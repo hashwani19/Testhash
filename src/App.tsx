@@ -7,7 +7,6 @@ import { AuditLogProvider } from './auditLog/AuditLogProvider'
 import { useAuth } from './hooks/useAuth'
 import { usePatients } from './hooks/usePatients'
 import { useEyeVisits } from './hooks/useEyeVisits'
-import { usePatientGroups } from './hooks/usePatientGroups'
 import { useAppointments } from './hooks/useAppointments'
 import { useAuditLog } from './hooks/useAuditLog'
 import { useAttachments } from './hooks/useAttachments'
@@ -19,7 +18,6 @@ import { PatientList } from './components/PatientList'
 import { PatientForm } from './components/PatientForm'
 import { PatientDetail } from './components/PatientDetail'
 import { EyeRecordForm } from './components/EyeRecordForm'
-import { ManageGroupsScreen } from './components/ManageGroupsScreen'
 import { ActivityScreen } from './components/ActivityScreen'
 import { PreferencesScreen } from './components/PreferencesScreen'
 import { AppointmentsScreen } from './components/AppointmentsScreen'
@@ -44,7 +42,6 @@ type View =
   | 'patientDetail'
   | 'newRecord'
   | 'editRecord'
-  | 'manageGroups'
   | 'activity'
   | 'appointments'
   | 'newAppointment'
@@ -54,7 +51,6 @@ type View =
   | 'preferences'
 
 const VIEW_TO_NAV_TARGET: Partial<Record<View, NavTarget>> = {
-  manageGroups: 'groups',
   activity: 'activity',
   appointments: 'appointments',
   newAppointment: 'appointments',
@@ -69,7 +65,6 @@ function AppShell() {
   const { patients, addPatient, updatePatient, deletePatient } = usePatients()
   const { visits, addVisit, updateVisit, deleteVisit, deleteVisitsForPatient, getVisitsForPatient } =
     useEyeVisits(patients)
-  const { groups, addGroup, renameGroup, deleteGroup } = usePatientGroups()
   const {
     appointments,
     addAppointment,
@@ -126,7 +121,6 @@ function AppShell() {
     setLinkAppointmentId(null)
     setEditingAppointment(null)
     if (target === 'patients') setView('list')
-    else if (target === 'groups') setView('manageGroups')
     else if (target === 'activity') setView('activity')
     else if (target === 'appointments') setView('appointments')
     else if (target === 'analytics') setView('analytics')
@@ -188,7 +182,6 @@ function AppShell() {
             </Button>
             <PatientList
               patients={patients}
-              groups={groups}
               onSelect={(id) => {
                 setSelectedPatientId(id)
                 setView('patientDetail')
@@ -200,7 +193,6 @@ function AppShell() {
         {view === 'newPatient' && (
           <PatientForm
             initial={newPatientPrefill ?? undefined}
-            groups={groups}
             onSubmit={(input) => {
               const id = addPatient(input)
               if (linkAppointmentId) linkAppointmentToPatient(linkAppointmentId, id)
@@ -220,7 +212,6 @@ function AppShell() {
         {view === 'editPatient' && selectedPatient && (
           <PatientForm
             initial={selectedPatient}
-            groups={groups}
             onSubmit={(input) => {
               updatePatient(selectedPatient.id, input)
               setView('patientDetail')
@@ -232,7 +223,6 @@ function AppShell() {
         {view === 'patientDetail' && selectedPatient && (
           <PatientDetail
             patient={selectedPatient}
-            groups={groups}
             visits={getVisitsForPatient(selectedPatient.id)}
             clinicType={clinicType}
             canDeleteRecords={isAdmin}
@@ -299,17 +289,6 @@ function AppShell() {
               setEditingVisit(null)
               setView('patientDetail')
             }}
-          />
-        )}
-
-        {view === 'manageGroups' && isAdmin && (
-          <ManageGroupsScreen
-            groups={groups}
-            patients={patients}
-            onAdd={addGroup}
-            onRename={renameGroup}
-            onDelete={deleteGroup}
-            onBack={goToList}
           />
         )}
 

@@ -58,13 +58,6 @@ export interface Tenant {
   createdAt: number
 }
 
-export interface PatientGroup {
-  id: string
-  name: string
-  createdAt: number
-  updatedAt: number
-}
-
 export interface Patient {
   id: string
   /** Human-facing ID, e.g. "P-20260705-0007". Immutable once assigned. */
@@ -80,7 +73,6 @@ export interface Patient {
   /** India mobile number, 10 digits (no country code stored). */
   mobile?: string
   gender: Gender
-  groupId?: string
   createdAt: number
   updatedAt: number
 }
@@ -145,7 +137,7 @@ export interface PrescriptionTemplate {
 }
 
 export type AuditAction = 'create' | 'update' | 'delete' | 'export'
-export type AuditEntityType = 'patient' | 'patient_group' | 'eye_visit' | 'appointment' | 'attachment'
+export type AuditEntityType = 'patient' | 'eye_visit' | 'appointment' | 'attachment'
 
 export interface AuditLogEntry {
   id: string

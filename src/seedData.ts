@@ -1,4 +1,4 @@
-import type { Appointment, EyeVisit, Patient, PatientGroup } from './types'
+import type { Appointment, EyeVisit, Patient } from './types'
 
 // Sample data for a fresh install of this local-only test build — lets you
 // explore search/filter/sort/history without manually typing in patients
@@ -14,11 +14,6 @@ const ago = (days: number) => Date.now() - days * DAY
 const agoIso = (days: number) => new Date(ago(days)).toISOString()
 // Negative `days` gives a date in the future — used for follow-up dates.
 const agoDateOnly = (days: number) => new Date(ago(days)).toISOString().slice(0, 10)
-
-export const SEED_GROUPS: PatientGroup[] = [
-  { id: 'seed-group-family', name: 'Family', createdAt: ago(85), updatedAt: ago(85) },
-  { id: 'seed-group-friends', name: 'Friends', createdAt: ago(83), updatedAt: ago(83) },
-]
 
 export const SEED_PATIENTS: Patient[] = [
   {
@@ -47,7 +42,6 @@ export const SEED_PATIENTS: Patient[] = [
     dob: '2015-03-22',
     address: '21 Shastripuram, Agra',
     gender: 'female',
-    groupId: 'seed-group-family',
     createdAt: ago(56),
     updatedAt: ago(56),
   },
@@ -58,7 +52,6 @@ export const SEED_PATIENTS: Patient[] = [
     dob: '1988-04-12',
     address: '12 MG Road, Agra',
     gender: 'female',
-    groupId: 'seed-group-family',
     createdAt: ago(34),
     updatedAt: ago(34),
   },
@@ -68,7 +61,6 @@ export const SEED_PATIENTS: Patient[] = [
     name: 'Rohan Verma',
     dob: '1995-09-03',
     gender: 'male',
-    groupId: 'seed-group-friends',
     createdAt: ago(30),
     updatedAt: ago(30),
   },
@@ -79,7 +71,6 @@ export const SEED_PATIENTS: Patient[] = [
     manualAge: 62,
     address: '4 Civil Lines, Agra',
     gender: 'female',
-    groupId: 'seed-group-family',
     createdAt: ago(25),
     updatedAt: ago(25),
   },
@@ -98,7 +89,6 @@ export const SEED_PATIENTS: Patient[] = [
     name: 'Sunita Devi',
     manualAge: 45,
     gender: 'female',
-    groupId: 'seed-group-friends',
     createdAt: ago(15),
     updatedAt: ago(15),
   },
@@ -108,7 +98,6 @@ export const SEED_PATIENTS: Patient[] = [
     name: 'Amit Joshi',
     manualAge: 33,
     gender: 'male',
-    groupId: 'seed-group-friends',
     createdAt: ago(10),
     updatedAt: ago(10),
   },

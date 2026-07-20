@@ -12,8 +12,8 @@
 // holds even for a sink that doesn't go through JSX — a future CSV/PDF
 // export, an emailed report, or a regression that introduces
 // `dangerouslySetInnerHTML` somewhere. Every hook that persists a free-text
-// field (patient name/address, visit notes/diagnosis, group names, the
-// prescription letterhead fields, ...) runs it through `sanitizeText` before
+// field (patient name/address, visit notes/diagnosis, the prescription
+// letterhead fields, ...) runs it through `sanitizeText` before
 // it's stored, alongside the `.trim()` cleanup those hooks already did.
 
 /** Strips characters with no legitimate purpose in user-typed text — C0/C1

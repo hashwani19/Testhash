@@ -8,7 +8,7 @@ interface Props extends SelectHTMLAttributes<HTMLSelectElement> {}
 /**
  * The one place every <select> dropdown in the app renders through —
  * fixing its look here (rather than per-screen) means every dropdown in
- * the app (Theme, Gender, Group, every filter/sort select, Clinic type, ...)
+ * the app (Theme, Gender, every filter/sort select, Clinic type, ...)
  * stays visually consistent by construction. `appearance-none` strips the
  * browser's own native arrow, which renders differently per browser/OS and
  * never quite matches the rest of the field styling, in favor of one

@@ -22,7 +22,7 @@ function loadEntries(storageKey: string): AuditLogEntry[] {
  * Client-side stand-in for the real backend's server-side write
  * interception (§10 of docs/design.md — genuine audit logging normally
  * happens on the API, never trusting the client). Every mutation hook
- * (usePatients/usePatientGroups/useEyeVisits/useAppointments) calls
+ * (usePatients/useEyeVisits/useAppointments) calls
  * `logEntry` itself right where it already mutates its own array, so an
  * entry gets recorded the same instant the real thing would happen server-
  * side — there's no separate interception layer to write since this app

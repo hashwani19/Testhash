@@ -1,4 +1,4 @@
-import type { Patient, PatientGroup } from '../types'
+import type { Patient } from '../types'
 import { getPatientAge } from '../utils/age'
 import { MIN_SEARCH_LENGTH } from '../utils/patientQuery'
 import type { PatientSort } from '../utils/patientQuery'
@@ -13,16 +13,12 @@ import { cx, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   patients: Patient[]
-  groups: PatientGroup[]
   onSelect: (id: string) => void
 }
 
-export function PatientList({ patients, groups, onSelect }: Props) {
-  const { search, setSearch, groupId, setGroupId, sort, setSort, resetFilters, isFilterActive, results } =
-    usePatientQuery(patients, groups)
+export function PatientList({ patients, onSelect }: Props) {
+  const { search, setSearch, sort, setSort, resetFilters, isFilterActive, results } = usePatientQuery(patients)
   const { preferences } = usePreferences()
-
-  const groupName = (id?: string) => groups.find((g) => g.id === id)?.name
 
   return (
     <div className="flex flex-col gap-3">
@@ -34,28 +30,14 @@ export function PatientList({ patients, groups, onSelect }: Props) {
           active: isFilterActive,
           onReset: resetFilters,
           content: (
-            <>
-              <label className={fieldLabel}>
-                <span className={fieldLabelText}>Group</span>
-                <Select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-                  <option value="">All groups</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-              <label className={fieldLabel}>
-                <span className={fieldLabelText}>Sort</span>
-                <Select value={sort} onChange={(e) => setSort(e.target.value as PatientSort)}>
-                  <option value="default">Newest first</option>
-                  <option value="group">By group</option>
-                  <option value="name-asc">Name (A-Z)</option>
-                  <option value="name-desc">Name (Z-A)</option>
-                </Select>
-              </label>
-            </>
+            <label className={fieldLabel}>
+              <span className={fieldLabelText}>Sort</span>
+              <Select value={sort} onChange={(e) => setSort(e.target.value as PatientSort)}>
+                <option value="default">Newest first</option>
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="name-desc">Name (Z-A)</option>
+              </Select>
+            </label>
           ),
         }}
       />
@@ -68,21 +50,13 @@ export function PatientList({ patients, groups, onSelect }: Props) {
         emptyMessage={patients.length === 0 ? 'No patients yet. Add the first one.' : 'No patients match.'}
         renderItem={(patient) => {
           const age = getPatientAge(patient)
-          const group = groupName(patient.groupId)
           return (
             <Button
               variant="unstyled"
               className={cx(cardBase, 'flex w-full flex-col gap-1 text-left cursor-pointer')}
               onClick={() => onSelect(patient.id)}
             >
-              <span className="font-semibold text-text-h">
-                {patient.name}
-                {group && (
-                  <span className="ml-2 rounded-full border border-border bg-bg px-2 py-0.5 text-[11px] font-medium text-text">
-                    {group}
-                  </span>
-                )}
-              </span>
+              <span className="font-semibold text-text-h">{patient.name}</span>
               <span className="text-[13px] capitalize text-text">
                 {patient.patientNumber} · {age != null ? `${age} yrs` : 'Age unknown'} ·{' '}
                 {patient.gender === 'unspecified' ? 'Gender unspecified' : patient.gender}

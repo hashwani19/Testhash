@@ -34,9 +34,7 @@ info:
       role information on top the same way most role-gated APIs do.
     - **Pagination**: every endpoint that can grow unbounded returns
       `{ items: [...], totalCount }` via `page` (0-indexed, default 0) and
-      `limit` (default 50) query params — never a bare array. The one
-      deliberate exception is `GET /patient-groups`, a small admin-managed
-      selector list not expected to need paging (design.md §6).
+      `limit` (default 50) query params — never a bare array.
     - **Default sort order is a contract**, not incidental — every list
       endpoint's description states its fixed default; see design.md §5.2/§6.
     - **Error shape**: not specified in design.md beyond status codes, so this
@@ -80,8 +78,6 @@ tags:
     description: Staff account management within a tenant (admin-only).
   - name: Patients
     description: Demographics and search — clinical detail lives under Visits.
-  - name: Patient Groups
-    description: Admin-managed free-form categories (e.g. "Friends", "Family").
   - name: Visits
     description: Eye examination records, including embedded refraction rows.
   - name: Attachments
@@ -627,27 +623,21 @@ paths:
         `search` matches **name** (substring, case-insensitive) **or**
         `patientNumber` (substring — a partial number or date prefix like
         `P-20260705` also works) — ≥3 characters or omitted, shorter values
-        → `400` (design.md §5.2). Optional `groupId` filters to one group.
-        Optional `sort` overrides the default: `group` (group name asc, then
-        `createdAt` desc within a group), `name_asc`/`name_desc` — omit for
-        the plain default. Summary rows only; full clinical detail lives on
-        the visit endpoints. Default sort: `createdAt` desc
-        (newest-registered first).
+        → `400` (design.md §5.2). Optional `sort` overrides the default:
+        `name_asc`/`name_desc` — omit for the plain default. Summary rows
+        only; full clinical detail lives on the visit endpoints. Default
+        sort: `createdAt` desc (newest-registered first).
       parameters:
         - name: search
           in: query
           schema:
             type: string
             minLength: 3
-        - name: groupId
-          in: query
-          schema:
-            type: string
         - name: sort
           in: query
           schema:
             type: string
-            enum: [group, name_asc, name_desc]
+            enum: [name_asc, name_desc]
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -696,7 +686,7 @@ paths:
       summary: Patient detail
       x-required-roles: [any]
       description: >-
-        Demographics, including group; visit history fetched separately via
+        Demographics; visit history fetched separately via
         `GET /patients/{id}/visits`.
       parameters:
         - $ref: '#/components/parameters/PatientId'
@@ -717,8 +707,8 @@ paths:
       summary: Update demographics
       x-required-roles: [admin, doctor, front_desk]
       description: >-
-        Including reassigning `groupId` — any role that can edit
-        demographics, not restricted to `admin` (design.md §4).
+        Any role that can edit demographics, not restricted to `admin`
+        (design.md §4).
       parameters:
         - $ref: '#/components/parameters/PatientId'
       requestBody:
@@ -816,112 +806,6 @@ paths:
               schema:
                 type: string
                 format: binary
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  # ---------------------------------------------------------------------
-  # Patient Groups
-  # ---------------------------------------------------------------------
-  /patient-groups:
-    get:
-      tags: [Patient Groups]
-      operationId: listPatientGroups
-      summary: List active (non-deleted) patient groups
-      x-required-roles: [any]
-      description: >-
-        For the group selector in patient forms and the filter dropdown.
-        **Not paginated** — a small, admin-managed selector list, not
-        expected to need paging (design.md §6). Default sort: `name` asc.
-      responses:
-        '200':
-          description: All active groups.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PatientGroup'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-    post:
-      tags: [Patient Groups]
-      operationId: createPatientGroup
-      summary: Create a group
-      x-required-roles: [admin]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatientGroupWriteRequest'
-      responses:
-        '201':
-          description: Group created.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PatientGroup'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-
-  /patient-groups/{id}:
-    patch:
-      tags: [Patient Groups]
-      operationId: renamePatientGroup
-      summary: Rename a group
-      x-required-roles: [admin]
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatientGroupWriteRequest'
-      responses:
-        '200':
-          description: Renamed group.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PatientGroup'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    delete:
-      tags: [Patient Groups]
-      operationId: deletePatientGroup
-      summary: Soft-delete a group
-      x-required-roles: [admin]
-      description: >-
-        Existing patients keep their `groupId`/name for history; the group
-        drops out of future assignment/filter lists.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '204':
-          description: Group soft-deleted.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1792,9 +1676,6 @@ components:
           description: Computed at read time (design.md §5.2) — never a stored/derived column.
         gender:
           $ref: '#/components/schemas/Gender'
-        groupId:
-          type: string
-          nullable: true
     Patient:
       allOf:
         - $ref: '#/components/schemas/PatientSummary'
@@ -1843,9 +1724,6 @@ components:
           nullable: true
         gender:
           $ref: '#/components/schemas/Gender'
-        groupId:
-          type: string
-          nullable: true
     PatientUpdateRequest:
       $ref: '#/components/schemas/PatientCreateRequest'
     PatientListResponse:
@@ -1858,28 +1736,6 @@ components:
             $ref: '#/components/schemas/PatientSummary'
         totalCount:
           type: integer
-
-    # -- Patient groups -----------------------------------------------------
-    PatientGroup:
-      type: object
-      required: [id, name, createdAt, updatedAt]
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-    PatientGroupWriteRequest:
-      type: object
-      required: [name]
-      properties:
-        name:
-          type: string
 
     # -- Visits / refractions ------------------------------------------------
     EyeRefraction:

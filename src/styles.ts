@@ -17,7 +17,7 @@ export const dimmedBackdrop = 'bg-black/50'
 // on the login splash and in the in-app header — it's allowed to wrap
 // onto two lines there rather than shrinking or truncating to fit next to
 // the hamburger/profile icons. screenHeading is a full-screen section
-// title (Manage Groups, Activity, Appointments, ...).
+// title (Activity, Appointments, ...).
 export const pageTitle = 'text-[22px] font-bold text-text-h'
 export const screenHeading = 'text-xl font-bold text-text-h'
 
@@ -26,7 +26,7 @@ export const fieldLabelText = 'text-[13px] text-text'
 
 // Caps a screen's content column at a comfortable reading width once there's
 // room to spare (md:+) — for screens that are a single form or a flat list
-// with no natural multi-column content (Preferences, Manage Groups), so
+// with no natural multi-column content (Preferences, Activity), so
 // they don't stretch full-width and read as sparse on a laptop screen.
 // Screens with real multi-column content (Analytics' chart grid, the
 // master-detail list+detail screens) don't use this — they have their own

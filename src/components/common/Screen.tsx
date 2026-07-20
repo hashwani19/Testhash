@@ -6,8 +6,8 @@ interface Props {
   /**
    * Defaults to `'narrow'` — caps content at a comfortable reading width
    * once there's room to spare (`md:`+), matching docs/design.md §8.0.
-   * Every single-form or flat-list screen (Preferences, Manage Groups,
-   * Users, Tenants, ...) should use the default rather than stretching
+   * Every single-form or flat-list screen (Preferences, Users, Tenants,
+   * ...) should use the default rather than stretching
    * edge-to-edge on a tablet/laptop. Pass `'wide'` only for a screen with
    * genuine multi-column content of its own (a search+list screen,
    * Analytics' chart grid) that manages its own width instead.

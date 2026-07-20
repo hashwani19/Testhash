@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import type { Gender, Patient, PatientGroup } from '../types'
+import type { Gender, Patient } from '../types'
 import type { PatientInput } from '../hooks/usePatients'
 import { computeAgeFromDob } from '../utils/age'
 import { Button } from './common/Button'
@@ -14,7 +14,6 @@ interface Props {
    *  appointment's new-patient details) — only a full Patient has `id`,
    *  which is what distinguishes "editing" from "creating" below. */
   initial?: Partial<Patient>
-  groups: PatientGroup[]
   onSubmit: (input: PatientInput) => void
   onCancel: () => void
 }
@@ -26,7 +25,7 @@ const GENDER_OPTIONS: { value: Gender; label: string }[] = [
   { value: 'unspecified', label: 'Prefer not to say' },
 ]
 
-export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
+export function PatientForm({ initial, onSubmit, onCancel }: Props) {
   const [name, setName] = useState(initial?.name ?? '')
   const [dob, setDob] = useState(initial?.dob ?? '')
   // Displayed/editable age — prefilled from dob (or a prior override), but
@@ -39,7 +38,6 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
   const [address, setAddress] = useState(initial?.address ?? '')
   const [mobile, setMobile] = useState(initial?.mobile ?? '')
   const [gender, setGender] = useState<Gender>(initial?.gender ?? 'unspecified')
-  const [groupId, setGroupId] = useState(initial?.groupId ?? '')
 
   const isEditingExisting = Boolean(initial?.id)
   const computedAge = dob ? computeAgeFromDob(dob) : undefined
@@ -67,7 +65,6 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
       address,
       mobile: mobile || undefined,
       gender,
-      groupId: groupId || undefined,
     })
   }
 
@@ -125,30 +122,16 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
         </label>
       </div>
 
-      <div className="flex flex-col gap-3.5 md:flex-row md:gap-2.5">
-        <label className={fieldLabel}>
-          <span className={fieldLabelText}>Gender</span>
-          <Select value={gender} onChange={(e) => setGender(e.target.value as Gender)}>
-            {GENDER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-
-        <label className={fieldLabel}>
-          <span className={fieldLabelText}>Group</span>
-          <Select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-            <option value="">No group</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </Select>
-        </label>
-      </div>
+      <label className={fieldLabel}>
+        <span className={fieldLabelText}>Gender</span>
+        <Select value={gender} onChange={(e) => setGender(e.target.value as Gender)}>
+          {GENDER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </Select>
+      </label>
 
       <label className={fieldLabel}>
         <span className={fieldLabelText}>Address</span>
