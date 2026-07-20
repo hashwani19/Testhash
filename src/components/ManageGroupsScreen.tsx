@@ -5,7 +5,8 @@ import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
 import { cardBase } from './common/Card'
 import { Breadcrumb } from './common/Breadcrumb'
-import { card, cx, narrowContent, screenHeading } from '../styles'
+import { Screen } from './common/Screen'
+import { card, cx, screenHeading } from '../styles'
 
 interface Props {
   groups: PatientGroup[]
@@ -43,7 +44,7 @@ export function ManageGroupsScreen({ groups, patients, onAdd, onRename, onDelete
   const patientCount = (groupId: string) => patients.filter((p) => p.groupId === groupId).length
 
   return (
-    <div className={`flex flex-col gap-3.5 ${narrowContent}`}>
+    <Screen className="gap-3.5">
       <Breadcrumb onClick={onBack} />
 
       <h2 className={screenHeading}>Manage Patient Groups</h2>
@@ -116,6 +117,6 @@ export function ManageGroupsScreen({ groups, patients, onAdd, onRename, onDelete
           ))}
         </ul>
       )}
-    </div>
+    </Screen>
   )
 }

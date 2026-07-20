@@ -12,6 +12,7 @@ import { ConfirmModal } from './ConfirmModal'
 import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
 import { cardBase } from './common/Card'
+import { Screen } from './common/Screen'
 import { card, cx, screenHeading, fieldLabel, fieldLabelText } from '../styles'
 
 function clinicTypeLabel(clinicType: Tenant['clinicType']): string {
@@ -98,7 +99,7 @@ export function TenantsScreen() {
   }
 
   return (
-    <div className="flex flex-col gap-3.5">
+    <Screen className="gap-3.5">
       <div className="flex items-center justify-between gap-2">
         <h2 className={screenHeading}>Tenants</h2>
         {!creating && (
@@ -268,6 +269,6 @@ export function TenantsScreen() {
           onCancel={() => setConfirmingDeleteId(null)}
         />
       )}
-    </div>
+    </Screen>
   )
 }

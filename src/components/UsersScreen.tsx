@@ -9,7 +9,8 @@ import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
 import { cardBase } from './common/Card'
 import { Breadcrumb } from './common/Breadcrumb'
-import { card, cx, narrowContent, screenHeading, fieldLabel, fieldLabelText } from '../styles'
+import { Screen } from './common/Screen'
+import { card, cx, screenHeading, fieldLabel, fieldLabelText } from '../styles'
 
 const ROLE_OPTIONS: { value: Role; label: string }[] = [
   { value: 'admin', label: 'Admin' },
@@ -162,7 +163,7 @@ export function UsersScreen({ onBack }: Props) {
   }
 
   return (
-    <div className={`flex flex-col gap-3.5 ${narrowContent}`}>
+    <Screen className="gap-3.5">
       <Breadcrumb onClick={onBack} />
 
       <h2 className={screenHeading}>Users</h2>
@@ -340,6 +341,6 @@ export function UsersScreen({ onBack }: Props) {
           onCancel={() => setConfirmingDeleteId(null)}
         />
       )}
-    </div>
+    </Screen>
   )
 }

@@ -1700,6 +1700,21 @@ phone widths the experience is unchanged — one screen at a time, full
 width. Orientation lock (`portrait` in the PWA manifest) and a true
 master-detail list+detail layout are known gaps, left for a later pass.
 
+- **`common/Screen`** is the one place the width-cap decision gets made,
+  rather than each screen remembering to reach for `narrowContent`
+  (`styles.ts`) itself — a screen wraps its content in `<Screen>` and
+  defaults to the capped, single-column-friendly width; `<Screen
+  width="wide">` opts out for a screen with genuine multi-column content of
+  its own. Added after the tenant-management screens (§5.4/§8, Tenants/
+  Users) shipped without the cap their sibling screens (Manage Groups,
+  Preferences) already had — a class of bug a shared component now
+  prevents by construction rather than by every screen author remembering
+  a convention. `ManageGroupsScreen`/`PreferencesScreen`/`UsersScreen`/
+  `TenantsScreen` all go through it today; the search+list screens
+  (Patients, Appointments, Activity) and `PatientDetail` weren't migrated
+  since they already correctly avoid the cap, not because `Screen` doesn't
+  apply to them.
+
 ### 8.1 Login (new — doesn't exist in the current MVP)
 
 Email + password — a single shared login page for every clinic (and for
