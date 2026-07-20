@@ -32,7 +32,6 @@ import { SuperUserShell } from './components/SuperUserShell'
 import { UsersScreen } from './components/UsersScreen'
 import { OfflineBanner } from './components/OfflineBanner'
 import { InstallBanner } from './components/InstallBanner'
-import { Button } from './components/common/Button'
 import type { Appointment, EyeVisit, Patient } from './types'
 
 type View =
@@ -289,45 +288,37 @@ function AppShell() {
         )}
 
         {view === 'appointments' && (
-          <>
-            <Button
-              variant="primary"
-              fullWidth
-              onClick={() => {
-                setEditingAppointment(null)
-                setView('newAppointment')
-              }}
-            >
-              Add appointment
-            </Button>
-            <AppointmentsScreen
-              appointments={appointments}
-              patients={patients}
-              isAdmin={isAdmin}
-              onAddAsPatient={(appointment) => {
-                setNewPatientPrefill({
-                  name: appointment.name,
-                  dob: appointment.dob,
-                  manualAge: appointment.manualAge,
-                  mobile: appointment.mobile,
-                  address: appointment.address,
-                })
-                setLinkAppointmentId(appointment.id)
-                setView('newPatient')
-              }}
-              onAddVisit={(appointment) => {
-                if (!appointment.patientId) return
-                setSelectedPatientId(appointment.patientId)
-                setView('newRecord')
-              }}
-              onEdit={(appointment) => {
-                setEditingAppointment(appointment)
-                setView('editAppointment')
-              }}
-              onDelete={deleteAppointment}
-              onBulkDelete={deleteAppointments}
-            />
-          </>
+          <AppointmentsScreen
+            appointments={appointments}
+            patients={patients}
+            isAdmin={isAdmin}
+            onAddNew={() => {
+              setEditingAppointment(null)
+              setView('newAppointment')
+            }}
+            onAddAsPatient={(appointment) => {
+              setNewPatientPrefill({
+                name: appointment.name,
+                dob: appointment.dob,
+                manualAge: appointment.manualAge,
+                mobile: appointment.mobile,
+                address: appointment.address,
+              })
+              setLinkAppointmentId(appointment.id)
+              setView('newPatient')
+            }}
+            onAddVisit={(appointment) => {
+              if (!appointment.patientId) return
+              setSelectedPatientId(appointment.patientId)
+              setView('newRecord')
+            }}
+            onEdit={(appointment) => {
+              setEditingAppointment(appointment)
+              setView('editAppointment')
+            }}
+            onDelete={deleteAppointment}
+            onBulkDelete={deleteAppointments}
+          />
         )}
 
         {view === 'newAppointment' && (

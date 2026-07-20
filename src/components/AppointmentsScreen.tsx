@@ -12,6 +12,7 @@ import { TextInput } from './common/TextInput'
 import { ListView } from './common/ListView'
 import { Card } from './common/Card'
 import { Badge } from './common/Badge'
+import { ScreenHeader } from './common/ScreenHeader'
 import { EditIcon } from './common/icons'
 import { ConfirmModal } from './ConfirmModal'
 import { fieldLabel, fieldLabelText } from '../styles'
@@ -23,6 +24,7 @@ interface Props {
    *  delete icon — the other two roles get the per-row icon and no bulk
    *  select UI at all. */
   isAdmin: boolean
+  onAddNew: () => void
   onAddAsPatient: (appointment: Appointment) => void
   onAddVisit: (appointment: Appointment) => void
   onEdit: (appointment: Appointment) => void
@@ -54,6 +56,7 @@ export function AppointmentsScreen({
   appointments,
   patients,
   isAdmin,
+  onAddNew,
   onAddAsPatient,
   onAddVisit,
   onEdit,
@@ -85,6 +88,15 @@ export function AppointmentsScreen({
 
   return (
     <div className="flex flex-col gap-3">
+      <ScreenHeader
+        title="Appointments"
+        action={
+          <Button variant="primary" onClick={onAddNew}>
+            Add appointment
+          </Button>
+        }
+      />
+
       <SearchBox
         value={search}
         onChange={setSearch}
