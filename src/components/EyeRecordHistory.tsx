@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Attachment, Eye, EyeRefraction, EyeVisit, Patient, VisionType } from '../types'
+import type { Attachment, ClinicType, Eye, EyeRefraction, EyeVisit, Patient, VisionType } from '../types'
 import { Button } from './common/Button'
 import { Card, CardHeader } from './common/Card'
 import { ListView } from './common/ListView'
@@ -15,6 +15,7 @@ import { hasRefractionData } from '../utils/eyeVisit'
 interface Props {
   patient: Patient
   visits: EyeVisit[]
+  clinicType: ClinicType
   canDelete: boolean
   /** Hidden entirely for front_desk (§8.4 of docs/design.md) — not just read-only. */
   canViewAttachments: boolean
@@ -104,6 +105,7 @@ function VisitAttachments({
 export function EyeRecordHistory({
   patient,
   visits,
+  clinicType,
   canDelete,
   canViewAttachments,
   attachments,
@@ -217,6 +219,7 @@ export function EyeRecordHistory({
           patient={patient}
           visit={printingVisit}
           template={template}
+          clinicType={clinicType}
           onClose={() => setPrintingVisit(null)}
           onPrinted={() =>
             logEntry({

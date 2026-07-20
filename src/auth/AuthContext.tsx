@@ -345,7 +345,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const updateTenantProfile = useCallback(
-    (id: string, patch: Partial<Pick<Tenant, 'mobile' | 'clinicType'>>) => {
+    (id: string, patch: Partial<Pick<Tenant, 'mobile'>>) => {
       setTenants((prev) =>
         prev.map((t) =>
           t.id === id

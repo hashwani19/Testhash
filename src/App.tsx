@@ -64,7 +64,8 @@ const VIEW_TO_NAV_TARGET: Partial<Record<View, NavTarget>> = {
 }
 
 function AppShell() {
-  const { user, users, logout } = useAuth()
+  const { user, users, tenants, logout } = useAuth()
+  const clinicType = tenants.find((t) => t.id === user?.tenantId)?.clinicType ?? 'ophthalmology'
   const { patients, addPatient, updatePatient, deletePatient } = usePatients()
   const { visits, addVisit, updateVisit, deleteVisit, deleteVisitsForPatient, getVisitsForPatient } =
     useEyeVisits(patients)
@@ -233,6 +234,7 @@ function AppShell() {
             patient={selectedPatient}
             groups={groups}
             visits={getVisitsForPatient(selectedPatient.id)}
+            clinicType={clinicType}
             canDeleteRecords={isAdmin}
             canDeletePatient={isAdmin}
             canViewAttachments={canManageAttachments}
@@ -260,6 +262,7 @@ function AppShell() {
 
         {view === 'newRecord' && selectedPatient && (
           <EyeRecordForm
+            clinicType={clinicType}
             canManageAttachments={canManageAttachments}
             canDeleteAttachments={isAdmin}
             attachments={[]}
@@ -278,6 +281,7 @@ function AppShell() {
         {view === 'editRecord' && selectedPatient && editingVisit && (
           <EyeRecordForm
             initial={editingVisit}
+            clinicType={clinicType}
             canManageAttachments={canManageAttachments}
             canDeleteAttachments={isAdmin}
             attachments={getAttachmentsForVisit(editingVisit.id)}

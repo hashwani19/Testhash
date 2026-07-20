@@ -1,4 +1,4 @@
-import type { EyeRefraction, EyeVisit, Patient, PrescriptionTemplate } from '../types'
+import type { ClinicType, EyeRefraction, EyeVisit, Patient, PrescriptionTemplate } from '../types'
 import { getPatientAge } from './age'
 
 /** The letterhead fallback when no clinicName is configured — matches the
@@ -67,6 +67,7 @@ export async function buildPrescriptionPdf(
   patient: Patient,
   visit: EyeVisit,
   template: PrescriptionTemplate,
+  clinicType: ClinicType,
 ): Promise<File> {
   const { jsPDF, GState } = await import('jspdf')
 
@@ -171,57 +172,60 @@ export async function buildPrescriptionPdf(
   y += 8
 
   // Refraction table — same fixed 9-column shape as the overlay (§5.6:
-  // every cell always prints, blank if unset).
-  const col0 = 26
-  const colW = (contentW - col0) / 8
-  const rowH = 8
-  const headerLabels = ['Sph', 'Cyl', 'Axis', 'V.A.', 'Sph', 'Cyl', 'Axis', 'V.A.']
-  const rows: Array<{ label: string; cells: string[] }> = [
-    {
-      label: 'Distance',
-      cells: [...refractionCells(visit.refractions.right.distance), ...refractionCells(visit.refractions.left.distance)],
-    },
-    {
-      label: 'Reading',
-      cells: [...refractionCells(visit.refractions.right.reading), ...refractionCells(visit.refractions.left.reading)],
-    },
-  ]
+  // every cell always prints, blank if unset). Orthopedic clinics don't
+  // examine eyes, so this whole table is skipped for them.
+  if (clinicType !== 'orthopedic') {
+    const col0 = 26
+    const colW = (contentW - col0) / 8
+    const rowH = 8
+    const headerLabels = ['Sph', 'Cyl', 'Axis', 'V.A.', 'Sph', 'Cyl', 'Axis', 'V.A.']
+    const rows: Array<{ label: string; cells: string[] }> = [
+      {
+        label: 'Distance',
+        cells: [...refractionCells(visit.refractions.right.distance), ...refractionCells(visit.refractions.left.distance)],
+      },
+      {
+        label: 'Reading',
+        cells: [...refractionCells(visit.refractions.right.reading), ...refractionCells(visit.refractions.left.reading)],
+      },
+    ]
 
-  doc.setDrawColor(140)
-  doc.setLineWidth(0.25)
+    doc.setDrawColor(140)
+    doc.setLineWidth(0.25)
 
-  // Row 1: eye group headers spanning 4 columns each.
-  doc.rect(left, y, col0, rowH)
-  doc.rect(left + col0, y, colW * 4, rowH)
-  doc.rect(left + col0 + colW * 4, y, colW * 4, rowH)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.text('Right eye', left + col0 + colW * 2, y + rowH / 2 + 1.3, { align: 'center' })
-  doc.text('Left eye', left + col0 + colW * 6, y + rowH / 2 + 1.3, { align: 'center' })
-  y += rowH
-
-  // Row 2: per-column labels.
-  doc.rect(left, y, col0, rowH)
-  headerLabels.forEach((label, i) => {
-    const x = left + col0 + colW * i
-    doc.rect(x, y, colW, rowH)
-    doc.text(label, x + colW / 2, y + rowH / 2 + 1.3, { align: 'center' })
-  })
-  y += rowH
-
-  // Data rows.
-  doc.setFont('helvetica', 'normal')
-  for (const row of rows) {
+    // Row 1: eye group headers spanning 4 columns each.
     doc.rect(left, y, col0, rowH)
-    doc.text(row.label, left + 2, y + rowH / 2 + 1.3)
-    row.cells.forEach((cell, i) => {
+    doc.rect(left + col0, y, colW * 4, rowH)
+    doc.rect(left + col0 + colW * 4, y, colW * 4, rowH)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.text('Right eye', left + col0 + colW * 2, y + rowH / 2 + 1.3, { align: 'center' })
+    doc.text('Left eye', left + col0 + colW * 6, y + rowH / 2 + 1.3, { align: 'center' })
+    y += rowH
+
+    // Row 2: per-column labels.
+    doc.rect(left, y, col0, rowH)
+    headerLabels.forEach((label, i) => {
       const x = left + col0 + colW * i
       doc.rect(x, y, colW, rowH)
-      if (cell) doc.text(cell, x + colW / 2, y + rowH / 2 + 1.3, { align: 'center' })
+      doc.text(label, x + colW / 2, y + rowH / 2 + 1.3, { align: 'center' })
     })
     y += rowH
+
+    // Data rows.
+    doc.setFont('helvetica', 'normal')
+    for (const row of rows) {
+      doc.rect(left, y, col0, rowH)
+      doc.text(row.label, left + 2, y + rowH / 2 + 1.3)
+      row.cells.forEach((cell, i) => {
+        const x = left + col0 + colW * i
+        doc.rect(x, y, colW, rowH)
+        if (cell) doc.text(cell, x + colW / 2, y + rowH / 2 + 1.3, { align: 'center' })
+      })
+      y += rowH
+    }
+    y += 8
   }
-  y += 8
 
   // Detail lines — label bold, value normal with a hanging indent when it
   // wraps; em dash for empty, same as the overlay's DetailLine.

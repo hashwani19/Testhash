@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { EyeVisitInput } from '../hooks/useEyeVisits'
 import type { NewAttachmentInput } from '../hooks/useAttachments'
-import type { Attachment, Eye, EyeRefraction, EyeVisit, RefractionGrid, VisionType } from '../types'
+import type { Attachment, ClinicType, Eye, EyeRefraction, EyeVisit, RefractionGrid, VisionType } from '../types'
 import { isEmptyVisit } from '../utils/eyeVisit'
 import { compressImageFile } from '../utils/imageCompression'
 import { Button } from './common/Button'
@@ -14,6 +14,11 @@ import { fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   initial?: EyeVisit
+  /** Orthopedic tenants don't have eyes to examine — the Left/Right eye
+   *  refraction fieldsets only render for `ophthalmology` clinics. Every
+   *  other field (lenses, diagnosis, treatment plan, follow-up, notes,
+   *  attachments) is clinic-type-agnostic and always shown. */
+  clinicType: ClinicType
   /** Hidden entirely for front_desk — attachments aren't rendered at all
    *  for that role (§8.4/§8.5 of docs/design.md), not just read-only. */
   canManageAttachments: boolean
@@ -153,6 +158,7 @@ function RefractionCell({
 
 export function EyeRecordForm({
   initial,
+  clinicType,
   canManageAttachments,
   canDeleteAttachments,
   attachments,
@@ -282,25 +288,26 @@ export function EyeRecordForm({
           />
         </label>
 
-        {(['left', 'right'] as Eye[]).map((eye) => (
-          // min-w-0 is required: fieldsets don't shrink in flex layouts by
-          // default, so without it this overflows past the card's edge.
-          <fieldset className="min-w-0 rounded-xl border border-border p-3" key={eye}>
-            <legend className="px-2 text-[17px] font-bold text-text-h">
-              {eye === 'left' ? 'Left' : 'Right'} eye
-            </legend>
-            <RefractionCell
-              visionType="distance"
-              cell={grid[eye].distance}
-              onChange={(next) => setCell(eye, 'distance', next)}
-            />
-            <RefractionCell
-              visionType="reading"
-              cell={grid[eye].reading}
-              onChange={(next) => setCell(eye, 'reading', next)}
-            />
-          </fieldset>
-        ))}
+        {clinicType !== 'orthopedic' &&
+          (['left', 'right'] as Eye[]).map((eye) => (
+            // min-w-0 is required: fieldsets don't shrink in flex layouts by
+            // default, so without it this overflows past the card's edge.
+            <fieldset className="min-w-0 rounded-xl border border-border p-3" key={eye}>
+              <legend className="px-2 text-[17px] font-bold text-text-h">
+                {eye === 'left' ? 'Left' : 'Right'} eye
+              </legend>
+              <RefractionCell
+                visionType="distance"
+                cell={grid[eye].distance}
+                onChange={(next) => setCell(eye, 'distance', next)}
+              />
+              <RefractionCell
+                visionType="reading"
+                cell={grid[eye].reading}
+                onChange={(next) => setCell(eye, 'reading', next)}
+              />
+            </fieldset>
+          ))}
 
         <label className={fieldLabel}>
           <span className={fieldLabelText}>Lenses (optional)</span>

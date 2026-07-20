@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Attachment, EyeVisit, Patient, PatientGroup } from '../types'
+import type { Attachment, ClinicType, EyeVisit, Patient, PatientGroup } from '../types'
 import { getPatientAge } from '../utils/age'
 import { EyeRecordHistory } from './EyeRecordHistory'
 import { ConfirmModal } from './ConfirmModal'
@@ -12,6 +12,7 @@ interface Props {
   patient: Patient
   groups: PatientGroup[]
   visits: EyeVisit[]
+  clinicType: ClinicType
   canDeleteRecords: boolean
   canDeletePatient: boolean
   /** Hidden entirely for front_desk (§8.4 of docs/design.md) — not just read-only. */
@@ -29,6 +30,7 @@ export function PatientDetail({
   patient,
   groups,
   visits,
+  clinicType,
   canDeleteRecords,
   canDeletePatient,
   canViewAttachments,
@@ -109,6 +111,7 @@ export function PatientDetail({
       <EyeRecordHistory
         patient={patient}
         visits={visits}
+        clinicType={clinicType}
         canDelete={canDeleteRecords}
         canViewAttachments={canViewAttachments}
         attachments={attachments}

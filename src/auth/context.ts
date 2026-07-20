@@ -77,10 +77,11 @@ export interface AuthContextValue {
    *  admin user without signing the caller out of their own session. */
   addTenant: (input: SignUpInput) => SignUpResult
   updateTenantStatus: (id: string, status: TenantStatus) => void
-  /** Edits the mandatory clinic-profile fields (§5.5) — the same two
-   *  fields (mobile, clinic type) captured at signup, later editable from
-   *  Preferences by that tenant's own admin, or by the superuser. */
-  updateTenantProfile: (id: string, patch: Partial<Pick<Tenant, 'mobile' | 'clinicType'>>) => void
+  /** Edits a tenant's mobile number from Preferences (that tenant's own
+   *  admin) — clinic type is captured once at tenant creation (signup or
+   *  the superuser's `TenantForm`) and is never editable afterward, by
+   *  anyone, including from this function. */
+  updateTenantProfile: (id: string, patch: Partial<Pick<Tenant, 'mobile'>>) => void
   /** Removes the tenant, every one of its users, and cascade-deletes all of
    *  its clinic data (§5.5). Never allowed on the default tenant. */
   deleteTenant: (id: string) => void

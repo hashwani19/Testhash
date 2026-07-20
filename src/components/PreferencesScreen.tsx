@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import type { ClinicType, ThemePreference } from '../types'
+import type { ThemePreference } from '../types'
 import { usePreferences } from '../hooks/usePreferences'
 import { useGlobalSettings } from '../hooks/useGlobalSettings'
 import { usePrescriptionTemplate } from '../hooks/usePrescriptionTemplate'
@@ -114,16 +114,14 @@ export function PreferencesScreen({ onBack }: Props) {
 
             <label className={fieldLabel}>
               <span className={fieldLabelText}>Clinic type</span>
-              <Select
-                value={tenant.clinicType}
-                onChange={(e) => updateTenantProfile(tenant.id, { clinicType: e.target.value as ClinicType })}
-              >
+              <Select value={tenant.clinicType} disabled>
                 {CLINIC_TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
                 ))}
               </Select>
+              <span className="text-[13px] text-text">Clinic type can only be set by a superuser.</span>
             </label>
           </div>
 

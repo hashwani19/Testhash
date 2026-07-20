@@ -1107,13 +1107,19 @@ flow specified above:
   so there's nothing else to revoke.
 - **The clinic-profile fields are editable later from Preferences**, per
   the original request — a "Clinic profile (admin only)" section
-  (`PreferencesScreen`) edits `Tenant.mobile`/`clinicType`
-  (`updateTenantProfile`), right above the existing "Prescription template
-  (admin only)" section that already owns clinicName/clinicAddress/
-  doctorName/doctorCredentials/logo (§5.6) — split across two sections
-  since one edits the `Tenant` row and the other edits that tenant's
-  `PrescriptionTemplate`, but presented together as one continuous set of
-  clinic-identity fields.
+  (`PreferencesScreen`) edits `Tenant.mobile` (`updateTenantProfile`), right
+  above the existing "Prescription template (admin only)" section that
+  already owns clinicName/clinicAddress/doctorName/doctorCredentials/logo
+  (§5.6) — split across two sections since one edits the `Tenant` row and
+  the other edits that tenant's `PrescriptionTemplate`, but presented
+  together as one continuous set of clinic-identity fields. **Clinic type
+  is shown in that same section but always disabled** — it's set once,
+  either at self-signup or by the superuser in `TenantForm`, and
+  `updateTenantProfile` no longer accepts a `clinicType` patch from anyone,
+  including the superuser (there is currently no edit-tenant flow at all;
+  `TenantForm` only creates). A tenant admin sees their clinic type with a
+  "Clinic type can only be set by a superuser" caption instead of a live
+  dropdown.
 - **A `Users` screen** (admin-only, own tenant) covers add/delete/reset-
   password/edit-roles for that tenant's staff — `createUser`/`deleteUser`/
   `updateUserPassword`/`updateUserRoles` on `AuthContext`, with `deleteUser`
@@ -2248,7 +2254,15 @@ build them if multi-device offline editing turns out to be a real need.
   prescription template (§5.6) still need their own design pass — the same
   way ophthalmology's were derived from a real prescription pad rather than
   guessed at. Do that work before provisioning any real `orthopedic`
-  tenant; the mechanism doesn't require it to exist yet.
+  tenant; the mechanism doesn't require it to exist yet. **Interim fix in
+  this local-storage build:** rather than leave the ophthalmology-shaped
+  eye exam form/print/PDF on screen for orthopedic tenants (who have no use
+  for a Left/Right eye refraction table), `EyeRecordForm`/`PrescriptionPrint`/
+  `buildPrescriptionPdf` all take the tenant's `clinicType` and skip
+  rendering the refraction fieldsets/table when it's `orthopedic`, keeping
+  every other field (lenses, diagnosis, treatment plan, follow-up, notes,
+  attachments) as-is. This is a narrow "hide what doesn't apply" patch, not
+  the orthopedic-specific field set this bullet still calls for.
 - **Patient groups: one per patient, assumed.** Modeled as a single nullable
   `patients.group_id`, not many-to-many — matches "Friends"/"Family" reading
   as mutually-exclusive categories, but wasn't asked explicitly. If a patient

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal, flushSync } from 'react-dom'
-import type { EyeRefraction, EyeVisit, Patient, PrescriptionTemplate } from '../types'
+import type { ClinicType, EyeRefraction, EyeVisit, Patient, PrescriptionTemplate } from '../types'
 import { getPatientAge } from '../utils/age'
 import { buildPrescriptionPdf, DEFAULT_CLINIC_NAME } from '../utils/prescriptionPdf'
 import { Button } from './common/Button'
@@ -10,6 +10,9 @@ interface Props {
   patient: Patient
   visit: EyeVisit
   template: PrescriptionTemplate
+  /** Orthopedic clinics don't examine eyes — the Right/Left eye refraction
+   *  table only prints for `ophthalmology` tenants. */
+  clinicType: ClinicType
   onClose: () => void
   /** Called each time Print/Share is tapped, right before the print dialog
    *  or share sheet opens — the caller logs this as an export-class audit
@@ -113,7 +116,7 @@ function DetailLine({ label, value }: { label: string; value: string }) {
  * document needs to stay legible and ink-economical on paper no matter what
  * a staff member's personal dark-mode setting is.
  */
-export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted }: Props) {
+export function PrescriptionPrint({ patient, visit, template, clinicType, onClose, onPrinted }: Props) {
   // position: fixed elements have long-standing WebKit/Chromium print bugs —
   // display:none under @media print isn't reliably respected on them the
   // way it is on normal-flow elements. Rather than trust the CSS, printing
@@ -144,7 +147,7 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
   useEffect(() => {
     if (!usePdfExport) return
     let cancelled = false
-    buildPrescriptionPdf(patient, visit, template).then(
+    buildPrescriptionPdf(patient, visit, template, clinicType).then(
       (file) => {
         if (!cancelled) setPdfFile(file)
       },
@@ -156,7 +159,7 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
     return () => {
       cancelled = true
     }
-  }, [patient, visit, template, usePdfExport])
+  }, [patient, visit, template, clinicType, usePdfExport])
 
   const sharePdf = () => {
     if (!pdfFile) return
@@ -291,48 +294,50 @@ export function PrescriptionPrint({ patient, visit, template, onClose, onPrinted
             <p>Visit: {formatVisitDateTime(visit.visitAt)}</p>
           </div>
 
-          {/* Own horizontal scroll container: this table's 9 columns don't
-           * shrink below their content's natural width, which is wider than
-           * a phone screen. print:overflow-visible since it always fits at
-           * the actual printed page width. */}
-          <div className="mb-4 overflow-x-auto print:overflow-visible">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th className="border border-black/30 px-2 py-1"></th>
-                  <th className="border border-black/30 px-2 py-1" colSpan={4}>
-                    Right eye
-                  </th>
-                  <th className="border border-black/30 px-2 py-1" colSpan={4}>
-                    Left eye
-                  </th>
-                </tr>
-                <tr>
-                  <th className="border border-black/30 px-2 py-1"></th>
-                  <th className="border border-black/30 px-2 py-1">Sph</th>
-                  <th className="border border-black/30 px-2 py-1">Cyl</th>
-                  <th className="border border-black/30 px-2 py-1">Axis</th>
-                  <th className="border border-black/30 px-2 py-1">V.A.</th>
-                  <th className="border border-black/30 px-2 py-1">Sph</th>
-                  <th className="border border-black/30 px-2 py-1">Cyl</th>
-                  <th className="border border-black/30 px-2 py-1">Axis</th>
-                  <th className="border border-black/30 px-2 py-1">V.A.</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <th className="border border-black/30 px-2 py-1 text-left font-normal">Distance</th>
-                  <RefractionCells refraction={visit.refractions.right.distance} />
-                  <RefractionCells refraction={visit.refractions.left.distance} />
-                </tr>
-                <tr>
-                  <th className="border border-black/30 px-2 py-1 text-left font-normal">Reading</th>
-                  <RefractionCells refraction={visit.refractions.right.reading} />
-                  <RefractionCells refraction={visit.refractions.left.reading} />
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          {clinicType !== 'orthopedic' && (
+            // Own horizontal scroll container: this table's 9 columns don't
+            // shrink below their content's natural width, which is wider than
+            // a phone screen. print:overflow-visible since it always fits at
+            // the actual printed page width.
+            <div className="mb-4 overflow-x-auto print:overflow-visible">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className="border border-black/30 px-2 py-1"></th>
+                    <th className="border border-black/30 px-2 py-1" colSpan={4}>
+                      Right eye
+                    </th>
+                    <th className="border border-black/30 px-2 py-1" colSpan={4}>
+                      Left eye
+                    </th>
+                  </tr>
+                  <tr>
+                    <th className="border border-black/30 px-2 py-1"></th>
+                    <th className="border border-black/30 px-2 py-1">Sph</th>
+                    <th className="border border-black/30 px-2 py-1">Cyl</th>
+                    <th className="border border-black/30 px-2 py-1">Axis</th>
+                    <th className="border border-black/30 px-2 py-1">V.A.</th>
+                    <th className="border border-black/30 px-2 py-1">Sph</th>
+                    <th className="border border-black/30 px-2 py-1">Cyl</th>
+                    <th className="border border-black/30 px-2 py-1">Axis</th>
+                    <th className="border border-black/30 px-2 py-1">V.A.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th className="border border-black/30 px-2 py-1 text-left font-normal">Distance</th>
+                    <RefractionCells refraction={visit.refractions.right.distance} />
+                    <RefractionCells refraction={visit.refractions.left.distance} />
+                  </tr>
+                  <tr>
+                    <th className="border border-black/30 px-2 py-1 text-left font-normal">Reading</th>
+                    <RefractionCells refraction={visit.refractions.right.reading} />
+                    <RefractionCells refraction={visit.refractions.left.reading} />
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <div className="mb-4 flex flex-col gap-1.5">
             <DetailLine label="Lenses" value={visit.lenses ?? ''} />
