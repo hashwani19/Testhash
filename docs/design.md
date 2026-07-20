@@ -146,6 +146,30 @@ roles afterward — both going through `AuthContext.createUser`/
 `admin` from a tenant's last remaining admin, the same guard `deleteUser`
 already has for deleting that last admin outright.
 
+- **Founder flag**: the user created by self-signup, or by a superuser
+  provisioning a tenant (§5.4/§5.5), gets `User.isFounder: true` —
+  persisted permanently, never set by the ordinary `createUser` a tenant
+  admin uses to add staff. `updateUserRoles` refuses to remove `admin`
+  from a founder outright, regardless of how many other admins the tenant
+  has — stronger than the "can't drop the last admin" rule, which a
+  founder is also still subject to. The Users screen shows a "Clinic
+  founder" note next to that account and renders its Admin checkbox
+  checked-but-disabled in the roles editor, so the restriction is visible
+  before a save attempt ever gets rejected. The pre-existing seeded
+  `admin@example.com` account is retroactively marked as the default
+  tenant's founder for the same reason.
+- **Caller authorization**: `createUser`, `deleteUser`, and
+  `updateUserRoles` all check that the *caller* (not just the request
+  shape) currently holds `admin` in their own tenant before doing
+  anything — `createUser` also no longer takes a client-supplied tenant id
+  at all, it always targets the caller's own `tenantId`. This was already
+  true in effect (only the admin-gated Users screen ever calls these), but
+  is now enforced at the same layer that owns the data, not just by which
+  UI screens are reachable — matching the "never trust the client"
+  principle above as closely as a client-only build can. `updateUserPassword`
+  is deliberately excluded from this: the superuser's Tenants screen (§5.4)
+  also needs to reset a tenant's admin password.
+
 **`admin`/`doctor`/`front_desk` are all tenant-scoped** — every one of them
 belongs to exactly one *real* tenant (clinic) and this table describes what
 they can do *within* it. None of them can provision, suspend, or otherwise

@@ -35,7 +35,13 @@ export function TenantsScreen() {
   const [newPassword, setNewPassword] = useState('')
   const [resetError, setResetError] = useState<string | null>(null)
 
-  const adminFor = (tenantId: string) => users.find((u) => u.tenantId === tenantId && u.roles.includes('admin'))
+  // Prefers the tenant's founder (guaranteed to exist and stay admin,
+  // §4 of docs/design.md) over any other admin, so "reset admin password"
+  // always targets a stable, unambiguous account even once a tenant has
+  // more than one admin.
+  const adminFor = (tenantId: string) =>
+    users.find((u) => u.tenantId === tenantId && u.isFounder) ??
+    users.find((u) => u.tenantId === tenantId && u.roles.includes('admin'))
 
   const resetCreateForm = () => {
     setEmail('')

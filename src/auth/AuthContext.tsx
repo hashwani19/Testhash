@@ -44,6 +44,7 @@ const SEED_USERS: User[] = [
     fullName: 'Alex Admin',
     roles: ['admin'],
     tenantId: DEFAULT_TENANT_ID,
+    isFounder: true,
     createdAt: Date.now(),
   },
   {
@@ -143,6 +144,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [tenants, setTenants] = useState<Tenant[]>(() => loadTenants())
   const [sessionUserId, setSessionUserId] = useState<string | null>(() => loadSessionUserId())
 
+  // Computed up front (rather than at the bottom, as `user`) so the
+  // tenant-admin-only mutations below can authorize the *caller*, not just
+  // validate the target — "never trust the client" extended to which
+  // account is asking, not only what it's asking for (§10 of docs/design.md).
+  const currentUser =
+    sessionUserId === SUPER_USER_ID ? SUPER_USER : (users.find((u) => u.id === sessionUserId) ?? null)
+
   useEffect(() => {
     localStorage.setItem(USERS_KEY, JSON.stringify(users))
   }, [users])
@@ -200,6 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fullName: deriveFullNameFromEmail(normalizedEmail),
         roles: ['admin'],
         tenantId,
+        isFounder: true,
         createdAt: Date.now(),
       }
       seedPrescriptionTemplate(tenantId, input)
@@ -234,6 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fullName: deriveFullNameFromEmail(normalizedEmail),
         roles: ['admin'],
         tenantId,
+        isFounder: true,
         createdAt: Date.now(),
       }
       seedPrescriptionTemplate(tenantId, input)
@@ -246,6 +256,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const createUser = useCallback(
     (input: CreateUserInput): CreateUserResult => {
+      if (!currentUser?.roles.includes('admin') || !currentUser.tenantId) {
+        return { ok: false, error: 'forbidden' }
+      }
       const normalizedEmail = input.email.trim().toLowerCase()
       if (emailTaken(normalizedEmail) || normalizedEmail === SUPER_USER_EMAIL) {
         return { ok: false, error: 'duplicate_email' }
@@ -258,20 +271,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password: input.password,
         fullName: sanitizeText(input.fullName),
         roles: input.roles,
-        tenantId: input.tenantId,
+        // Never the caller-supplied tenant — always the admin's own, so a
+        // tenant admin can only ever add staff to their own clinic.
+        tenantId: currentUser.tenantId,
         createdAt: Date.now(),
       }
       setUsers((prev) => [...prev, newUser])
       return { ok: true, id: newUser.id }
     },
-    [emailTaken],
+    [emailTaken, currentUser],
   )
 
   const deleteUser = useCallback(
     (id: string): DeleteUserResult => {
+      if (!currentUser?.roles.includes('admin')) return { ok: false, error: 'forbidden' }
       if (id === sessionUserId) return { ok: false, error: 'self' }
       const target = users.find((u) => u.id === id)
       if (!target) return { ok: true }
+      if (target.tenantId !== currentUser.tenantId) return { ok: false, error: 'forbidden' }
       if (target.roles.includes('admin')) {
         const remainingAdmins = users.filter(
           (u) => u.tenantId === target.tenantId && u.roles.includes('admin') && u.id !== id,
@@ -281,7 +298,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUsers((prev) => prev.filter((u) => u.id !== id))
       return { ok: true }
     },
-    [users, sessionUserId],
+    [users, sessionUserId, currentUser],
   )
 
   const updateUserPassword = useCallback(
@@ -295,9 +312,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateUserRoles = useCallback(
     (id: string, roles: Role[]): UpdateRolesResult => {
+      if (!currentUser?.roles.includes('admin')) return { ok: false, error: 'forbidden' }
       if (roles.length === 0) return { ok: false, error: 'empty_roles' }
       const target = users.find((u) => u.id === id)
       if (!target) return { ok: true }
+      if (target.tenantId !== currentUser.tenantId) return { ok: false, error: 'forbidden' }
+      if (target.isFounder && !roles.includes('admin')) return { ok: false, error: 'founder' }
       if (target.roles.includes('admin') && !roles.includes('admin')) {
         const remainingAdmins = users.filter(
           (u) => u.tenantId === target.tenantId && u.roles.includes('admin') && u.id !== id,
@@ -307,7 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, roles } : u)))
       return { ok: true }
     },
-    [users],
+    [users, currentUser],
   )
 
   const updateTenantStatus = useCallback((id: string, status: TenantStatus) => {
@@ -341,12 +361,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const user = sessionUserId === SUPER_USER_ID ? SUPER_USER : (users.find((u) => u.id === sessionUserId) ?? null)
-
   return (
     <AuthContext.Provider
       value={{
-        user,
+        user: currentUser,
         users,
         tenants,
         login,

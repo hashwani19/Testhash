@@ -29,18 +29,19 @@ export interface CreateUserInput {
   password: string
   fullName: string
   roles: Role[]
-  tenantId: string
 }
 
 export type CreateUserResult =
   | { ok: true; id: string }
-  | { ok: false; error: 'duplicate_email' | 'weak_password' | 'empty_roles' }
+  | { ok: false; error: 'duplicate_email' | 'weak_password' | 'empty_roles' | 'forbidden' }
 
-export type DeleteUserResult = { ok: true } | { ok: false; error: 'self' | 'last_admin' }
+export type DeleteUserResult = { ok: true } | { ok: false; error: 'self' | 'last_admin' | 'forbidden' }
 
 export type UpdatePasswordResult = { ok: true } | { ok: false; error: 'weak_password' }
 
-export type UpdateRolesResult = { ok: true } | { ok: false; error: 'empty_roles' | 'last_admin' }
+export type UpdateRolesResult =
+  | { ok: true }
+  | { ok: false; error: 'empty_roles' | 'last_admin' | 'founder' | 'forbidden' }
 
 export interface AuthContextValue {
   user: User | null
@@ -55,12 +56,18 @@ export interface AuthContextValue {
    *  template from the optional clinic-profile fields, creates its first
    *  user as `admin`, and signs that user in. */
   signUp: (input: SignUpInput) => SignUpResult
+  /** Tenant-admin-only (§8). Creates the new user under the caller's own
+   *  tenant — there's no client-supplied tenant id to trust. */
   createUser: (input: CreateUserInput) => CreateUserResult
+  /** Tenant-admin-only, and only within the caller's own tenant. */
   deleteUser: (id: string) => DeleteUserResult
   updateUserPassword: (id: string, newPassword: string) => UpdatePasswordResult
-  /** Replaces a user's held roles outright (not a patch) — a user can hold
-   *  more than one at once. Rejects an empty list, and rejects dropping
-   *  `admin` from the last `admin` a tenant has left. */
+  /** Tenant-admin-only, and only within the caller's own tenant. Replaces a
+   *  user's held roles outright (not a patch) — a user can hold more than
+   *  one at once. Rejects an empty list, rejects dropping `admin` from the
+   *  last `admin` a tenant has left, and rejects dropping `admin` from the
+   *  tenant's founder (`User.isFounder`) at all, regardless of how many
+   *  other admins remain. */
   updateUserRoles: (id: string, roles: Role[]) => UpdateRolesResult
   /** Superuser-only equivalent of `signUp` — provisions a tenant + its
    *  admin user without signing the caller out of their own session. */

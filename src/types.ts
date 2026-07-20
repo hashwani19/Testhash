@@ -25,6 +25,14 @@ export interface User {
   /** Owning tenant. Unset only for the fixed `super_user` account, which
    *  isn't scoped to any one clinic. */
   tenantId?: string
+  /** Set only on the tenant's original admin — the account created by
+   *  self-signup (or by a superuser provisioning the tenant), never by a
+   *  later `createUser` call. Persisted permanently: a founder can never
+   *  have the `admin` role edited off them (`AuthContext.updateUserRoles`),
+   *  guaranteeing a tenant always keeps at least one admin who can't be
+   *  demoted, on top of the ordinary "can't remove the last admin" rule
+   *  every other admin already has. */
+  isFounder?: boolean
   createdAt: number
 }
 

@@ -20,13 +20,17 @@ const ROLE_OPTIONS: { value: Role; label: string }[] = [
 interface RoleCheckboxesProps {
   value: Role[]
   onChange: (roles: Role[]) => void
+  /** Roles rendered checked-but-locked — used to show (not just enforce
+   *  server-side) that a tenant founder's `admin` role can't be unchecked. */
+  disabledValues?: Role[]
 }
 
 /** A user can hold more than one role at once — access is the union of
  *  every held role's permissions. Shared by the "Add user" form and each
  *  row's "Edit roles" inline editor. */
-function RoleCheckboxes({ value, onChange }: RoleCheckboxesProps) {
+function RoleCheckboxes({ value, onChange, disabledValues = [] }: RoleCheckboxesProps) {
   const toggle = (role: Role) => {
+    if (disabledValues.includes(role)) return
     onChange(value.includes(role) ? value.filter((r) => r !== role) : [...value, role])
   }
 
@@ -38,6 +42,7 @@ function RoleCheckboxes({ value, onChange }: RoleCheckboxesProps) {
             type="checkbox"
             className="accent-accent"
             checked={value.includes(opt.value)}
+            disabled={disabledValues.includes(opt.value)}
             onChange={() => toggle(opt.value)}
           />
           {opt.label}
@@ -90,10 +95,14 @@ export function UsersScreen({ onBack }: Props) {
       setCreateError(PASSWORD_HINT)
       return
     }
-    const result = createUser({ email, password, fullName, roles, tenantId })
+    const result = createUser({ email, password, fullName, roles })
     if (!result.ok) {
       setCreateError(
-        result.error === 'duplicate_email' ? 'An account with this email already exists.' : PASSWORD_HINT,
+        result.error === 'duplicate_email'
+          ? 'An account with this email already exists.'
+          : result.error === 'forbidden'
+            ? "You don't have permission to do this."
+            : PASSWORD_HINT,
       )
       return
     }
@@ -123,7 +132,11 @@ export function UsersScreen({ onBack }: Props) {
     const result = updateUserRoles(editingRolesFor, editingRoles)
     if (!result.ok) {
       setEditRolesError(
-        result.error === 'empty_roles' ? 'Pick at least one role.' : 'A clinic needs at least one admin.',
+        result.error === 'empty_roles'
+          ? 'Pick at least one role.'
+          : result.error === 'founder'
+            ? "This is the clinic's original admin and can't lose the admin role."
+            : 'A clinic needs at least one admin.',
       )
       return
     }
@@ -135,7 +148,11 @@ export function UsersScreen({ onBack }: Props) {
     const result = deleteUser(id)
     if (!result.ok) {
       setDeleteError(
-        result.error === 'self' ? "You can't delete your own account." : 'A clinic needs at least one admin.',
+        result.error === 'self'
+          ? "You can't delete your own account."
+          : result.error === 'last_admin'
+            ? 'A clinic needs at least one admin.'
+            : "You don't have permission to do this.",
       )
       setConfirmingDeleteId(null)
       return
@@ -211,7 +228,10 @@ export function UsersScreen({ onBack }: Props) {
                   ))}
                 </span>
               </div>
-              <p className="text-[13px] text-text">{u.email}</p>
+              <p className="text-[13px] text-text">
+                {u.email}
+                {u.isFounder && ' · Clinic founder — always keeps the admin role'}
+              </p>
 
               {resettingPasswordFor === u.id && (
                 <form className="flex flex-wrap items-end gap-2.5" onSubmit={submitResetPassword}>
@@ -245,7 +265,11 @@ export function UsersScreen({ onBack }: Props) {
 
               {editingRolesFor === u.id && (
                 <form className="flex flex-wrap items-end gap-2.5" onSubmit={submitEditRoles}>
-                  <RoleCheckboxes value={editingRoles} onChange={setEditingRoles} />
+                  <RoleCheckboxes
+                    value={editingRoles}
+                    onChange={setEditingRoles}
+                    disabledValues={u.isFounder ? ['admin'] : []}
+                  />
                   <Button type="submit" variant="secondary">
                     Save
                   </Button>
