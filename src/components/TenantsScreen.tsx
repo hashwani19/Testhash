@@ -2,91 +2,58 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Tenant } from '../types'
 import { useAuth } from '../hooks/useAuth'
+import { useTenantQuery } from '../hooks/useTenantQuery'
 import { DEFAULT_TENANT_ID } from '../utils/tenantStorage'
-import { PASSWORD_HINT, isStrongPassword } from '../utils/password'
+import { PASSWORD_HINT } from '../utils/password'
 import { CLINIC_TYPE_OPTIONS } from '../clinicTypes'
-import { ClinicProfileFields } from './ClinicProfileFields'
-import { EMPTY_CLINIC_PROFILE } from '../utils/clinicProfile'
-import type { ClinicProfileValue } from '../utils/clinicProfile'
+import { MIN_SEARCH_LENGTH, adminEmailFor } from '../utils/tenantQuery'
+import type { TenantSort } from '../utils/tenantQuery'
+import { TenantForm } from './TenantForm'
 import { ConfirmModal } from './ConfirmModal'
 import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
+import { Select } from './common/Select'
+import { SearchBox } from './common/SearchBox'
+import { ListView } from './common/ListView'
 import { cardBase } from './common/Card'
 import { Screen } from './common/Screen'
-import { card, cx, screenHeading, fieldLabel, fieldLabelText } from '../styles'
+import { cx, screenHeading, fieldLabel, fieldLabelText } from '../styles'
 
 function clinicTypeLabel(clinicType: Tenant['clinicType']): string {
   return CLINIC_TYPE_OPTIONS.find((opt) => opt.value === clinicType)?.label ?? clinicType
 }
 
-/** Superuser-only tenant management (§5.5 of docs/design.md) — create,
- *  suspend/reactivate, delete, and reset the admin password for any
- *  tenant. Mirrors self-signup's own fields (§1) since provisioning a
- *  tenant here does exactly what a clinic signing up itself would do. */
+/** Superuser-only tenant management (§5.4/§5.5 of docs/design.md) —
+ *  create, search/filter, suspend/reactivate, delete, and reset the admin
+ *  password for any tenant. Mirrors the Patients workflow's own shape
+ *  (search+filter, paginated ListView, a dedicated add form) so the two
+ *  don't feel like different apps. */
 export function TenantsScreen() {
-  const { tenants, users, addTenant, updateTenantStatus, deleteTenant, updateUserPassword } = useAuth()
-  const [creating, setCreating] = useState(false)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [repeatPassword, setRepeatPassword] = useState('')
-  const [profile, setProfile] = useState<ClinicProfileValue>(EMPTY_CLINIC_PROFILE)
-  const [createError, setCreateError] = useState<string | null>(null)
+  const { tenants, users, updateTenantStatus, deleteTenant, updateUserPassword } = useAuth()
+  const {
+    search,
+    setSearch,
+    status,
+    setStatus,
+    clinicType,
+    setClinicType,
+    sort,
+    setSort,
+    resetFilters,
+    isFilterActive,
+    results,
+  } = useTenantQuery(tenants, users)
+  const [adding, setAdding] = useState(false)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const [resettingPasswordFor, setResettingPasswordFor] = useState<string | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [resetError, setResetError] = useState<string | null>(null)
 
-  // Prefers the tenant's founder (guaranteed to exist and stay admin,
-  // §4 of docs/design.md) over any other admin, so "reset admin password"
-  // always targets a stable, unambiguous account even once a tenant has
-  // more than one admin.
-  const adminFor = (tenantId: string) =>
-    users.find((u) => u.tenantId === tenantId && u.isFounder) ??
-    users.find((u) => u.tenantId === tenantId && u.roles.includes('admin'))
-
-  const resetCreateForm = () => {
-    setEmail('')
-    setPassword('')
-    setRepeatPassword('')
-    setProfile(EMPTY_CLINIC_PROFILE)
-    setCreateError(null)
-  }
-
-  const submitCreate = (e: FormEvent) => {
-    e.preventDefault()
-    if (password !== repeatPassword) {
-      setCreateError('Passwords do not match.')
-      return
-    }
-    if (!isStrongPassword(password)) {
-      setCreateError(PASSWORD_HINT)
-      return
-    }
-    const result = addTenant({
-      email,
-      password,
-      mobile: profile.mobile,
-      clinicType: profile.clinicType,
-      clinicName: profile.clinicName || undefined,
-      clinicAddress: profile.clinicAddress || undefined,
-      doctorName: profile.doctorName || undefined,
-      doctorCredentials: profile.doctorCredentials || undefined,
-      logoDataUrl: profile.logoDataUrl || undefined,
-    })
-    if (!result.ok) {
-      setCreateError(
-        result.error === 'duplicate_email' ? 'An account with this email already exists.' : PASSWORD_HINT,
-      )
-      return
-    }
-    resetCreateForm()
-    setCreating(false)
-  }
-
   const submitResetPassword = (e: FormEvent) => {
     e.preventDefault()
     if (!resettingPasswordFor) return
-    const admin = adminFor(resettingPasswordFor)
+    const admin = users.find((u) => u.tenantId === resettingPasswordFor && u.isFounder)
+      ?? users.find((u) => u.tenantId === resettingPasswordFor && u.roles.includes('admin'))
     if (!admin) return
     const result = updateUserPassword(admin.id, newPassword)
     if (!result.ok) {
@@ -98,162 +65,152 @@ export function TenantsScreen() {
     setResetError(null)
   }
 
+  if (adding) {
+    return <TenantForm onDone={() => setAdding(false)} onCancel={() => setAdding(false)} />
+  }
+
   return (
     <Screen className="gap-3.5">
       <div className="flex items-center justify-between gap-2">
         <h2 className={screenHeading}>Tenants</h2>
-        {!creating && (
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            Add tenant
-          </Button>
-        )}
+        <Button variant="primary" onClick={() => setAdding(true)}>
+          Add tenant
+        </Button>
       </div>
 
-      {creating && (
-        <form className={`${card} flex flex-col gap-3.5`} onSubmit={submitCreate}>
-          <h3 className="text-base font-bold text-text-h">New clinic</h3>
+      <SearchBox
+        value={search}
+        onChange={setSearch}
+        placeholder={`Admin email or mobile (${MIN_SEARCH_LENGTH}+ chars)`}
+        filter={{
+          active: isFilterActive,
+          onReset: resetFilters,
+          content: (
+            <>
+              <label className={fieldLabel}>
+                <span className={fieldLabelText}>Status</span>
+                <Select value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
+                  <option value="">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="suspended">Suspended</option>
+                </Select>
+              </label>
+              <label className={fieldLabel}>
+                <span className={fieldLabelText}>Clinic type</span>
+                <Select value={clinicType} onChange={(e) => setClinicType(e.target.value as typeof clinicType)}>
+                  <option value="">All clinic types</option>
+                  {CLINIC_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <label className={fieldLabel}>
+                <span className={fieldLabelText}>Sort</span>
+                <Select value={sort} onChange={(e) => setSort(e.target.value as TenantSort)}>
+                  <option value="default">Newest first</option>
+                  <option value="email-asc">Admin email (A-Z)</option>
+                  <option value="email-desc">Admin email (Z-A)</option>
+                </Select>
+              </label>
+            </>
+          ),
+        }}
+      />
 
-          <label className={fieldLabel}>
-            <span className={fieldLabelText}>Admin email</span>
-            <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </label>
+      <ListView
+        items={results}
+        getKey={(tenant) => tenant.id}
+        itemLabel="tenant"
+        emptyMessage={tenants.length === 0 ? 'No tenants yet. Add the first one.' : 'No tenants match.'}
+        renderItem={(tenant) => {
+          const adminEmail = adminEmailFor(tenant, users)
+          const isDefaultTenant = tenant.id === DEFAULT_TENANT_ID
 
-          <div className="flex flex-col gap-3.5 md:flex-row md:gap-2.5">
-            <label className={fieldLabel}>
-              <span className={fieldLabelText}>Admin password</span>
-              <TextInput
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                title={PASSWORD_HINT}
-                required
-              />
-            </label>
-            <label className={fieldLabel}>
-              <span className={fieldLabelText}>Repeat password</span>
-              <TextInput
-                type="password"
-                value={repeatPassword}
-                onChange={(e) => setRepeatPassword(e.target.value)}
-                required
-              />
-            </label>
-          </div>
-          <p className="text-[13px] text-text">{PASSWORD_HINT}</p>
+          return (
+            <div className={cx(cardBase, 'flex flex-col gap-2')}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold text-text-h">{adminEmail || '(no admin)'}</span>
+                <span
+                  className={cx(
+                    'w-fit rounded-full border px-2 py-0.5 text-[11px] capitalize',
+                    tenant.status === 'suspended' ? 'border-high text-high' : 'border-border text-text',
+                  )}
+                >
+                  {tenant.status}
+                </span>
+              </div>
+              <p className="text-[13px] text-text">
+                {clinicTypeLabel(tenant.clinicType)} · {tenant.mobile} · created{' '}
+                {new Date(tenant.createdAt).toLocaleDateString()}
+              </p>
 
-          <ClinicProfileFields value={profile} onChange={setProfile} />
-
-          {createError && <p className="text-[13px] text-high">{createError}</p>}
-
-          <div className="flex justify-end gap-2.5">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                resetCreateForm()
-                setCreating(false)
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary">
-              Create tenant
-            </Button>
-          </div>
-        </form>
-      )}
-
-      {tenants.length === 0 ? (
-        <p className="py-8 text-center text-sm text-text">No tenants yet.</p>
-      ) : (
-        <ul className="flex flex-col gap-2.5">
-          {tenants.map((tenant) => {
-            const admin = adminFor(tenant.id)
-            const isDefaultTenant = tenant.id === DEFAULT_TENANT_ID
-
-            return (
-              <li key={tenant.id} className={cx(cardBase, 'flex flex-col gap-2')}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-semibold text-text-h">{admin?.email ?? '(no admin)'}</span>
-                  <span
-                    className={cx(
-                      'w-fit rounded-full border px-2 py-0.5 text-[11px] capitalize',
-                      tenant.status === 'suspended' ? 'border-high text-high' : 'border-border text-text',
-                    )}
+              {resettingPasswordFor === tenant.id ? (
+                <form className="flex flex-wrap items-end gap-2.5" onSubmit={submitResetPassword}>
+                  <label className={fieldLabel}>
+                    <span className={fieldLabelText}>New admin password</span>
+                    <TextInput
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      title={PASSWORD_HINT}
+                      autoFocus
+                      required
+                    />
+                  </label>
+                  <Button type="submit" variant="secondary">
+                    Save
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setResettingPasswordFor(null)
+                      setNewPassword('')
+                      setResetError(null)
+                    }}
                   >
-                    {tenant.status}
-                  </span>
+                    Cancel
+                  </Button>
+                  {resetError && <p className="w-full text-[13px] text-high">{resetError}</p>}
+                </form>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    disabled={isDefaultTenant}
+                    title={isDefaultTenant ? 'The default test tenant cannot be suspended.' : undefined}
+                    onClick={() =>
+                      updateTenantStatus(tenant.id, tenant.status === 'active' ? 'suspended' : 'active')
+                    }
+                  >
+                    {tenant.status === 'active' ? 'Suspend' : 'Reactivate'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={!adminEmail}
+                    onClick={() => {
+                      setResettingPasswordFor(tenant.id)
+                      setNewPassword('')
+                      setResetError(null)
+                    }}
+                  >
+                    Reset admin password
+                  </Button>
+                  <Button
+                    variant="danger"
+                    disabled={isDefaultTenant}
+                    title={isDefaultTenant ? 'The default test tenant cannot be deleted.' : undefined}
+                    onClick={() => setConfirmingDeleteId(tenant.id)}
+                  >
+                    Delete
+                  </Button>
                 </div>
-                <p className="text-[13px] text-text">
-                  {clinicTypeLabel(tenant.clinicType)} · {tenant.mobile} · created{' '}
-                  {new Date(tenant.createdAt).toLocaleDateString()}
-                </p>
-
-                {resettingPasswordFor === tenant.id ? (
-                  <form className="flex flex-wrap items-end gap-2.5" onSubmit={submitResetPassword}>
-                    <label className={fieldLabel}>
-                      <span className={fieldLabelText}>New admin password</span>
-                      <TextInput
-                        type="password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        title={PASSWORD_HINT}
-                        autoFocus
-                        required
-                      />
-                    </label>
-                    <Button type="submit" variant="secondary">
-                      Save
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        setResettingPasswordFor(null)
-                        setNewPassword('')
-                        setResetError(null)
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    {resetError && <p className="w-full text-[13px] text-high">{resetError}</p>}
-                  </form>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="secondary"
-                      disabled={isDefaultTenant}
-                      title={isDefaultTenant ? 'The default test tenant cannot be suspended.' : undefined}
-                      onClick={() =>
-                        updateTenantStatus(tenant.id, tenant.status === 'active' ? 'suspended' : 'active')
-                      }
-                    >
-                      {tenant.status === 'active' ? 'Suspend' : 'Reactivate'}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      disabled={!admin}
-                      onClick={() => {
-                        setResettingPasswordFor(tenant.id)
-                        setNewPassword('')
-                        setResetError(null)
-                      }}
-                    >
-                      Reset admin password
-                    </Button>
-                    <Button
-                      variant="danger"
-                      disabled={isDefaultTenant}
-                      title={isDefaultTenant ? 'The default test tenant cannot be deleted.' : undefined}
-                      onClick={() => setConfirmingDeleteId(tenant.id)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      )}
+              )}
+            </div>
+          )
+        }}
+      />
 
       {confirmingDeleteId && (
         <ConfirmModal

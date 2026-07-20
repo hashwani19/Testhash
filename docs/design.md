@@ -1057,12 +1057,28 @@ flow specified above:
   name is derived from the email's local part (there's no separate "your
   name" field in the mandatory set) rather than reusing the optional
   doctor name, since the signer-up isn't necessarily the doctor.
-- **`TenantsScreen`** (superuser-only) does the create side with the exact
-  same fields/form as `SignUpScreen` (shared via `ClinicProfileFields`),
-  plus suspend/reactivate, hard-delete (cascades every localStorage key
-  under that tenant, unlike the real design's indefinite-retention
-  suspension, §13), and resetting a tenant's admin password directly (no
-  email involved).
+- **`TenantsScreen`** (superuser-only) mirrors the Patients workflow's own
+  shape (§8.3) rather than being a bespoke one-off screen: a search box
+  (admin email or mobile, `utils/tenantQuery.ts`) with a filter popover
+  (status, clinic type, sort) exactly like `SearchBox`/`usePatientQuery`,
+  and a paginated `common/ListView` instead of a hand-rolled `<ul>`. "Add
+  tenant" opens `TenantForm` — a full-screen replacement of the list (not
+  an inline expansion above it), same as `PatientForm` replacing
+  `PatientList` — built on the shared `common/FormCard` (below) with the
+  exact same fields as `SignUpScreen` (via `ClinicProfileFields`) and
+  submitting through `addTenant` instead of `signUp`, since the superuser
+  isn't the new tenant's own admin. Suspend/reactivate, hard-delete
+  (cascades every localStorage key under that tenant, unlike the real
+  design's indefinite-retention suspension, §13), and resetting a tenant's
+  admin password directly (no email involved) stay as per-row actions in
+  each list item, matching how `AppointmentsScreen` keeps its actions
+  inline rather than behind a separate detail screen.
+- **`common/FormCard`** generalizes the header-×-plus-footer-Cancel/Save
+  shape `EyeRecordForm` already had (title + a × icon that cancels, `isDirty`-
+  gated so it confirms before discarding unsaved input, a footer Cancel/Save
+  pair) into one component both `EyeRecordForm` and the new `TenantForm` go
+  through, instead of each form re-implementing the same header/footer/
+  confirm-modal wiring.
 - **Tenant-scoped storage**: every per-clinic hook/provider
   (`usePatients`, `useEyeVisits`, `usePatientGroups`, `useAppointments`,
   `useAttachments`, `AuditLogProvider`, `GlobalSettingsProvider`,

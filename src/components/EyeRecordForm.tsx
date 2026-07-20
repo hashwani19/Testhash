@@ -9,8 +9,8 @@ import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
 import { Textarea } from './common/Textarea'
 import { ImageViewer, type ViewerImage } from './common/ImageViewer'
-import { ConfirmModal } from './ConfirmModal'
-import { card, fieldLabel, fieldLabelText } from '../styles'
+import { FormCard } from './common/FormCard'
+import { fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   initial?: EyeVisit
@@ -175,7 +175,6 @@ export function EyeRecordForm({
   const [pendingAttachments, setPendingAttachments] = useState<NewAttachmentInput[]>([])
   const [compressing, setCompressing] = useState(false)
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
-  const [confirmingCancel, setConfirmingCancel] = useState(false)
 
   const allImages: ViewerImage[] = useMemo(
     () => [
@@ -244,13 +243,6 @@ export function EyeRecordForm({
     setPendingAttachments((prev) => prev.filter((_, i) => i !== index))
   }
 
-  // Cancelling (the header × or the footer button) discards silently only
-  // when there's nothing to lose — otherwise it confirms first.
-  const requestCancel = () => {
-    if (hasUnsavedChanges) setConfirmingCancel(true)
-    else onCancel()
-  }
-
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (isEmpty) return
@@ -270,14 +262,15 @@ export function EyeRecordForm({
 
   return (
     <>
-      <form className={`${card} flex flex-col gap-3.5`} onSubmit={submit}>
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-bold text-text-h">{initial ? 'Edit record' : 'Add record'}</h2>
-          <Button variant="icon" aria-label="Cancel" onClick={requestCancel}>
-            ×
-          </Button>
-        </div>
-
+      <FormCard
+        title={initial ? 'Edit record' : 'Add record'}
+        onCancel={onCancel}
+        onSubmit={submit}
+        submitLabel={initial ? 'Save changes' : 'Save record'}
+        submitDisabled={isEmpty}
+        isDirty={hasUnsavedChanges}
+        discardTitle="Discard this record?"
+      >
         <label className={fieldLabel}>
           <span className={fieldLabelText}>Visit date &amp; time</span>
           <TextInput
@@ -423,33 +416,10 @@ export function EyeRecordForm({
             Enter at least one value below the visit date to save a record.
           </p>
         )}
-
-        <div className="flex justify-end gap-2.5">
-          <Button variant="secondary" onClick={requestCancel}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" disabled={isEmpty}>
-            {initial ? 'Save changes' : 'Save record'}
-          </Button>
-        </div>
-      </form>
+      </FormCard>
 
       {viewerIndex != null && (
         <ImageViewer images={allImages} initialIndex={viewerIndex} onClose={() => setViewerIndex(null)} />
-      )}
-
-      {confirmingCancel && (
-        <ConfirmModal
-          title="Discard this record?"
-          warning="The details you've entered haven't been saved and will be lost."
-          mode="yesNo"
-          confirmLabel="Discard"
-          onConfirm={() => {
-            setConfirmingCancel(false)
-            onCancel()
-          }}
-          onCancel={() => setConfirmingCancel(false)}
-        />
       )}
     </>
   )
