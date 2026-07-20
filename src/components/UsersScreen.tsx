@@ -2,75 +2,55 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Role } from '../types'
 import { useAuth } from '../hooks/useAuth'
-import { PASSWORD_HINT, isStrongPassword } from '../utils/password'
-import { formatRole } from '../utils/roles'
+import { useUserQuery } from '../hooks/useUserQuery'
+import { PASSWORD_HINT } from '../utils/password'
+import { ROLE_OPTIONS, formatRole } from '../utils/roles'
+import { MIN_SEARCH_LENGTH } from '../utils/userQuery'
+import type { UserSort } from '../utils/userQuery'
+import { RoleCheckboxes } from './RoleCheckboxes'
+import { UserForm } from './UserForm'
 import { ConfirmModal } from './ConfirmModal'
 import { Button } from './common/Button'
 import { TextInput } from './common/TextInput'
+import { Select } from './common/Select'
+import { SearchBox } from './common/SearchBox'
+import { ListView } from './common/ListView'
 import { cardBase } from './common/Card'
 import { Breadcrumb } from './common/Breadcrumb'
 import { Screen } from './common/Screen'
-import { card, cx, screenHeading, fieldLabel, fieldLabelText } from '../styles'
-
-const ROLE_OPTIONS: { value: Role; label: string }[] = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'doctor', label: 'Doctor' },
-  { value: 'front_desk', label: 'Front desk' },
-]
-
-interface RoleCheckboxesProps {
-  value: Role[]
-  onChange: (roles: Role[]) => void
-  /** Roles rendered checked-but-locked — used to show (not just enforce
-   *  server-side) that a tenant founder's `admin` role can't be unchecked. */
-  disabledValues?: Role[]
-}
-
-/** A user can hold more than one role at once — access is the union of
- *  every held role's permissions. Shared by the "Add user" form and each
- *  row's "Edit roles" inline editor. */
-function RoleCheckboxes({ value, onChange, disabledValues = [] }: RoleCheckboxesProps) {
-  const toggle = (role: Role) => {
-    if (disabledValues.includes(role)) return
-    onChange(value.includes(role) ? value.filter((r) => r !== role) : [...value, role])
-  }
-
-  return (
-    <div className="flex flex-wrap gap-3">
-      {ROLE_OPTIONS.map((opt) => (
-        <label key={opt.value} className="flex items-center gap-1.5 text-[15px] text-text-h">
-          <input
-            type="checkbox"
-            className="accent-accent"
-            checked={value.includes(opt.value)}
-            disabled={disabledValues.includes(opt.value)}
-            onChange={() => toggle(opt.value)}
-          />
-          {opt.label}
-        </label>
-      ))}
-    </div>
-  )
-}
+import { cx, screenHeading, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   onBack: () => void
 }
 
 /** Tenant-admin-only staff management (§8 of docs/design.md, spec item 8)
- *  — add/delete accounts, reset passwords, and edit roles, scoped to the
- *  signed-in admin's own tenant. `deleteUser`/`updateUserPassword`/
- *  `updateUserRoles` already enforce the "can't delete yourself" / "can't
- *  drop the last admin" / password-strength rules server-side
- *  (AuthContext); this screen also disables the affected controls up front
- *  so the guard rarely needs to fire. */
+ *  — search/filter, add, delete accounts, reset passwords, and edit
+ *  roles, scoped to the signed-in admin's own tenant. Mirrors the
+ *  Patients/Tenants workflows' own shape: `SearchBox` + a query hook feed
+ *  a paginated `common/ListView`, and "Add user" opens a dedicated
+ *  `common/FormCard`-based form that replaces the list. `deleteUser`/
+ *  `updateUserPassword`/`updateUserRoles` already enforce the "can't
+ *  delete yourself" / "can't drop the last admin" / password-strength
+ *  rules server-side (AuthContext); this screen also disables the
+ *  affected controls up front so the guard rarely needs to fire. */
 export function UsersScreen({ onBack }: Props) {
-  const { user, users, createUser, deleteUser, updateUserPassword, updateUserRoles } = useAuth()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [fullName, setFullName] = useState('')
-  const [roles, setRoles] = useState<Role[]>(['front_desk'])
-  const [createError, setCreateError] = useState<string | null>(null)
+  const { user, users, deleteUser, updateUserPassword, updateUserRoles } = useAuth()
+  const tenantId = user?.tenantId
+  const tenantUsers = users.filter((u) => u.tenantId === tenantId)
+  const {
+    search,
+    setSearch,
+    role,
+    setRole,
+    sort,
+    setSort,
+    resetFilters,
+    isFilterActive,
+    results,
+  } = useUserQuery(tenantUsers)
+
+  const [adding, setAdding] = useState(false)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [resettingPasswordFor, setResettingPasswordFor] = useState<string | null>(null)
@@ -80,39 +60,9 @@ export function UsersScreen({ onBack }: Props) {
   const [editingRoles, setEditingRoles] = useState<Role[]>([])
   const [editRolesError, setEditRolesError] = useState<string | null>(null)
 
-  const tenantId = user?.tenantId
-  if (!tenantId) return null
+  if (!tenantId || !user) return null
 
-  const tenantUsers = users.filter((u) => u.tenantId === tenantId)
   const adminCount = tenantUsers.filter((u) => u.roles.includes('admin')).length
-
-  const submitCreate = (e: FormEvent) => {
-    e.preventDefault()
-    if (roles.length === 0) {
-      setCreateError('Pick at least one role.')
-      return
-    }
-    if (!isStrongPassword(password)) {
-      setCreateError(PASSWORD_HINT)
-      return
-    }
-    const result = createUser({ email, password, fullName, roles })
-    if (!result.ok) {
-      setCreateError(
-        result.error === 'duplicate_email'
-          ? 'An account with this email already exists.'
-          : result.error === 'forbidden'
-            ? "You don't have permission to do this."
-            : PASSWORD_HINT,
-      )
-      return
-    }
-    setEmail('')
-    setPassword('')
-    setFullName('')
-    setRoles(['front_desk'])
-    setCreateError(null)
-  }
 
   const submitResetPassword = (e: FormEvent) => {
     e.preventDefault()
@@ -162,69 +112,76 @@ export function UsersScreen({ onBack }: Props) {
     setDeleteError(null)
   }
 
+  if (adding) {
+    return <UserForm onDone={() => setAdding(false)} onCancel={() => setAdding(false)} />
+  }
+
   return (
     <Screen className="gap-3.5">
       <Breadcrumb onClick={onBack} />
 
-      <h2 className={screenHeading}>Users</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className={screenHeading}>Users</h2>
+        <Button variant="primary" onClick={() => setAdding(true)}>
+          Add user
+        </Button>
+      </div>
       <p className="text-sm text-text">Admin-only. Manage the accounts that can sign in to this clinic.</p>
 
-      <form className={`${card} flex flex-col gap-3.5`} onSubmit={submitCreate}>
-        <h3 className="text-base font-bold text-text-h">Add user</h3>
-
-        <label className={fieldLabel}>
-          <span className={fieldLabelText}>Full name</span>
-          <TextInput value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-        </label>
-
-        <fieldset className={fieldLabel}>
-          <legend className={fieldLabelText}>Roles</legend>
-          <RoleCheckboxes value={roles} onChange={setRoles} />
-        </fieldset>
-
-        <label className={fieldLabel}>
-          <span className={fieldLabelText}>Email</span>
-          <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
-
-        <label className={fieldLabel}>
-          <span className={fieldLabelText}>Password</span>
-          <TextInput
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            title={PASSWORD_HINT}
-            required
-          />
-        </label>
-        <p className="text-[13px] text-text">{PASSWORD_HINT}</p>
-
-        {createError && <p className="text-[13px] text-high">{createError}</p>}
-
-        <div className="flex justify-end">
-          <Button type="submit" variant="primary">
-            Add user
-          </Button>
-        </div>
-      </form>
+      <SearchBox
+        value={search}
+        onChange={setSearch}
+        placeholder={`Name or email (${MIN_SEARCH_LENGTH}+ chars)`}
+        filter={{
+          active: isFilterActive,
+          onReset: resetFilters,
+          content: (
+            <>
+              <label className={fieldLabel}>
+                <span className={fieldLabelText}>Role</span>
+                <Select value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
+                  <option value="">All roles</option>
+                  {ROLE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <label className={fieldLabel}>
+                <span className={fieldLabelText}>Sort</span>
+                <Select value={sort} onChange={(e) => setSort(e.target.value as UserSort)}>
+                  <option value="default">Newest first</option>
+                  <option value="name-asc">Name (A-Z)</option>
+                  <option value="name-desc">Name (Z-A)</option>
+                </Select>
+              </label>
+            </>
+          ),
+        }}
+      />
 
       {deleteError && <p className="text-[13px] text-high">{deleteError}</p>}
 
-      <ul className="flex flex-col gap-2">
-        {tenantUsers.map((u) => {
+      <ListView
+        items={results}
+        getKey={(u) => u.id}
+        itemLabel="user"
+        emptyMessage={tenantUsers.length === 0 ? 'No users yet.' : 'No users match.'}
+        renderItem={(u) => {
           const isSelf = u.id === user.id
           const isLastAdmin = u.roles.includes('admin') && adminCount <= 1
           return (
-            <li key={u.id} className={cx(cardBase, 'flex flex-col gap-2')}>
+            <div className={cx(cardBase, 'flex flex-col gap-2')}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-semibold text-text-h">{u.fullName}</span>
                 <span className="flex flex-wrap gap-1">
-                  {u.roles.map((role) => (
+                  {u.roles.map((r) => (
                     <span
-                      key={role}
+                      key={r}
                       className="w-fit rounded-full border border-border bg-bg px-2 py-0.5 text-[11px] capitalize text-text"
                     >
-                      {formatRole(role)}
+                      {formatRole(r)}
                     </span>
                   ))}
                 </span>
@@ -325,10 +282,10 @@ export function UsersScreen({ onBack }: Props) {
                   </Button>
                 </div>
               )}
-            </li>
+            </div>
           )
-        })}
-      </ul>
+        }}
+      />
 
       {confirmingDeleteId && (
         <ConfirmModal

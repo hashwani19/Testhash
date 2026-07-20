@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { Button } from './Button'
 import { ConfirmModal } from '../ConfirmModal'
-import { card, cx } from '../../styles'
+import { card, cx, narrowContent } from '../../styles'
 
 interface Props {
   title: string
@@ -28,6 +28,10 @@ interface Props {
  * generalized from EyeRecordForm's original header-×-plus-footer-buttons
  * shape so every such form (adding a tenant, a visit record, ...) looks
  * and behaves the same way instead of each screen hand-rolling it.
+ *
+ * Width-capped by default (`narrowContent`, matching `PatientForm`/
+ * `AppointmentForm`'s own convention, §8.0 of docs/design.md) — a caller
+ * never has to remember to wrap it in `Screen` itself.
  */
 export function FormCard({
   title,
@@ -50,7 +54,7 @@ export function FormCard({
 
   return (
     <>
-      <form className={cx(card, 'flex flex-col gap-3.5', className)} onSubmit={onSubmit}>
+      <form className={cx(card, 'flex flex-col gap-3.5', narrowContent, className)} onSubmit={onSubmit}>
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-bold text-text-h">{title}</h2>
           <Button variant="icon" aria-label="Cancel" onClick={requestCancel}>

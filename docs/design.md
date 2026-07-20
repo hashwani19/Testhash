@@ -1076,9 +1076,12 @@ flow specified above:
 - **`common/FormCard`** generalizes the header-×-plus-footer-Cancel/Save
   shape `EyeRecordForm` already had (title + a × icon that cancels, `isDirty`-
   gated so it confirms before discarding unsaved input, a footer Cancel/Save
-  pair) into one component both `EyeRecordForm` and the new `TenantForm` go
-  through, instead of each form re-implementing the same header/footer/
-  confirm-modal wiring.
+  pair) into one component `EyeRecordForm`, `TenantForm`, and `UserForm` all
+  go through, instead of each form re-implementing the same header/footer/
+  confirm-modal wiring. Width-capped by default (`narrowContent`, §8.0) for
+  the same reason `common/Screen` is — a "form that is its own screen" is
+  exactly the single-column case that convention already covers, and a
+  caller shouldn't have to remember to wrap it.
 - **Tenant-scoped storage**: every per-clinic hook/provider
   (`usePatients`, `useEyeVisits`, `usePatientGroups`, `useAppointments`,
   `useAttachments`, `AuditLogProvider`, `GlobalSettingsProvider`,
@@ -1112,9 +1115,15 @@ flow specified above:
   `PrescriptionTemplate`, but presented together as one continuous set of
   clinic-identity fields.
 - **A `Users` screen** (admin-only, own tenant) covers add/delete/reset-
-  password for that tenant's staff — `createUser`/`deleteUser`/
-  `updateUserPassword` on `AuthContext`, with `deleteUser` guarding against
-  removing yourself or a tenant's last remaining `admin`.
+  password/edit-roles for that tenant's staff — `createUser`/`deleteUser`/
+  `updateUserPassword`/`updateUserRoles` on `AuthContext`, with `deleteUser`
+  guarding against removing yourself or a tenant's last remaining `admin`.
+  Same shape as `TenantsScreen` (search+filter via `useUserQuery`/
+  `utils/userQuery.ts` into a paginated `common/ListView`; "Add user" opens
+  a `common/FormCard`-based `UserForm` that replaces the list rather than
+  expanding inline above it) — `RoleCheckboxes` (roles multi-select) moved
+  to its own file so both `UserForm` and each row's inline "Edit roles"
+  editor share it.
 - **Password strength** is enforced client-side (`utils/password.ts`:
   ≥8 characters, at least one letter and one digit) everywhere a password
   is set — signup, superuser tenant creation, and the Users screen —
