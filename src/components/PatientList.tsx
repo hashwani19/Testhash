@@ -8,20 +8,31 @@ import { Button } from './common/Button'
 import { SearchBox } from './common/SearchBox'
 import { Select } from './common/Select'
 import { ListView } from './common/ListView'
+import { ScreenHeader } from './common/ScreenHeader'
 import { cardBase } from './common/Card'
 import { cx, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   patients: Patient[]
   onSelect: (id: string) => void
+  onAddNew: () => void
 }
 
-export function PatientList({ patients, onSelect }: Props) {
+export function PatientList({ patients, onSelect, onAddNew }: Props) {
   const { search, setSearch, sort, setSort, resetFilters, isFilterActive, results } = usePatientQuery(patients)
   const { preferences } = usePreferences()
 
   return (
     <div className="flex flex-col gap-3">
+      <ScreenHeader
+        title="Patients"
+        action={
+          <Button variant="primary" onClick={onAddNew}>
+            Add new patient
+          </Button>
+        }
+      />
+
       <SearchBox
         value={search}
         onChange={setSearch}

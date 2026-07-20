@@ -1705,6 +1705,16 @@ master-detail list+detail layout are known gaps, left for a later pass.
   (Patients, Appointments, Activity) and `PatientDetail` weren't migrated
   since they already correctly avoid the cap, not because `Screen` doesn't
   apply to them.
+- **`common/ScreenHeader`** is the one place the "title left, primary add-
+  action right" header row gets rendered — `Tenants`, `Users`, and
+  `Patients` (§8.3) all open with the exact same shape (a `screenHeading`
+  `<h2>` in a `flex items-center justify-between` row next to a primary
+  `<Button>`), so it was pulled into a shared component the same way
+  `Screen`/`FormCard`/`Select` were, rather than staying copy-pasted a
+  third time. `PatientList` owns its own header this way now too — the
+  "Add new patient" button moved from a full-width `<Button>` `App.tsx`
+  rendered above the list into this row, matching the admin screens
+  instead of being visually distinct from them.
 
 ### 8.1 Login (new — doesn't exist in the current MVP)
 

@@ -18,7 +18,8 @@ import { ListView } from './common/ListView'
 import { cardBase } from './common/Card'
 import { Breadcrumb } from './common/Breadcrumb'
 import { Screen } from './common/Screen'
-import { cx, screenHeading, fieldLabel, fieldLabelText } from '../styles'
+import { ScreenHeader } from './common/ScreenHeader'
+import { cx, fieldLabel, fieldLabelText } from '../styles'
 
 interface Props {
   onBack: () => void
@@ -120,12 +121,14 @@ export function UsersScreen({ onBack }: Props) {
     <Screen className="gap-3.5">
       <Breadcrumb onClick={onBack} />
 
-      <div className="flex items-center justify-between gap-2">
-        <h2 className={screenHeading}>Users</h2>
-        <Button variant="primary" onClick={() => setAdding(true)}>
-          Add user
-        </Button>
-      </div>
+      <ScreenHeader
+        title="Users"
+        action={
+          <Button variant="primary" onClick={() => setAdding(true)}>
+            Add user
+          </Button>
+        }
+      />
       <p className="text-sm text-text">Admin-only. Manage the accounts that can sign in to this clinic.</p>
 
       <SearchBox

@@ -168,26 +168,18 @@ function AppShell() {
 
         <main className="flex flex-1 flex-col gap-4 px-5 pb-10 pt-3 md:px-8 md:pt-[26px] lg:px-10">
         {view === 'list' && (
-          <>
-            <Button
-              variant="primary"
-              fullWidth
-              onClick={() => {
-                setNewPatientPrefill(null)
-                setLinkAppointmentId(null)
-                setView('newPatient')
-              }}
-            >
-              Add new patient
-            </Button>
-            <PatientList
-              patients={patients}
-              onSelect={(id) => {
-                setSelectedPatientId(id)
-                setView('patientDetail')
-              }}
-            />
-          </>
+          <PatientList
+            patients={patients}
+            onSelect={(id) => {
+              setSelectedPatientId(id)
+              setView('patientDetail')
+            }}
+            onAddNew={() => {
+              setNewPatientPrefill(null)
+              setLinkAppointmentId(null)
+              setView('newPatient')
+            }}
+          />
         )}
 
         {view === 'newPatient' && (

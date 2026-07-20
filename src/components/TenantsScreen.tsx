@@ -17,7 +17,8 @@ import { SearchBox } from './common/SearchBox'
 import { ListView } from './common/ListView'
 import { cardBase } from './common/Card'
 import { Screen } from './common/Screen'
-import { cx, screenHeading, fieldLabel, fieldLabelText } from '../styles'
+import { ScreenHeader } from './common/ScreenHeader'
+import { cx, fieldLabel, fieldLabelText } from '../styles'
 
 function clinicTypeLabel(clinicType: Tenant['clinicType']): string {
   return CLINIC_TYPE_OPTIONS.find((opt) => opt.value === clinicType)?.label ?? clinicType
@@ -71,12 +72,14 @@ export function TenantsScreen() {
 
   return (
     <Screen className="gap-3.5">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className={screenHeading}>Tenants</h2>
-        <Button variant="primary" onClick={() => setAdding(true)}>
-          Add tenant
-        </Button>
-      </div>
+      <ScreenHeader
+        title="Tenants"
+        action={
+          <Button variant="primary" onClick={() => setAdding(true)}>
+            Add tenant
+          </Button>
+        }
+      />
 
       <SearchBox
         value={search}
