@@ -122,10 +122,17 @@ function deriveFullNameFromEmail(email: string): string {
  *  provider is already mounted and scoped to whichever tenant is *currently*
  *  signed in, so calling its `updateTemplate` right after `signUp`/`addTenant`
  *  would race against it re-rendering for the new tenant. Writing the
- *  storage key directly sidesteps that ordering hazard entirely. */
+ *  storage key directly sidesteps that ordering hazard entirely.
+ *
+ *  Always writes (unlike the optional fields below, `clinicName` is
+ *  mandatory and validated by the caller before this ever runs) since it's
+ *  also the tenant's app-wide display name (§8.0), not just letterhead
+ *  content that can be safely left unset. */
 function seedPrescriptionTemplate(tenantId: string, input: SignUpInput): void {
-  const template: Partial<PrescriptionTemplate> = {
-    clinicName: input.clinicName ? sanitizeText(input.clinicName) || undefined : undefined,
+  const template: PrescriptionTemplate = {
+    showLetterhead: true,
+    topMarginMm: 0,
+    clinicName: sanitizeText(input.clinicName),
     clinicAddress: input.clinicAddress ? sanitizeText(input.clinicAddress) || undefined : undefined,
     doctorName: input.doctorName ? sanitizeText(input.doctorName) || undefined : undefined,
     doctorCredentials: input.doctorCredentials
@@ -133,10 +140,7 @@ function seedPrescriptionTemplate(tenantId: string, input: SignUpInput): void {
       : undefined,
     logoDataUrl: input.logoDataUrl || undefined,
   }
-  const hasAny = Object.values(template).some((v) => v !== undefined)
-  if (!hasAny) return
-  const full: PrescriptionTemplate = { showLetterhead: true, topMarginMm: 0, ...template }
-  localStorage.setItem(tenantStorageKey(PRESCRIPTION_TEMPLATE_BASE_KEY, tenantId), JSON.stringify(full))
+  localStorage.setItem(tenantStorageKey(PRESCRIPTION_TEMPLATE_BASE_KEY, tenantId), JSON.stringify(template))
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -192,6 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { ok: false, error: 'duplicate_email' }
       }
       if (!isStrongPassword(input.password)) return { ok: false, error: 'weak_password' }
+      if (!input.clinicName.trim()) return { ok: false, error: 'missing_clinic_name' }
 
       const tenantId = crypto.randomUUID()
       const tenant: Tenant = {
@@ -227,6 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { ok: false, error: 'duplicate_email' }
       }
       if (!isStrongPassword(input.password)) return { ok: false, error: 'weak_password' }
+      if (!input.clinicName.trim()) return { ok: false, error: 'missing_clinic_name' }
 
       const tenantId = crypto.randomUUID()
       const tenant: Tenant = {

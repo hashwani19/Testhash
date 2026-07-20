@@ -5,6 +5,9 @@ import { ProfileMenu } from './ProfileMenu'
 import { pageTitle } from '../styles'
 
 interface Props {
+  /** Same value passed to `NavRail` — see its doc comment. Only rendered
+   *  here below `md:` since `NavRail` carries the title at `md:`+. */
+  title: string
   fullName: string
   roles: Role[]
   activeNavTarget: NavTarget
@@ -14,6 +17,7 @@ interface Props {
 }
 
 export function AppHeader({
+  title,
   fullName,
   roles,
   activeNavTarget,
@@ -29,7 +33,7 @@ export function AppHeader({
         <div className="flex min-w-0 flex-1 items-center gap-2 md:hidden">
           <NavMenu roles={roles} active={activeNavTarget} onNavigate={onNavigate} />
 
-          <h1 className={`min-w-0 flex-1 ${pageTitle}`}>Ortho and Vision Care</h1>
+          <h1 className={`min-w-0 flex-1 truncate ${pageTitle}`}>{title}</h1>
         </div>
 
         <ProfileMenu

@@ -39,7 +39,7 @@ export function SignUpScreen({ onCancel }: Props) {
       password,
       mobile: profile.mobile,
       clinicType: profile.clinicType,
-      clinicName: profile.clinicName || undefined,
+      clinicName: profile.clinicName,
       clinicAddress: profile.clinicAddress || undefined,
       doctorName: profile.doctorName || undefined,
       doctorCredentials: profile.doctorCredentials || undefined,
@@ -49,7 +49,9 @@ export function SignUpScreen({ onCancel }: Props) {
       setError(
         result.error === 'duplicate_email'
           ? 'An account with this email already exists.'
-          : PASSWORD_HINT,
+          : result.error === 'missing_clinic_name'
+            ? 'Clinic name is required.'
+            : PASSWORD_HINT,
       )
       return
     }

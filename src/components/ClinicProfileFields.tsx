@@ -16,11 +16,12 @@ interface Props {
 }
 
 /**
- * Mandatory clinic mobile number + clinic type, plus the optional fields
- * that only shape the printed prescription letterhead (§5.6 of
- * docs/design.md) — shared by self-signup and superuser tenant
- * provisioning (§5.5), and the exact same set of fields a tenant admin
- * later edits from Preferences.
+ * Mandatory clinic mobile number, clinic type, and clinic name (also the
+ * tenant's own display name shown in the app header everywhere, §8.0),
+ * plus the optional fields that only shape the printed prescription
+ * letterhead (§5.6 of docs/design.md) — shared by self-signup and
+ * superuser tenant provisioning (§5.5), and the exact same set of fields a
+ * tenant admin later edits from Preferences.
  */
 export function ClinicProfileFields({ value, onChange }: Props) {
   const [compressingLogo, setCompressingLogo] = useState(false)
@@ -70,19 +71,20 @@ export function ClinicProfileFields({ value, onChange }: Props) {
         </label>
       </div>
 
+      <label className={fieldLabel}>
+        <span className={fieldLabelText}>Clinic name</span>
+        <TextInput
+          value={value.clinicName}
+          onChange={(e) => set('clinicName', e.target.value)}
+          placeholder="e.g. Ortho and Vision Care"
+          required
+        />
+      </label>
+
       <p className="text-[13px] text-text">
         Everything below is optional and only shapes how your printed prescriptions look — you can skip it
         now and fill it in later from Preferences.
       </p>
-
-      <label className={fieldLabel}>
-        <span className={fieldLabelText}>Clinic name (optional)</span>
-        <TextInput
-          value={value.clinicName}
-          onChange={(e) => set('clinicName', e.target.value)}
-          placeholder="Printed in the prescription header"
-        />
-      </label>
 
       <label className={fieldLabel}>
         <span className={fieldLabelText}>Clinic address (optional)</span>

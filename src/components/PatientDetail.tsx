@@ -102,7 +102,7 @@ export function PatientDetail({
       <div className="flex items-center justify-between">
         <h3 className="text-base font-bold text-text-h">Eye treatment history</h3>
         <Button variant="primary" onClick={onAddRecord}>
-          Add record
+          Add prescription
         </Button>
       </div>
 

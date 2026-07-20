@@ -7,9 +7,17 @@ import { PrescriptionTemplateContext } from './prescriptionTemplateContext'
 
 const BASE_STORAGE_KEY = 'testhash.prescriptionTemplate.v1'
 
+// clinicName is mandatory going forward (signup/tenant-provisioning/
+// Preferences all enforce it), but a stored template from before that was
+// true — the pre-existing default tenant's, most notably — may still lack
+// the key entirely (JSON.stringify drops undefined-valued keys, so it was
+// never possible to persist an *empty* one). This default only ever
+// surfaces for that legacy case; every new tenant gets a real value
+// written at creation time (AuthContext.seedPrescriptionTemplate).
 const DEFAULT_TEMPLATE: PrescriptionTemplate = {
   showLetterhead: true,
   topMarginMm: 0,
+  clinicName: 'Ortho and Vision Care',
 }
 
 // The only free-text fields — logoDataUrl is a data: URL, not typed text,

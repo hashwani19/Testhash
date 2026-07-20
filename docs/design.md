@@ -616,7 +616,7 @@ a rework of `PATIENTS` or anything tenant-level.
   - **Existing vs. prospective is a discriminant on `patient_id`**, not a
     separate `status`/`type` column — `patient_id IS NULL` *is* "this is a
     prospective patient," and the moment `PATCH /appointments/:id` sets it
-    (because "Add patient" ran, §8.11), the row behaves as an
+    (because "Add new patient" ran, §8.11), the row behaves as an
     existing-patient appointment from then on; `name`/`dob`/etc. are left in
     place as a historical record but no longer read for display (the linked
     patient's own name/DOB take over).
@@ -1183,6 +1183,33 @@ itself:
   `logo_storage_key` and deletes the R2 object — the header then falls back
   to title/subtitle text only, same as a tenant that never uploaded one.
 
+**Implemented in this local-storage build, as a deliberately smaller
+version of the above** — no separate `tenant_branding` concept, no
+subtitle, no logo-in-header, no dedicated Branding screen:
+
+- The app header (`NavRail`/`AppHeader`, every screen) shows the signed-in
+  tenant's `PrescriptionTemplate.clinicName` (§5.6) directly — the same
+  field the print letterhead already used, reused as the tenant's whole
+  app-wide display name rather than modeling `title`/`subtitle`/`logoUrl`
+  as their own thing. `clinicName` is mandatory everywhere it's set —
+  `SignUpScreen`, the superuser's `TenantForm`, and Preferences (which
+  actively prevents saving it empty, reverting to the last real value on
+  blur) — precisely because the header would otherwise have nothing to
+  show; there's no `tenants.name` to fall back to the way the real design
+  above does.
+- **Signed-out and platform-level contexts show a fixed name instead**:
+  `PLATFORM_NAME` (`src/branding.ts`, currently "Out patient management
+  system") — the login/signup screens (no tenant is known pre-auth) and
+  the superuser's own shell (not scoped to any tenant). Every tenant-
+  scoped screen shows that tenant's own name instead, never this one.
+- **Pre-existing tenants from before this was mandatory** (the seeded
+  default tenant, most notably) fall back to a hardcoded
+  `'Ortho and Vision Care'` in `PrescriptionTemplateProvider`'s
+  `DEFAULT_TEMPLATE` — the app's own original name, so nothing regresses
+  for accounts that predate this feature without requiring a migration
+  step. Every tenant created from here on always has a real value written
+  at creation time, so this fallback is legacy-only.
+
 ### 5.6 Prescription printing (`ophthalmology` clinic type)
 
 Staff can print a US Letter page of a single visit's prescription — the same
@@ -1461,7 +1488,7 @@ UI at all — only the data-fetching layer.
 | `GET /audit-log?search=&entity_type=&actor_user_id=&from=&to=&page=&limit=` | admin | Audit trail lookup (§8.9). `search` matches `actor_name` or `entity_label` (≥3 chars, same rule as `/patients`, §5.2). `entity_type`/`actor_user_id` filter to one value each; `from`/`to` filter to a date range (either or both, inclusive) | `created_at` **desc** (most recent activity first, not user-configurable) |
 | `GET /appointments?search=&from=&to=&sort=&page=&limit=` | any | List/search appointments (§8.11). `search` matches the resolved patient name (linked patient's name, or the prospective `name` — ≥3 chars, same rule as `/patients`, §5.2). `from`/`to` filter to a date range (either or both, inclusive). `sort` overrides the default: `name_asc`/`name_desc` | `date`, `time` asc (soonest first) |
 | `POST /appointments` | any | Book an appointment — either `patient_id` (existing patient) or `name`/`dob`/`manual_age`/`mobile`/`address` (prospective patient), plus `date` (required) and `time` (optional). `date` must be today or later — rejects a past date with `400` (§8.11) | — |
-| `PATCH /appointments/:id` | any | Update any of `date`/`time`/`patient_id`/`name`/`dob`/`manual_age`/`mobile`/`address` — used both for the Edit action (§8.11) and to set `patient_id` once a prospective patient is registered via "Add patient" | — |
+| `PATCH /appointments/:id` | any | Update any of `date`/`time`/`patient_id`/`name`/`dob`/`manual_age`/`mobile`/`address` — used both for the Edit action (§8.11) and to set `patient_id` once a prospective patient is registered via "Add new patient" | — |
 | `DELETE /appointments/:id` | any | Delete a single appointment (§8.11) — not admin-only, unlike `DELETE /visits/:id`; the client's "bulk delete" is just this endpoint called once per selected id | — |
 | `GET /settings` | admin | App-wide settings (auto-delete toggle + day threshold, §5.2) | — |
 | `PATCH /settings` | admin | Update either/both fields | — |
@@ -1807,7 +1834,7 @@ emailed link.
   patient's group (if any) as a small label/chip. Default order is
   newest-registered-first (`created_at` desc) — a server-guaranteed order,
   not incidental array order (§6).
-- "Add patient" button — visible to `admin`, `doctor`, and `front_desk`.
+- "Add new patient" button — visible to `admin`, `doctor`, and `front_desk`.
 - Tapping a row opens Patient Detail.
 
 ### 8.4 Patient Detail
@@ -1830,7 +1857,7 @@ emailed link.
   Lenses, diagnosis/treatment plan text, and any attachment thumbnails.
 - A row (Distance or Reading) or an entire eye section is omitted from the
   card if it has nothing to show — no `—` placeholders for unset fields.
-- "Add record" button — visible to `admin`, `doctor`, *and* `front_desk`
+- "Add prescription" button — visible to `admin`, `doctor`, *and* `front_desk`
   (front desk can create/edit clinical records, §4). Delete on a visit card
   is **admin-only**.
 - Attachments are not rendered at all for `front_desk` — not greyed out,
@@ -2011,7 +2038,7 @@ this is additive on top of that shell, not a rewrite of it.
     §5.2), and address. The typed text becomes the name as-is — no
     confirmation step.
     None of these fields touch the `patients` table yet — they live on the
-    appointment row itself until "Add patient" (§8.11 below) runs.
+    appointment row itself until "Add new patient" (§8.11 below) runs.
   - If the user keeps typing and the text starts matching someone after
     all, the new-patient fields disappear and the match list takes over
     again — the form always reflects the *current* text, not whichever
@@ -2058,7 +2085,7 @@ this is additive on top of that shell, not a rewrite of it.
     dialog (the same `ConfirmModal` used for every other destructive
     action in the app), then `DELETE /appointments/:id` (§6). `admin` does
     not see this icon at all — see bulk delete below instead.
-  - **"Add patient"** (prospective patient only) — opens the patient
+  - **"Add new patient"** (prospective patient only) — opens the patient
     form (§8.3) prefilled with the name/DOB/age/mobile/address captured at
     booking time. Submitting it creates the patient **and** links this
     appointment to the new `patient_id` (`PATCH /appointments/:id`, §6) —

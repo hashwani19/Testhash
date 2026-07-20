@@ -263,13 +263,13 @@ export function EyeRecordForm({
   return (
     <>
       <FormCard
-        title={initial ? 'Edit record' : 'Add record'}
+        title={initial ? 'Edit prescription' : 'Add prescription'}
         onCancel={onCancel}
         onSubmit={submit}
-        submitLabel={initial ? 'Save changes' : 'Save record'}
+        submitLabel={initial ? 'Save changes' : 'Save prescription'}
         submitDisabled={isEmpty}
         isDirty={hasUnsavedChanges}
-        discardTitle="Discard this record?"
+        discardTitle="Discard this prescription?"
       >
         <label className={fieldLabel}>
           <span className={fieldLabelText}>Visit date &amp; time</span>

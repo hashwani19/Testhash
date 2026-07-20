@@ -12,7 +12,9 @@ import { useAppointments } from './hooks/useAppointments'
 import { useAuditLog } from './hooks/useAuditLog'
 import { useAttachments } from './hooks/useAttachments'
 import { usePreferences } from './hooks/usePreferences'
+import { usePrescriptionTemplate } from './hooks/usePrescriptionTemplate'
 import { useThemeEffect } from './hooks/useThemeEffect'
+import { PLATFORM_NAME } from './branding'
 import { PatientList } from './components/PatientList'
 import { PatientForm } from './components/PatientForm'
 import { PatientDetail } from './components/PatientDetail'
@@ -79,6 +81,12 @@ function AppShell() {
   const { attachments, addAttachments, deleteAttachment, deleteAttachmentsForVisits, getAttachmentsForVisit } =
     useAttachments()
   const { preferences } = usePreferences()
+  const { template } = usePrescriptionTemplate()
+  // Clinic name is mandatory going forward (SignUpScreen/TenantForm,
+  // PreferencesScreen) — this fallback only ever matters for the
+  // pre-existing default tenant's template, which already gets one from
+  // PrescriptionTemplateProvider's own DEFAULT_TEMPLATE.
+  const title = template.clinicName?.trim() || PLATFORM_NAME
   useThemeEffect(preferences.theme)
 
   const [view, setView] = useState<View>('list')
@@ -129,6 +137,7 @@ function AppShell() {
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-[560px] flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] md:max-w-[1440px] md:flex-row">
       <NavRail
+        title={title}
         roles={user.roles}
         active={VIEW_TO_NAV_TARGET[view] ?? 'patients'}
         onNavigate={navigateTo}
@@ -139,6 +148,7 @@ function AppShell() {
         <InstallBanner />
 
         <AppHeader
+          title={title}
           fullName={user.fullName}
           roles={user.roles}
           activeNavTarget={VIEW_TO_NAV_TARGET[view] ?? 'patients'}
@@ -173,7 +183,7 @@ function AppShell() {
                 setView('newPatient')
               }}
             >
-              Add patient
+              Add new patient
             </Button>
             <PatientList
               patients={patients}

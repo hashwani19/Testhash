@@ -6,11 +6,13 @@ export type LoginResult = { ok: true } | { ok: false; error: 'invalid' | 'suspen
 /** Same fields whether they come in via self-signup or a superuser
  *  provisioning a tenant (docs/design.md §5.5) — the doctor/address/logo
  *  fields end up on the new tenant's `PrescriptionTemplate` (§5.6), not on
- *  the `Tenant` record itself. */
+ *  the `Tenant` record itself. `clinicName` is mandatory: it's the tenant's
+ *  own display name shown in the app header everywhere (§8.0), not just
+ *  the prescription letterhead. */
 export interface ClinicProfileInput {
   clinicType: ClinicType
   mobile: string
-  clinicName?: string
+  clinicName: string
   clinicAddress?: string
   doctorName?: string
   doctorCredentials?: string
@@ -22,7 +24,9 @@ export interface SignUpInput extends ClinicProfileInput {
   password: string
 }
 
-export type SignUpResult = { ok: true } | { ok: false; error: 'duplicate_email' | 'weak_password' }
+export type SignUpResult =
+  | { ok: true }
+  | { ok: false; error: 'duplicate_email' | 'weak_password' | 'missing_clinic_name' }
 
 export interface CreateUserInput {
   email: string

@@ -165,7 +165,7 @@ export function PatientForm({ initial, groups, onSubmit, onCancel }: Props) {
           Cancel
         </Button>
         <Button type="submit" variant="primary" disabled={!name.trim()}>
-          {isEditingExisting ? 'Save changes' : 'Add patient'}
+          {isEditingExisting ? 'Save changes' : 'Add new patient'}
         </Button>
       </div>
     </form>

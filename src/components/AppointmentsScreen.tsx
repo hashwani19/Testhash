@@ -200,7 +200,7 @@ export function AppointmentsScreen({
 
                 {isNewPatient ? (
                   <Button variant="secondary" onClick={() => onAddAsPatient(appointment)}>
-                    Add patient
+                    Add new patient
                   </Button>
                 ) : (
                   linkedPatient && (

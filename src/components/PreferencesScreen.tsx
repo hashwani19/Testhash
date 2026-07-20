@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import type { ClinicType, ThemePreference } from '../types'
 import { usePreferences } from '../hooks/usePreferences'
@@ -33,6 +33,17 @@ export function PreferencesScreen({ onBack }: Props) {
   const { template, updateTemplate } = usePrescriptionTemplate()
   const [compressingLogo, setCompressingLogo] = useState(false)
   const tenant = tenants.find((t) => t.id === user?.tenantId)
+
+  // Clinic name is mandatory (§8.0 of docs/design.md — it's also the app
+  // header's title, not just letterhead content) but this screen has no
+  // submit step to gate on; every other field here saves per-keystroke.
+  // A local draft lets typing/backspacing feel normal while never actually
+  // persisting an empty value — blurring with nothing typed snaps back to
+  // the last real one instead.
+  const [clinicNameDraft, setClinicNameDraft] = useState(template.clinicName ?? '')
+  useEffect(() => {
+    setClinicNameDraft(template.clinicName ?? '')
+  }, [template.clinicName])
 
   const handleLogoSelected = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -156,14 +167,26 @@ export function PreferencesScreen({ onBack }: Props) {
               Show clinic name on printed prescriptions
             </label>
 
-            <label className={fieldLabel}>
-              <span className={fieldLabelText}>Clinic name</span>
-              <TextInput
-                value={template.clinicName ?? ''}
-                onChange={(e) => updateTemplate({ clinicName: e.target.value || undefined })}
-                placeholder="Ortho and Vision Care (default)"
-              />
-            </label>
+            <div className={fieldLabel}>
+              <label className={fieldLabel}>
+                <span className={fieldLabelText}>Clinic name</span>
+                <TextInput
+                  value={clinicNameDraft}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setClinicNameDraft(v)
+                    if (v.trim()) updateTemplate({ clinicName: v })
+                  }}
+                  onBlur={() => {
+                    if (!clinicNameDraft.trim()) setClinicNameDraft(template.clinicName ?? '')
+                  }}
+                  required
+                />
+              </label>
+              {!clinicNameDraft.trim() && (
+                <span className="text-[13px] text-high">Clinic name is required.</span>
+              )}
+            </div>
 
             <label className={fieldLabel}>
               <span className={fieldLabelText}>Clinic address (optional)</span>

@@ -5,6 +5,10 @@ import { Button } from './common/Button'
 import { pageTitle, cx } from '../styles'
 
 interface Props {
+  /** The tenant's own display name (`PrescriptionTemplate.clinicName`),
+   *  or the platform name for contexts with no tenant (§5.5/§8.0 of
+   *  docs/design.md) — the caller resolves which, this just renders it. */
+  title: string
   roles: Role[]
   active: NavTarget
   onNavigate: (target: NavTarget) => void
@@ -19,12 +23,12 @@ interface Props {
  * only ever renders at pointer-friendly widths, unlike the touch-first
  * drawer it replaces.
  */
-export function NavRail({ roles, active, onNavigate }: Props) {
+export function NavRail({ title, roles, active, onNavigate }: Props) {
   const items = NAV_ITEMS.filter((item) => !item.roles || item.roles.some((r) => roles.includes(r)))
 
   return (
     <nav className="hidden w-56 shrink-0 flex-col gap-1 border-r border-border p-4 md:flex">
-      <p className={`mb-2 px-3 ${pageTitle}`}>Ortho and Vision Care</p>
+      <p className={`mb-2 px-3 ${pageTitle}`}>{title}</p>
       {items.map((item) => (
         <Button
           key={item.target}

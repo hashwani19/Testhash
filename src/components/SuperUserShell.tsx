@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { PLATFORM_NAME } from '../branding'
 import { AppHeader } from './AppHeader'
 import { NavRail } from './NavRail'
 import { ConfirmModal } from './ConfirmModal'
@@ -20,10 +21,11 @@ export function SuperUserShell() {
 
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-[560px] flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] md:max-w-[1440px] md:flex-row">
-      <NavRail roles={user.roles} active="tenants" onNavigate={() => {}} />
+      <NavRail title={PLATFORM_NAME} roles={user.roles} active="tenants" onNavigate={() => {}} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <AppHeader
+          title={PLATFORM_NAME}
           fullName={user.fullName}
           roles={user.roles}
           activeNavTarget="tenants"
