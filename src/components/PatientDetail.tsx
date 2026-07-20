@@ -102,7 +102,7 @@ export function PatientDetail({
       </Card>
 
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold text-text-h">Eye treatment history</h3>
+        <h3 className="text-base font-bold text-text-h">Prescription History</h3>
         <Button variant="primary" onClick={onAddRecord}>
           Add prescription
         </Button>
@@ -127,7 +127,7 @@ export function PatientDetail({
               ? `This permanently deletes ${patient.name} (${patient.patientNumber}). This cannot be undone.`
               : `This permanently deletes ${patient.name} (${patient.patientNumber}) along with their ${
                   visits.length
-                } eye treatment history record${visits.length === 1 ? '' : 's'}. This cannot be undone.`
+                } prescription history record${visits.length === 1 ? '' : 's'}. This cannot be undone.`
           }
           mode="typeConfirm"
           confirmLabel="Delete"

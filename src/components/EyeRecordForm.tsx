@@ -309,15 +309,17 @@ export function EyeRecordForm({
             </fieldset>
           ))}
 
-        <label className={fieldLabel}>
-          <span className={fieldLabelText}>Lenses (optional)</span>
-          <TextInput
-            type="text"
-            value={lenses}
-            onChange={(e) => setLenses(e.target.value)}
-            placeholder="Progressive, bifocal, single vision…"
-          />
-        </label>
+        {clinicType !== 'orthopedic' && (
+          <label className={fieldLabel}>
+            <span className={fieldLabelText}>Lenses (optional)</span>
+            <TextInput
+              type="text"
+              value={lenses}
+              onChange={(e) => setLenses(e.target.value)}
+              placeholder="Progressive, bifocal, single vision…"
+            />
+          </label>
+        )}
 
         <label className={fieldLabel}>
           <span className={fieldLabelText}>Diagnosis (optional)</span>
