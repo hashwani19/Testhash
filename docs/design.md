@@ -1470,7 +1470,7 @@ UI at all — only the data-fetching layer.
 |---|---|---|---|
 | `POST /platform/tenants` | super_user | Provision a tenant — the full clinic profile (name/mobile/clinic type mandatory, plus the same optional letterhead-shaping fields §5.6/§13 already supports) and the prospective admin's email, which is mandatory (§5.4). Creates the tenant, a default `app_settings` row, and an inactive first `admin` user with an invite token; sends the invite email. Response is the created tenant — never the invite token | — |
 | `GET /platform/tenants?status=&page=&limit=` | super_user | List tenants across the whole service (excludes the reserved platform tenant, §4.1) | `created_at` desc |
-| `GET /clinic-types` | super_user | List available clinic types (§5.2) — powers the provisioning UI's type picker. Regular staff don't call this; their own tenant's clinic type comes back on `GET /auth/me` below instead | `sort_order` |
+| `GET /clinic-types` | public | List available clinic types (§5.2) — powers the type picker on both the super_user's provisioning UI and the public self-serve Sign up screen (§5.4), neither of which necessarily has a session yet. Regular staff don't call this once signed in; their own tenant's clinic type comes back on `GET /auth/me` below instead | `sort_order` |
 | `PATCH /platform/tenants/:id` | super_user | Update `status` (`active`/`suspended`) — suspending also kills that tenant's live sessions immediately (§5.4/§10) | — |
 | `GET /platform/settings` | super_user | Service-wide configuration (§5.4) — distinct from the per-tenant `GET /settings` below | — |
 | `PATCH /platform/settings` | super_user | Update service-wide configuration | — |

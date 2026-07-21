@@ -22,8 +22,12 @@ info:
       this spec — see design.md §4.1/§5.4/§10 for why a client-supplied
       tenant value is treated as a security bug, not a convenience.
     - **Auth is a session cookie**, not a bearer token — see the `cookieAuth`
-      security scheme below. `POST /auth/login` and `POST /auth/accept-invite`
-      are the only endpoints that don't require it already being set.
+      security scheme below. The handful of endpoints that don't require one
+      already being set are marked `x-required-roles: [public]` with an
+      empty `security: []` override — `POST /auth/login`,
+      `POST /auth/signup`, `GET /auth/google`,
+      `GET /auth/google/callback`, `GET /auth/invite-preview`,
+      `POST /auth/accept-invite`, and `GET /clinic-types` (design.md §5.4).
     - **Roles**: `super_user` (operates the service, no clinical access),
       `admin`/`doctor`/`front_desk` (all tenant-scoped clinic staff). Each
       operation's required role(s) are stated in its description and in the
@@ -51,6 +55,12 @@ info:
       Functions included) resolves it the same way: literal path segments
       take precedence over parameterized ones, which is exactly the
       behavior these routes need.
+    - **Redirect-only endpoints have no JSON `2XX` response, only a `302`**:
+      `GET /auth/google`, `GET /auth/google/callback`, and the pre-existing
+      `GET /attachments/{id}` are genuinely browser-navigation endpoints,
+      not `fetch`-and-parse-JSON ones — a strict linter flags the missing
+      `2XX`, but adding a fake one that never actually gets returned would
+      be more misleading than the warning.
 servers:
   - url: /api
     description: >-
@@ -62,10 +72,14 @@ tags:
   - name: Platform
     description: >-
       super_user-only — provisioning/revoking tenants and service-wide
-      config. Operates across tenants by nature; every other tag's endpoints
-      are scoped to one tenant.
+      config — except `GET /clinic-types`, deliberately public since the
+      self-serve Sign up screen needs it before any session exists.
+      Operates across tenants by nature; every other tag's endpoints are
+      scoped to one tenant.
   - name: Auth
-    description: Login, logout, current-session lookup, and invite acceptance.
+    description: >-
+      Login, logout, current-session lookup, self-serve signup, Google
+      OAuth, and invite acceptance.
   - name: Preferences
     description: Per-user, per-device-independent settings (design.md §5.2).
   - name: Branding
@@ -105,9 +119,13 @@ paths:
       description: >-
         Creates the tenant, a default `app_settings` row, and an inactive
         first `admin` user with an invite token; sends the invite email
-        out-of-band. `name`/`contactEmail`/`contactMobile` are all mandatory
-        (design.md §5.4). The invite token is never present in the response
-        — only delivered by email.
+        out-of-band. `name`/`contactEmail`/`contactMobile`/`clinicTypeId`
+        are all mandatory (design.md §5.4). The invited admin sees this
+        clinic profile pre-filled and editable when they accept
+        (`GET /auth/invite-preview`, `POST /auth/accept-invite` below) —
+        this call doesn't lock anything in permanently except who the
+        invite email goes to. The invite token is never present in the
+        response — only delivered by email.
       requestBody:
         required: true
         content:
@@ -187,6 +205,29 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /clinic-types:
+    get:
+      tags: [Platform]
+      operationId: listClinicTypes
+      summary: List available clinic types
+      x-required-roles: [public]
+      security: []
+      description: >-
+        Public — powers the type picker on both the super_user's
+        provisioning UI and the public self-serve Sign up screen (design.md
+        §5.2/§5.4/§6), neither of which necessarily has a session yet.
+        Regular staff don't call this once signed in; their own tenant's
+        clinic type comes back on `GET /auth/me` below instead.
+      responses:
+        '200':
+          description: Available clinic types.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClinicType'
+
   /platform/settings:
     get:
       tags: [Platform]
@@ -236,17 +277,164 @@ paths:
   # ---------------------------------------------------------------------
   # Auth
   # ---------------------------------------------------------------------
+  /auth/signup:
+    post:
+      tags: [Auth]
+      operationId: signup
+      summary: Self-serve signup — creates a tenant and its first admin
+      x-required-roles: [public]
+      security: []
+      description: >-
+        Public, no invite needed (design.md §5.4). Creates the tenant, a
+        default `app_settings` row, and an active first `admin` user in
+        one transaction, then signs them in — the credential (a password,
+        or a Google signup ticket from `GET /auth/google/callback` below)
+        and the mandatory clinic profile are both supplied in this one
+        call.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: Tenant + admin created; session cookie set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Email (or Google account) already registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/google:
+    get:
+      tags: [Auth]
+      operationId: startGoogleAuth
+      summary: Start the Google OAuth flow
+      x-required-roles: [public]
+      security: []
+      description: >-
+        Redirects to Google's consent screen with a signed `state` param
+        encoding *why* — self-serve signup, or accepting a specific
+        invite token — so `GET /auth/google/callback` below knows what to
+        do next without trusting anything the browser could tamper with
+        (design.md §5.4/§10).
+      parameters:
+        - name: intent
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [signup, accept-invite]
+        - name: inviteToken
+          in: query
+          required: false
+          description: Required when `intent=accept-invite`; ignored otherwise.
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to Google's OAuth consent screen.
+        '400':
+          description: Missing/invalid `intent`, or `intent=accept-invite` without `inviteToken`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/google/callback:
+    get:
+      tags: [Auth]
+      operationId: googleAuthCallback
+      summary: Google's OAuth redirect target
+      x-required-roles: [public]
+      security: []
+      description: >-
+        Exchanges `code` for tokens server-side — the client secret never
+        reaches the browser — verifies the ID token's signature/issuer/
+        audience against Google's public keys, and rejects an unverified
+        Google email outright (design.md §5.4/§10). If the resulting
+        `sub`/email already matches an existing `users` row, this is a
+        login, not a signup: sets the session cookie and redirects
+        straight into the app. Otherwise mints a short-lived signed
+        signup ticket and redirects to the client's signup-completion or
+        accept-invite screen with it, per the intent decoded from `state`.
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: >-
+            Redirect — either into the app (session cookie set, existing
+            user) or to the signup-completion/accept-invite screen
+            carrying a signup ticket (brand-new identity).
+        '400':
+          description: Invalid/expired/tampered `state`, or an unverified Google email.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/invite-preview:
+    get:
+      tags: [Auth]
+      operationId: previewInvite
+      summary: Look up a pending invite's clinic profile, for pre-filling
+      x-required-roles: [public]
+      security: []
+      description: >-
+        Public, read-only — lets the accept-invite screen (design.md
+        §8.1) show the clinic profile a `super_user` already entered
+        before the invited admin edits and confirms it. Never exposes
+        anything beyond what that form needs.
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The pending invite's clinic profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitePreview'
+        '400':
+          description: Invalid, expired, or already-used token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /auth/accept-invite:
     post:
       tags: [Auth]
       operationId: acceptInvite
-      summary: Accept a provisioning invite and set a password
+      summary: Accept a provisioning invite, choosing a credential
       x-required-roles: [public]
       security: []
       description: >-
-        Public endpoint — the token comes from the emailed invite link, not
-        a session. Sets the password, activates the user, clears the invite
-        fields, and signs them in (sets the session cookie) in one step
+        Public endpoint — the token comes from the emailed invite link,
+        not a session. Sets the chosen credential (password or Google,
+        matching `GET /auth/invite-preview`'s pre-filled/edited clinic
+        profile back), activates the user, clears the invite fields, and
+        signs them in (sets the session cookie) in one step
         (design.md §5.4/§6).
       requestBody:
         required: true
@@ -1415,9 +1603,26 @@ components:
       enum: [light, dark, auto]
 
     # -- Platform / tenants -------------------------------------------------
+    ClinicType:
+      type: object
+      required: [id, label]
+      properties:
+        id:
+          type: string
+          example: ophthalmology
+          description: >-
+            'ophthalmology' | 'orthopedic' today (design.md §5.2) — an
+            extensible lookup, not a hardcoded enum, so a third type is an
+            additive row, not a schema change.
+        label:
+          type: string
+          example: Ophthalmology (eye care)
+        sortOrder:
+          type: integer
+          description: Display order only — not a ranking of any kind.
     Tenant:
       type: object
-      required: [id, name, contactEmail, contactMobile, status, createdAt, updatedAt]
+      required: [id, name, contactEmail, contactMobile, clinicTypeId, status, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -1428,6 +1633,9 @@ components:
           format: email
         contactMobile:
           type: string
+        clinicTypeId:
+          type: string
+          description: References ClinicType.id — set once at provisioning (design.md §5.2), never changed afterward.
         status:
           $ref: '#/components/schemas/TenantStatus'
         createdAt:
@@ -1438,7 +1646,13 @@ components:
           format: date-time
     TenantCreateRequest:
       type: object
-      required: [name, contactEmail, contactMobile]
+      required: [name, contactEmail, contactMobile, clinicTypeId]
+      description: >-
+        The full clinic profile a super_user fills in on the prospective
+        admin's behalf, plus their email — the same shape self-serve
+        signup collects (design.md §5.4). `contactEmail` is where the
+        invite is sent; the account that accepts it is created with this
+        email.
       properties:
         name:
           type: string
@@ -1447,6 +1661,9 @@ components:
           format: email
         contactMobile:
           type: string
+        clinicTypeId:
+          type: string
+          description: References ClinicType.id — see GET /clinic-types.
     TenantStatusUpdateRequest:
       type: object
       required: [status]
@@ -1499,6 +1716,13 @@ components:
           type: string
         branding:
           $ref: '#/components/schemas/TenantBranding'
+        clinicType:
+          $ref: '#/components/schemas/ClinicType'
+          description: >-
+            Absent for a super_user session (the reserved platform tenant
+            has no clinic type, design.md §4.1) — bundled in here so the
+            client picks the right visit/print form from this one call,
+            no second round-trip to GET /clinic-types on every app load.
     LoginRequest:
       type: object
       required: [email, password]
@@ -1509,15 +1733,110 @@ components:
         password:
           type: string
           format: password
-    AcceptInviteRequest:
+
+    # -- Signup / invite acceptance -------------------------------------------
+    PasswordCredential:
       type: object
-      required: [token, password]
+      required: [type, email, password]
+      description: The email the new account will log in with, plus a password meeting design.md §5.4's strength rule.
       properties:
-        token:
+        type:
           type: string
+          enum: [password]
+        email:
+          type: string
+          format: email
         password:
           type: string
           format: password
+    GoogleCredential:
+      type: object
+      required: [type, ticket]
+      description: >-
+        Proves a Google identity already verified by GET
+        /auth/google/callback, without re-running the OAuth handshake
+        (design.md §5.4).
+      properties:
+        type:
+          type: string
+          enum: [google]
+        ticket:
+          type: string
+          description: The short-lived signed signup ticket minted by the callback for a brand-new identity.
+    Credential:
+      description: Exactly one way to establish a brand-new account's identity — a typed password, or an already-verified Google identity (design.md §5.4).
+      oneOf:
+        - $ref: '#/components/schemas/PasswordCredential'
+        - $ref: '#/components/schemas/GoogleCredential'
+      discriminator:
+        propertyName: type
+        mapping:
+          password: '#/components/schemas/PasswordCredential'
+          google: '#/components/schemas/GoogleCredential'
+    SignupRequest:
+      type: object
+      required: [name, mobile, clinicTypeId, credential]
+      description: The mandatory clinic profile (design.md §5.4) plus a chosen credential — the same shape TenantCreateRequest's clinic fields use, minus contactEmail (the credential carries the email instead).
+      properties:
+        name:
+          type: string
+        mobile:
+          type: string
+        clinicTypeId:
+          type: string
+        credential:
+          $ref: '#/components/schemas/Credential'
+    InvitePasswordCredential:
+      type: object
+      required: [type, password]
+      description: No email field here — the invite already fixed it (TenantCreateRequest.contactEmail); this only sets the password.
+      properties:
+        type:
+          type: string
+          enum: [password]
+        password:
+          type: string
+          format: password
+    InviteCredential:
+      description: Same idea as Credential, but for accepting an invite whose email is already fixed rather than self-chosen (design.md §5.4).
+      oneOf:
+        - $ref: '#/components/schemas/InvitePasswordCredential'
+        - $ref: '#/components/schemas/GoogleCredential'
+      discriminator:
+        propertyName: type
+        mapping:
+          password: '#/components/schemas/InvitePasswordCredential'
+          google: '#/components/schemas/GoogleCredential'
+    InvitePreview:
+      type: object
+      required: [email, name, mobile, clinicTypeId]
+      description: What GET /auth/invite-preview returns — the clinic profile a super_user already entered, for the accept-invite screen to pre-fill (design.md §5.4/§8.1).
+      properties:
+        email:
+          type: string
+          format: email
+          description: Read-only — fixed by the invite, not part of what gets edited/resubmitted.
+        name:
+          type: string
+        mobile:
+          type: string
+        clinicTypeId:
+          type: string
+    AcceptInviteRequest:
+      type: object
+      required: [token, name, mobile, clinicTypeId, credential]
+      description: The token from the emailed link, the (possibly-edited) clinic profile GET /auth/invite-preview returned, and a chosen credential (design.md §5.4).
+      properties:
+        token:
+          type: string
+        name:
+          type: string
+        mobile:
+          type: string
+        clinicTypeId:
+          type: string
+        credential:
+          $ref: '#/components/schemas/InviteCredential'
 
     # -- Preferences ----------------------------------------------------------
     Preferences:
